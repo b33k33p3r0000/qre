@@ -33,15 +33,16 @@ Overrides (apply to any preset):
   --hours N          History length (default from preset)
   --trials N         Trial count (e.g., --trials 25000 for SOL)
   --skip-recent N    Skip most recent N hours (720 = 1 month)
+  --fg               Run in foreground (default: background)
 
 Usage:
-  ./run.sh              # Interactive menu
-  ./run.sh 2            # Standard preset, both pairs
-  ./run.sh 3 --btc      # Production, BTC only
-  ./run.sh 3 --sol --trials 25000          # Production SOL, 25k trials
-  ./run.sh 3 --hours 17520                 # Production, 2yr history
-  ./run.sh 3 --skip-recent 720            # Production, skip last month
-  ./run.sh 3 --hours 13140 --skip-recent 720  # 15mo history, skip last month
+  ./run.sh 3 --btc              # Background, Production BTC
+  ./run.sh 3 --btc --fg         # Foreground (watch live)
+  ./run.sh 3 --sol --trials 25000          # SOL, 25k trials
+  ./run.sh 3 --hours 17520                 # 2yr history
+  ./run.sh 3 --skip-recent 720            # Skip last month
+  ./run.sh attach               # Attach to running/latest log
+  ./run.sh logs                 # List recent log files
 
 EOF
 }
@@ -57,6 +58,9 @@ PAIRS="both"
 TAG=""
 PRESET=""
 SKIP_RECENT=0
+FOREGROUND=false
+LOG_DIR="$SCRIPT_DIR/logs"
+mkdir -p "$LOG_DIR"
 
 # =============================================================================
 # PARSE ARGS
@@ -77,6 +81,24 @@ while [[ $# -gt 0 ]]; do
         --splits) SPLITS="$2"; shift ;;
         --tag) TAG="$2"; shift ;;
         --skip-recent) SKIP_RECENT="$2"; shift ;;
+        --fg) FOREGROUND=true ;;
+        attach)
+            LATEST=$(ls -t "$LOG_DIR"/*.log 2>/dev/null | head -1)
+            if [ -z "$LATEST" ]; then
+                echo "No log files found in $LOG_DIR"
+                exit 1
+            fi
+            echo "Attaching to: $LATEST"
+            echo "(Ctrl+C to detach — run continues in background)"
+            echo ""
+            tail -f "$LATEST"
+            exit 0
+            ;;
+        logs)
+            echo "Recent logs:"
+            ls -lht "$LOG_DIR"/*.log 2>/dev/null | head -10
+            exit 0
+            ;;
         -h|--help) show_presets; exit 0 ;;
         *) echo "Unknown option: $1"; show_presets; exit 1 ;;
     esac
@@ -147,6 +169,9 @@ build_cmd() {
 # RUN
 # =============================================================================
 
+MODE_LABEL="background"
+$FOREGROUND && MODE_LABEL="foreground"
+
 echo ""
 echo "═══════════════════════════════════════════"
 echo "  QRE Optimizer — MACD+RSI AWF"
@@ -157,29 +182,56 @@ echo "  Hours:   $HOURS (~$((HOURS / 24)) days)"
 [ -n "$SPLITS" ] && echo "  Splits:  $SPLITS"
 [ -n "$TAG" ] && echo "  Tag:     $TAG"
 echo "  Pairs:   $PAIRS"
+echo "  Mode:    $MODE_LABEL"
 echo "═══════════════════════════════════════════"
 echo ""
 
-run_symbol() {
-    local symbol="$1"
-    local cmd=$(build_cmd "$symbol")
-    echo ">>> Running: $cmd"
-    echo ""
-    eval "$cmd"
-    echo ""
-    echo ">>> Done: $symbol"
-    echo ""
-}
-
+# Build list of symbols to run
+SYMBOLS=()
 case "$PAIRS" in
-    btc)  run_symbol "BTC/USDC" ;;
-    sol)  run_symbol "SOL/USDC" ;;
-    both)
-        run_symbol "BTC/USDC"
-        run_symbol "SOL/USDC"
-        ;;
+    btc)  SYMBOLS=("BTC/USDC") ;;
+    sol)  SYMBOLS=("SOL/USDC") ;;
+    both) SYMBOLS=("BTC/USDC" "SOL/USDC") ;;
 esac
 
-echo "═══════════════════════════════════════════"
-echo "  All runs complete!"
-echo "═══════════════════════════════════════════"
+if $FOREGROUND; then
+    # Foreground mode: run directly in terminal
+    for sym in "${SYMBOLS[@]}"; do
+        cmd=$(build_cmd "$sym")
+        echo ">>> Running: $cmd"
+        echo ""
+        eval "$cmd"
+        echo ""
+        echo ">>> Done: $sym"
+        echo ""
+    done
+    echo "═══════════════════════════════════════════"
+    echo "  All runs complete!"
+    echo "═══════════════════════════════════════════"
+else
+    # Background mode: nohup + log file
+    TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
+    LOG_FILE="$LOG_DIR/qre_${TIMESTAMP}.log"
+
+    # Build combined command for all symbols
+    BG_CMDS=""
+    for sym in "${SYMBOLS[@]}"; do
+        cmd=$(build_cmd "$sym")
+        if [ -n "$BG_CMDS" ]; then
+            BG_CMDS="$BG_CMDS && echo '' && echo '>>> Done: $sym' && echo '' && "
+        fi
+        BG_CMDS="${BG_CMDS}echo '>>> Running: $cmd' && echo '' && $cmd && echo '' && echo '>>> Done: $sym'"
+    done
+
+    nohup bash -c "cd $SCRIPT_DIR && source venv/bin/activate && $BG_CMDS && echo '' && echo 'All runs complete!'" > "$LOG_FILE" 2>&1 &
+    BG_PID=$!
+
+    echo "Started in background (PID: $BG_PID)"
+    echo "Log: $LOG_FILE"
+    echo ""
+    echo "Commands:"
+    echo "  ./run.sh attach          # Watch live output"
+    echo "  ./run.sh logs            # List log files"
+    echo "  tail -f $LOG_FILE        # Direct tail"
+    echo "  kill $BG_PID             # Stop run"
+fi
