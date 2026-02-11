@@ -17,8 +17,10 @@ from qre.core.backtest import simulate_trades_fast
 from qre.core.metrics import calculate_metrics, monte_carlo_validation
 from qre.core.strategy import MACDRSIStrategy
 from qre.io import save_json, save_trades_csv
+from qre.notify import format_complete_message, format_start_message
 from qre.optimize import build_objective, compute_awf_splits
 from qre.penalties import apply_all_penalties
+from qre.report import build_equity_curve, build_drawdown_curve, generate_report, save_report
 
 
 def make_synthetic_data(n_bars: int = 5000) -> dict:
@@ -151,6 +153,110 @@ class TestFullPipeline:
         study = optuna.create_study(direction="maximize")
         study.optimize(objective, n_trials=1, show_progress_bar=False)
         assert study.best_value is not None
+
+
+class TestReportIntegration:
+    """Report generation works with real backtest output."""
+
+    def test_report_generates_html(self, tmp_path):
+        """HTML report generates with Plotly charts from real trades."""
+        data = make_synthetic_data(5000)
+        strategy = MACDRSIStrategy()
+        params = strategy.get_default_params()
+        buy, sell, gates = strategy.precompute_signals(data, params)
+        result = simulate_trades_fast(
+            "BTC/USDC", data, params,
+            precomputed_buy_signals=buy,
+            precomputed_sell_signals=sell,
+            precomputed_rsi_gates=gates,
+        )
+        metrics = calculate_metrics(result.trades, result.backtest_days, start_equity=STARTING_EQUITY)
+
+        report_params = {
+            "symbol": "BTC/USDC",
+            "equity": metrics.equity,
+            "trades": metrics.trades,
+            "sharpe": round(metrics.sharpe_ratio, 4),
+            "max_drawdown": round(metrics.max_drawdown, 2),
+            "win_rate": round(metrics.win_rate / 100, 4),
+            "total_pnl_pct": round(metrics.total_pnl_pct, 2),
+            "start_equity": STARTING_EQUITY,
+        }
+        trades_dicts = [t._asdict() if hasattr(t, '_asdict') else t for t in result.trades]
+
+        report_path = tmp_path / "report.html"
+        save_report(report_path, report_params, trades_dicts)
+
+        assert report_path.exists()
+        html = report_path.read_text()
+        assert "BTC/USDC" in html
+        assert "plotly" in html.lower()
+        assert "equity-chart" in html
+
+    def test_equity_curve_from_real_trades(self):
+        """Equity curve starts at start_equity and has correct length."""
+        data = make_synthetic_data(5000)
+        strategy = MACDRSIStrategy()
+        params = strategy.get_default_params()
+        buy, sell, gates = strategy.precompute_signals(data, params)
+        result = simulate_trades_fast(
+            "BTC/USDC", data, params,
+            precomputed_buy_signals=buy,
+            precomputed_sell_signals=sell,
+            precomputed_rsi_gates=gates,
+        )
+        trades_dicts = [t._asdict() if hasattr(t, '_asdict') else t for t in result.trades]
+        curve = build_equity_curve(trades_dicts, STARTING_EQUITY)
+        assert curve[0] == STARTING_EQUITY
+        assert len(curve) == len(trades_dicts) + 1
+
+    def test_drawdown_curve_non_positive(self):
+        """Drawdown values are always <= 0."""
+        data = make_synthetic_data(5000)
+        strategy = MACDRSIStrategy()
+        params = strategy.get_default_params()
+        buy, sell, gates = strategy.precompute_signals(data, params)
+        result = simulate_trades_fast(
+            "BTC/USDC", data, params,
+            precomputed_buy_signals=buy,
+            precomputed_sell_signals=sell,
+            precomputed_rsi_gates=gates,
+        )
+        trades_dicts = [t._asdict() if hasattr(t, '_asdict') else t for t in result.trades]
+        curve = build_equity_curve(trades_dicts, STARTING_EQUITY)
+        dd = build_drawdown_curve(curve)
+        assert all(d <= 0 for d in dd)
+
+
+class TestNotifyIntegration:
+    """Notification formatting works with real backtest metrics."""
+
+    def test_complete_message_with_real_metrics(self):
+        """Complete message formats correctly with real data."""
+        data = make_synthetic_data(5000)
+        strategy = MACDRSIStrategy()
+        params = strategy.get_default_params()
+        buy, sell, gates = strategy.precompute_signals(data, params)
+        result = simulate_trades_fast(
+            "BTC/USDC", data, params,
+            precomputed_buy_signals=buy,
+            precomputed_sell_signals=sell,
+            precomputed_rsi_gates=gates,
+        )
+        metrics = calculate_metrics(result.trades, result.backtest_days, start_equity=STARTING_EQUITY)
+
+        msg_params = {
+            "symbol": "BTC/USDC",
+            "equity": metrics.equity,
+            "sharpe": metrics.sharpe_ratio,
+            "trades": metrics.trades,
+            "max_drawdown": metrics.max_drawdown,
+            "win_rate": metrics.win_rate / 100,
+            "total_pnl_pct": metrics.total_pnl_pct,
+        }
+        msg = format_complete_message(msg_params)
+        assert "BTC/USDC" in msg
+        assert "COMPLETED" in msg
 
 
 class TestMonteCarlo:
