@@ -377,7 +377,12 @@ def run_optimization(
 
     # 7. HTML report
     trades_dicts = [t._asdict() if hasattr(t, '_asdict') else t for t in full_result.trades]
-    save_report(outdir / f"report_{base}.html", best_params, trades_dicts)
+    # Extract optimization history for report visualization
+    optuna_history = []
+    for trial in study.trials:
+        if trial.state == optuna.trial.TrialState.COMPLETE:
+            optuna_history.append({"number": trial.number, "value": trial.value})
+    save_report(outdir / f"report_{base}.html", best_params, trades_dicts, optuna_history=optuna_history)
 
     logger.info(f"Done {symbol}: Equity=${full_metrics.equity:,.2f}, "
                 f"Sharpe={full_metrics.sharpe_ratio:.2f}, Trades={full_metrics.trades}")
