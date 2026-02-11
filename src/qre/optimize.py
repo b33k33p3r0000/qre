@@ -39,6 +39,7 @@ from qre.config import (
     STARTING_EQUITY,
     STARTUP_TRIALS_RATIO,
     TF_LIST,
+    TF_MS,
     TPE_CONSIDER_ENDPOINTS,
     TPE_N_EI_CANDIDATES,
 )
