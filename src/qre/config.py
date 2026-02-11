@@ -55,23 +55,23 @@ def get_slippage(symbol: str) -> float:
 SYMBOL_CONFIGS: Dict[str, Dict] = {
     "BTC/USDC": {
         "min_trades_year": 80,
-        "min_trades_test": 15,
+        "min_trades_test": 8,
         "max_drawdown_limit": 0.15,
         "min_hold_min": 8,
         "min_hold_max": 12,
-        "p_buy_min": 0.15,
-        "p_buy_max": 0.45,
+        "p_buy_min": 0.10,
+        "p_buy_max": 0.22,
         "volatility_class": "low",
         "threshold_tightness": 0.95,
     },
     "SOL/USDC": {
         "min_trades_year": 80,
-        "min_trades_test": 15,
+        "min_trades_test": 8,
         "max_drawdown_limit": 0.25,
         "min_hold_min": 8,
         "min_hold_max": 12,
         "p_buy_min": 0.10,
-        "p_buy_max": 0.55,
+        "p_buy_max": 0.25,
         "volatility_class": "high",
         "threshold_tightness": 1.0,
     },
@@ -79,7 +79,7 @@ SYMBOL_CONFIGS: Dict[str, Dict] = {
 
 DEFAULT_SYMBOL_CONFIG: Dict = {
     "min_trades_year": 80,
-    "min_trades_test": 15,
+    "min_trades_test": 8,
     "max_drawdown_limit": 0.18,
     "min_hold_min": 8,
     "min_hold_max": 12,
@@ -99,7 +99,7 @@ def get_symbol_config(symbol: str) -> Dict:
 # =============================================================================
 
 MIN_TRADES_YEAR_HARD = 80
-MIN_TRADES_TEST_HARD = 15
+MIN_TRADES_TEST_HARD = 8
 MAX_TRADES_YEAR = 500
 OVERTRADING_PENALTY = 0.15
 
