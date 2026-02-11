@@ -29,12 +29,19 @@ Presets:
 
 Pairs: BTC/USDC, SOL/USDC (or both)
 
+Overrides (apply to any preset):
+  --hours N          History length (default from preset)
+  --trials N         Trial count (e.g., --trials 25000 for SOL)
+  --skip-recent N    Skip most recent N hours (720 = 1 month)
+
 Usage:
   ./run.sh              # Interactive menu
   ./run.sh 2            # Standard preset, both pairs
   ./run.sh 3 --btc      # Production, BTC only
-  ./run.sh 3 --sol      # Production, SOL only
-  ./run.sh 5 --trials 20000 --hours 17520 --splits 4 --btc
+  ./run.sh 3 --sol --trials 25000          # Production SOL, 25k trials
+  ./run.sh 3 --hours 17520                 # Production, 2yr history
+  ./run.sh 3 --skip-recent 720            # Production, skip last month
+  ./run.sh 3 --hours 13140 --skip-recent 720  # 15mo history, skip last month
 
 EOF
 }
@@ -49,6 +56,7 @@ SPLITS=""
 PAIRS="both"
 TAG=""
 PRESET=""
+SKIP_RECENT=0
 
 # =============================================================================
 # PARSE ARGS
@@ -68,6 +76,7 @@ while [[ $# -gt 0 ]]; do
         --hours) HOURS="$2"; shift ;;
         --splits) SPLITS="$2"; shift ;;
         --tag) TAG="$2"; shift ;;
+        --skip-recent) SKIP_RECENT="$2"; shift ;;
         -h|--help) show_presets; exit 0 ;;
         *) echo "Unknown option: $1"; show_presets; exit 1 ;;
     esac
@@ -98,6 +107,7 @@ case "$PRESET" in
                 read -p "Trials [10000]: " TRIALS; TRIALS="${TRIALS:-10000}"
                 read -p "Hours [8760]: " HOURS; HOURS="${HOURS:-8760}"
                 read -p "Splits [3]: " SPLITS; SPLITS="${SPLITS:-3}"
+                read -p "Skip recent hours [0]: " SKIP_RECENT; SKIP_RECENT="${SKIP_RECENT:-0}"
                 ;;
             *) echo "Invalid choice"; exit 1 ;;
         esac
@@ -127,6 +137,9 @@ build_cmd() {
     if [ -n "$TAG" ]; then
         cmd="$cmd --tag $TAG"
     fi
+    if [ "$SKIP_RECENT" -gt 0 ] 2>/dev/null; then
+        cmd="$cmd --skip-recent $SKIP_RECENT"
+    fi
     echo "$cmd"
 }
 
@@ -140,6 +153,7 @@ echo "  QRE Optimizer — MACD+RSI AWF"
 echo "═══════════════════════════════════════════"
 echo "  Trials:  $TRIALS"
 echo "  Hours:   $HOURS (~$((HOURS / 24)) days)"
+[ "$SKIP_RECENT" -gt 0 ] 2>/dev/null && echo "  Skip:    ${SKIP_RECENT}h (~$((SKIP_RECENT / 24)) days recent data excluded)"
 [ -n "$SPLITS" ] && echo "  Splits:  $SPLITS"
 [ -n "$TAG" ] && echo "  Tag:     $TAG"
 echo "  Pairs:   $PAIRS"

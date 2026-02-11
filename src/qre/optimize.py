@@ -185,9 +185,14 @@ def run_optimization(
     results_dir: str = "results",
     cache_dir: str = "cache",
     run_tag: Optional[str] = None,
+    skip_recent_hours: int = 0,
 ) -> Dict[str, Any]:
     """
     Run full AWF optimization pipeline for a single symbol.
+
+    Args:
+        skip_recent_hours: Drop the most recent N hours of data before optimizing.
+            Useful for excluding anomalous recent periods (e.g., 720 = skip last month).
 
     Returns best_params dict with all metrics.
     """
@@ -206,6 +211,17 @@ def run_optimization(
     # 1. Fetch data
     logger.info(f"Loading {symbol} data ({hours}h history)...")
     data = load_all_data(exchange, symbol, hours, cache)
+
+    # Trim recent data if requested
+    if skip_recent_hours > 0:
+        skip_bars = skip_recent_hours  # 1h base TF → 1 bar = 1 hour
+        for tf in data:
+            tf_multiplier = TF_MS[tf] // TF_MS[BASE_TF]
+            tf_skip = max(1, skip_bars // tf_multiplier)
+            if tf_skip < len(data[tf]):
+                data[tf] = data[tf].iloc[:-tf_skip]
+        logger.info(f"Trimmed {skip_recent_hours}h ({skip_bars} bars) of recent data")
+
     total_bars = len(data[BASE_TF])
     logger.info(f"Loaded {total_bars} bars for {symbol}")
 
@@ -407,6 +423,8 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--timeout", type=int, default=0)
     parser.add_argument("--tag", type=str, default=None)
+    parser.add_argument("--skip-recent", type=int, default=0,
+                        help="Skip most recent N hours of data (e.g., 720 = skip last month)")
     parser.add_argument("--results-dir", type=str, default="results")
     parser.add_argument("--cache-dir", type=str, default="cache")
 
@@ -425,6 +443,7 @@ def main():
         results_dir=args.results_dir,
         cache_dir=args.cache_dir,
         run_tag=args.tag,
+        skip_recent_hours=args.skip_recent,
     )
 
     print(f"\nResult: {result['symbol']}")
