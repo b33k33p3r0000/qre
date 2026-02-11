@@ -237,5 +237,6 @@ else
     echo "  ./run.sh attach          # Watch live output"
     echo "  ./run.sh logs            # List log files"
     echo "  tail -f $LOG_FILE        # Direct tail"
-    echo "  kill $BG_PID             # Stop run"
+    echo "  kill -2 $BG_PID          # Graceful stop (finishes report + notifications)"
+    echo "  kill $BG_PID             # Hard kill (no report)"
 fi

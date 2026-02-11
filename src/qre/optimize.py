@@ -15,6 +15,7 @@ Only AWF mode. Only MACD+RSI strategy.
 """
 
 import logging
+import signal
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -272,6 +273,13 @@ def run_optimization(
         load_if_exists=True,
     )
 
+    # Graceful shutdown: SIGTERM → study.stop() so pipeline completes
+    def _graceful_stop(signum, frame):
+        logger.info("Received SIGTERM — stopping optimization gracefully...")
+        study.stop()
+
+    prev_handler = signal.signal(signal.SIGTERM, _graceful_stop)
+
     logger.info(f"Starting AWF optimization: {n_trials} trials")
     study.optimize(
         objective,
@@ -281,7 +289,12 @@ def run_optimization(
         show_progress_bar=True,
     )
 
+    signal.signal(signal.SIGTERM, prev_handler)
+
     best_params = study.best_trial.params
+    completed_trials = len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE])
+    if completed_trials < n_trials:
+        logger.info(f"Optimization stopped early: {completed_trials}/{n_trials} trials completed")
     strategy = MACDRSIStrategy()
 
     # 4. Final evaluation
@@ -290,7 +303,8 @@ def run_optimization(
         "symbol": symbol, "tf": "1h", "range": "FULL",
         "n_votes": len(TF_LIST),
         "optimization_mode": "anchored_walk_forward",
-        "n_splits": len(splits), "n_trials": n_trials,
+        "n_splits": len(splits), "n_trials": completed_trials,
+        "n_trials_requested": n_trials,
         "strategy": strategy.name, "strategy_version": strategy.version,
     })
 
