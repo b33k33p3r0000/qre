@@ -1,0 +1,38 @@
+[project]
+name = "qre"
+version = "1.0.0"
+description = "Quantitative Research Engine — MACD+RSI optimizer"
+requires-python = ">=3.11"
+
+[project.scripts]
+qre = "qre.optimize:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+ignore = ["E402", "E741", "E722"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: marks tests as integration tests",
+    "slow: marks tests as slow",
+]
+
+[tool.poetry.dependencies]
+pandas = "^3.0.0"
+numpy = ">=1.22,<2.4"
+numba = "^0.63.1"
+optuna = "^4.7.0"
+ccxt = "^4.5.35"
+python-dotenv = "^1.2.1"
+pyarrow = "^23.0.0"
+
+[dependency-groups]
+dev = [
+    "pytest (>=9.0.2,<10.0.0)"
+]
