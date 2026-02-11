@@ -24,8 +24,9 @@ Presets:
   1) Quick      —  2k trials, 1yr, 2 splits     (~5 min)
   2) Standard   —  5k trials, 1yr, 3 splits     (~15 min)
   3) Production — 10k trials, 1yr, 3 splits     (~30 min)
-  4) Deep       — 15k trials, 2yr, 4 splits     (~60 min)
-  5) Custom     — You choose everything
+  4) Deep       — 15k trials, 1yr, 4 splits     (~60 min)
+  5) Über       — 25k trials, 1yr, 4 splits     (~120 min)
+  6) Custom     — You choose everything
 
 Pairs: BTC/USDC, SOL/USDC (or both)
 
@@ -72,7 +73,8 @@ while [[ $# -gt 0 ]]; do
         2) PRESET="standard" ;;
         3) PRESET="production" ;;
         4) PRESET="deep" ;;
-        5) PRESET="custom" ;;
+        5) PRESET="uber" ;;
+        6) PRESET="custom" ;;
         --btc) PAIRS="btc" ;;
         --sol) PAIRS="sol" ;;
         --both) PAIRS="both" ;;
@@ -113,19 +115,21 @@ case "$PRESET" in
     quick)      TRIALS=2000;  HOURS=8760;  SPLITS=2 ;;
     standard)   TRIALS=5000;  HOURS=8760;  SPLITS=3 ;;
     production) TRIALS=10000; HOURS=8760;  SPLITS=3 ;;
-    deep)       TRIALS=15000; HOURS=17520; SPLITS=4 ;;
+    deep)       TRIALS=15000; HOURS=8760;  SPLITS=4 ;;
+    uber)       TRIALS=25000; HOURS=8760;  SPLITS=4 ;;
     custom)     ;; # Use --trials, --hours, --splits from args
     "")
         # Interactive mode
         echo ""
         show_presets
-        read -p "Select preset (1-5): " choice
+        read -p "Select preset (1-6): " choice
         case "$choice" in
             1) TRIALS=2000;  HOURS=8760;  SPLITS=2 ;;
             2) TRIALS=5000;  HOURS=8760;  SPLITS=3 ;;
             3) TRIALS=10000; HOURS=8760;  SPLITS=3 ;;
-            4) TRIALS=15000; HOURS=17520; SPLITS=4 ;;
-            5)
+            4) TRIALS=15000; HOURS=8760;  SPLITS=4 ;;
+            5) TRIALS=25000; HOURS=8760;  SPLITS=4 ;;
+            6)
                 read -p "Trials [10000]: " TRIALS; TRIALS="${TRIALS:-10000}"
                 read -p "Hours [8760]: " HOURS; HOURS="${HOURS:-8760}"
                 read -p "Splits [3]: " SPLITS; SPLITS="${SPLITS:-3}"
