@@ -50,7 +50,9 @@ from qre.core.strategy import MACDRSIStrategy
 from qre.data.fetch import DataCache, load_all_data
 from qre.hooks import run_post_hooks, run_pre_hooks
 from qre.io import save_json, save_trades_csv
+from qre.notify import notify_complete, notify_start
 from qre.penalties import apply_all_penalties
+from qre.report import save_report
 
 logger = logging.getLogger("qre.optimize")
 
@@ -199,6 +201,7 @@ def run_optimization(
     run_timestamp = f"{run_timestamp}{tag_suffix}"
 
     run_pre_hooks({"symbol": symbol, "hours": hours, "n_trials": n_trials})
+    notify_start(symbol=symbol, n_trials=n_trials, hours=hours, n_splits=n_splits or 3, run_tag=run_tag)
 
     exchange = ccxt.binance({"enableRateLimit": True})
     cache = DataCache(cache_dir)
@@ -375,8 +378,15 @@ def run_optimization(
     save_json(outdir / "best_params.json", best_params)
     save_trades_csv(outdir / f"trades_{symbol.replace('/', '_')}_1h_FULL.csv", full_result.trades)
 
+    # 7. HTML report
+    trades_dicts = [t._asdict() if hasattr(t, '_asdict') else t for t in full_result.trades]
+    save_report(outdir / f"report_{base}.html", best_params, trades_dicts)
+
     logger.info(f"Done {symbol}: Equity=${full_metrics.equity:,.2f}, "
                 f"Sharpe={full_metrics.sharpe_ratio:.2f}, Trades={full_metrics.trades}")
+
+    # 8. Notifications
+    notify_complete(best_params)
 
     run_post_hooks(best_params)
 

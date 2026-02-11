@@ -77,3 +77,16 @@ class TestBuildObjective:
             splits=splits,
         )
         assert callable(objective)
+
+
+class TestOptimizeImports:
+    """Verify report + notify wiring is present in optimize module."""
+
+    def test_notify_importable(self):
+        from qre.optimize import notify_start, notify_complete
+        assert callable(notify_start)
+        assert callable(notify_complete)
+
+    def test_report_importable(self):
+        from qre.optimize import save_report
+        assert callable(save_report)
