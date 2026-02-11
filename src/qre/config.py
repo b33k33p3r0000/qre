@@ -123,6 +123,48 @@ MIN_TEST_SHARPE = 0.0
 
 MIN_TEST_SHARPE_TIME_BASED = 0.3
 MIN_TEST_TRAIN_RATIO_STRICT = 0.25
+
+# =============================================================================
+# OPTIMIZATION
+# =============================================================================
+
+DEFAULT_TRIALS = 10000
+DEFAULT_TIMEOUT = 0  # 0 = no timeout
+
+# Sampler (TPE)
+SAMPLER_STRATEGY = "tpe"
+MIN_STARTUP_TRIALS = 50
+STARTUP_TRIALS_RATIO = 0.10
+TPE_N_EI_CANDIDATES = 24
+TPE_CONSIDER_ENDPOINTS = True
+
+# Pruning (SuccessiveHalving)
+ENABLE_PRUNING = True
+MIN_PRUNING_WARMUP = 30
+PRUNING_WARMUP_RATIO = 0.10
+
+# Monte Carlo
+MONTE_CARLO_SIMULATIONS = 1000
+MONTE_CARLO_MIN_TRADES = 30
+
+# =============================================================================
+# ANCHORED WALK-FORWARD
+# =============================================================================
+
+ANCHORED_WF_MIN_DATA_HOURS = 4000  # ~167 days minimum
+ANCHORED_WF_SHORT_THRESHOLD_HOURS = 13140  # 1.5 years
+
+ANCHORED_WF_SPLITS = [
+    {"train_end": 0.60, "test_end": 0.70},
+    {"train_end": 0.70, "test_end": 0.80},
+    {"train_end": 0.80, "test_end": 0.90},
+]
+
+ANCHORED_WF_SPLITS_SHORT = [
+    {"train_end": 0.70, "test_end": 0.85},
+    {"train_end": 0.85, "test_end": 1.00},
+]
+
 N_SPLITS_DEFAULT = 3
 
 # =============================================================================
