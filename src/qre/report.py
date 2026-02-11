@@ -149,7 +149,7 @@ def _render_performance_charts(trades: List[Dict]) -> tuple[str, str]:
     """
 
     month_colors = [
-        "'#50fa7b'" if v > 0 else "'#ff5555'" for v in perf["month_values"]
+        "'#c3e88d'" if v > 0 else "'#ff757f'" for v in perf["month_values"]
     ]
 
     js = f"""
@@ -158,22 +158,22 @@ def _render_performance_charts(trades: List[Dict]) -> tuple[str, str]:
             x: {json.dumps(perf['winners_pnl'])},
             type: 'histogram',
             name: 'Winners',
-            marker: {{ color: 'rgba(80, 250, 123, 0.7)' }},
+            marker: {{ color: 'rgba(195, 232, 141, 0.7)' }},
             xbins: {{ size: 1 }}
         }}, {{
             x: {json.dumps(perf['losers_pnl'])},
             type: 'histogram',
             name: 'Losers',
-            marker: {{ color: 'rgba(255, 85, 85, 0.7)' }},
+            marker: {{ color: 'rgba(255, 117, 127, 0.7)' }},
             xbins: {{ size: 1 }}
         }}], {{
-            paper_bgcolor: '#44475a',
-            plot_bgcolor: '#44475a',
-            font: {{ color: '#f8f8f2', size: 10 }},
+            paper_bgcolor: '#2f334d',
+            plot_bgcolor: '#2f334d',
+            font: {{ color: '#c8d3f5', size: 10 }},
             margin: {{ t: 30, b: 40, l: 50, r: 20 }},
-            title: {{ text: 'P&L Distribution', font: {{ size: 12, color: '#6272a4' }} }},
-            xaxis: {{ gridcolor: '#282a36', title: 'P&L (%)' }},
-            yaxis: {{ gridcolor: '#282a36', title: 'Count' }},
+            title: {{ text: 'P&L Distribution', font: {{ size: 12, color: '#636da6' }} }},
+            xaxis: {{ gridcolor: '#3b4261', title: 'P&L (%)' }},
+            yaxis: {{ gridcolor: '#3b4261', title: 'Count' }},
             barmode: 'overlay',
             legend: {{ font: {{ size: 10 }} }}
         }});
@@ -186,15 +186,15 @@ def _render_performance_charts(trades: List[Dict]) -> tuple[str, str]:
             marker: {{ color: [{', '.join(month_colors)}] }},
             text: {json.dumps([f'${v:,.0f}' for v in perf['month_values']])},
             textposition: 'outside',
-            textfont: {{ size: 9, color: '#f8f8f2' }}
+            textfont: {{ size: 9, color: '#c8d3f5' }}
         }}], {{
-            paper_bgcolor: '#44475a',
-            plot_bgcolor: '#44475a',
-            font: {{ color: '#f8f8f2', size: 10 }},
+            paper_bgcolor: '#2f334d',
+            plot_bgcolor: '#2f334d',
+            font: {{ color: '#c8d3f5', size: 10 }},
             margin: {{ t: 30, b: 60, l: 60, r: 20 }},
-            title: {{ text: 'Monthly Returns', font: {{ size: 12, color: '#6272a4' }} }},
-            xaxis: {{ gridcolor: '#282a36', title: 'Month' }},
-            yaxis: {{ gridcolor: '#282a36', title: 'P&L ($)' }},
+            title: {{ text: 'Monthly Returns', font: {{ size: 12, color: '#636da6' }} }},
+            xaxis: {{ gridcolor: '#3b4261', title: 'Month' }},
+            yaxis: {{ gridcolor: '#3b4261', title: 'P&L ($)' }},
             showlegend: false
         }});
 
@@ -205,22 +205,22 @@ def _render_performance_charts(trades: List[Dict]) -> tuple[str, str]:
             type: 'scatter',
             mode: 'markers',
             name: 'Winners',
-            marker: {{ color: '#50fa7b', size: 6, opacity: 0.7 }}
+            marker: {{ color: '#c3e88d', size: 6, opacity: 0.7 }}
         }}, {{
             x: {json.dumps(perf['lose_hold'])},
             y: {json.dumps(perf['lose_pnl'])},
             type: 'scatter',
             mode: 'markers',
             name: 'Losers',
-            marker: {{ color: '#ff5555', size: 6, opacity: 0.7 }}
+            marker: {{ color: '#ff757f', size: 6, opacity: 0.7 }}
         }}], {{
-            paper_bgcolor: '#44475a',
-            plot_bgcolor: '#44475a',
-            font: {{ color: '#f8f8f2', size: 10 }},
+            paper_bgcolor: '#2f334d',
+            plot_bgcolor: '#2f334d',
+            font: {{ color: '#c8d3f5', size: 10 }},
             margin: {{ t: 30, b: 40, l: 50, r: 20 }},
-            title: {{ text: 'Trade Duration vs P&L', font: {{ size: 12, color: '#6272a4' }} }},
-            xaxis: {{ gridcolor: '#282a36', title: 'Hold Duration (bars)' }},
-            yaxis: {{ gridcolor: '#282a36', title: 'P&L (%)' }},
+            title: {{ text: 'Trade Duration vs P&L', font: {{ size: 12, color: '#636da6' }} }},
+            xaxis: {{ gridcolor: '#3b4261', title: 'Hold Duration (bars)' }},
+            yaxis: {{ gridcolor: '#3b4261', title: 'P&L (%)' }},
             legend: {{ font: {{ size: 10 }} }}
         }});
     """
@@ -304,6 +304,8 @@ def _render_strategy_flow(params: Dict[str, Any]) -> str:
     return f"""
     <h2>Strategy Flow</h2>
 
+    <div class="flow-grid">
+
     <div class="flow-phase">
         <div class="flow-phase-header">
             <span class="flow-phase-num">1</span>
@@ -324,8 +326,6 @@ def _render_strategy_flow(params: Dict[str, Any]) -> str:
             </div>
         </div>
     </div>
-
-    <div class="flow-arrow">&darr;</div>
 
     <div class="flow-phase">
         <div class="flow-phase-header">
@@ -353,8 +353,6 @@ def _render_strategy_flow(params: Dict[str, Any]) -> str:
         </div>
     </div>
 
-    <div class="flow-arrow">&darr;</div>
-
     <div class="flow-phase">
         <div class="flow-phase-header">
             <span class="flow-phase-num">3</span>
@@ -370,8 +368,6 @@ def _render_strategy_flow(params: Dict[str, Any]) -> str:
             </div>
         </div>
     </div>
-
-    <div class="flow-arrow">&darr;</div>
 
     <div class="flow-phase">
         <div class="flow-phase-header">
@@ -397,6 +393,8 @@ def _render_strategy_flow(params: Dict[str, Any]) -> str:
             </div>
         </div>
     </div>
+
+    </div><!-- /flow-grid -->
     """
 
 
@@ -484,9 +482,14 @@ def _render_optuna_history(optuna_history: List[Dict]) -> tuple[str, str]:
             name: 'Trial Value',
             marker: {{
                 color: {json.dumps(values)},
-                colorscale: [[0, '#ff5555'], [0.01, '#6272a4'], [0.5, '#8be9fd'], [1, '#50fa7b']],
+                colorscale: [[0, '#ff757f'], [0.01, '#3b4261'], [0.3, '#82aaff'], [0.7, '#4fd6be'], [1, '#c3e88d']],
                 size: 4,
-                opacity: 0.6
+                opacity: 0.6,
+                colorbar: {{
+                    thickness: 12,
+                    outlinewidth: 0,
+                    tickfont: {{ color: '#636da6', size: 9 }}
+                }}
             }}
         }}, {{
             x: {json.dumps(numbers)},
@@ -494,15 +497,15 @@ def _render_optuna_history(optuna_history: List[Dict]) -> tuple[str, str]:
             type: 'scatter',
             mode: 'lines',
             name: 'Best So Far',
-            line: {{ color: '#50fa7b', width: 2 }}
+            line: {{ color: '#c3e88d', width: 2 }}
         }}], {{
-            paper_bgcolor: '#44475a',
-            plot_bgcolor: '#44475a',
-            font: {{ color: '#f8f8f2', size: 10 }},
+            paper_bgcolor: '#2f334d',
+            plot_bgcolor: '#2f334d',
+            font: {{ color: '#c8d3f5', size: 10 }},
             margin: {{ t: 30, b: 40, l: 60, r: 20 }},
-            title: {{ text: 'Optimization Progress', font: {{ size: 12, color: '#6272a4' }} }},
-            xaxis: {{ gridcolor: '#282a36', title: 'Trial #' }},
-            yaxis: {{ gridcolor: '#282a36', title: 'Objective Value (Equity)' }},
+            title: {{ text: 'Optimization Progress', font: {{ size: 12, color: '#636da6' }} }},
+            xaxis: {{ gridcolor: '#3b4261', title: 'Trial #' }},
+            yaxis: {{ gridcolor: '#3b4261', title: 'Objective Value (Equity)' }},
             legend: {{ font: {{ size: 10 }} }}
         }});
     """
@@ -542,22 +545,31 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
     <script src="{PLOTLY_CDN}"></script>
     <style>
         :root {{
-            --bg-primary: #282a36;
-            --bg-secondary: #44475a;
-            --text-primary: #f8f8f2;
-            --text-secondary: #6272a4;
-            --accent-green: #50fa7b;
-            --accent-red: #ff5555;
-            --accent-purple: #bd93f9;
-            --accent-cyan: #8be9fd;
+            --bg-primary: #222436;
+            --bg-deep: #1e2030;
+            --bg-secondary: #2f334d;
+            --text-primary: #c8d3f5;
+            --text-secondary: #636da6;
+            --text-muted: #3b4261;
+            --accent-green: #c3e88d;
+            --accent-red: #ff757f;
+            --accent-purple: #c099ff;
+            --accent-cyan: #86e1fc;
+            --accent-teal: #4fd6be;
+            --accent-yellow: #ffc777;
+            --accent-orange: #ff966c;
+            --accent-blue: #82aaff;
+            --border: #545c7e;
         }}
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{
             font-family: 'JetBrains Mono', 'Fira Code', monospace;
-            background: var(--bg-primary);
+            background: var(--bg-deep);
             color: var(--text-primary);
             padding: 20px;
             font-size: 12px;
+            max-width: 1200px;
+            margin: 0 auto;
         }}
         h1 {{
             color: var(--accent-purple);
@@ -570,8 +582,57 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
             text-transform: uppercase;
             letter-spacing: 1px;
             margin: 20px 0 10px 0;
-            border-bottom: 1px solid var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
             padding-bottom: 5px;
+        }}
+        .hero-grid {{
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 16px;
+        }}
+        .hero-card {{
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            border: 1px solid var(--text-muted);
+        }}
+        .hero-label {{
+            font-size: 10px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 6px;
+        }}
+        .hero-value {{
+            font-size: 28px;
+            font-weight: bold;
+        }}
+        .detail-list {{
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 14px 18px;
+            margin-bottom: 16px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0;
+        }}
+        .detail-row {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 12px 6px 0;
+            border-bottom: 1px solid var(--text-muted);
+            font-size: 12px;
+        }}
+        .detail-row:nth-last-child(-n+2) {{ border-bottom: none; }}
+        .detail-label {{
+            color: var(--text-secondary);
+        }}
+        .detail-value {{
+            font-weight: bold;
+            font-size: 13px;
         }}
         .metrics-grid {{
             display: grid;
@@ -612,7 +673,7 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
         .params-table th, .params-table td {{
             padding: 8px;
             text-align: left;
-            border-bottom: 1px solid var(--bg-primary);
+            border-bottom: 1px solid var(--text-muted);
         }}
         .params-table th {{
             color: var(--text-secondary);
@@ -624,6 +685,16 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
             text-align: center;
             color: var(--text-secondary);
             font-size: 10px;
+        }}
+        .flow-grid {{
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 12px;
+        }}
+        .flow-grid .flow-arrow {{ display: none; }}
+        @media (max-width: 800px) {{
+            .flow-grid {{ grid-template-columns: 1fr; }}
         }}
         .flow-phase {{
             background: var(--bg-secondary);
@@ -753,62 +824,64 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
     </p>
 
     <h2>Key Metrics</h2>
-    <div class="metrics-grid">
-        <div class="metric-card">
-            <div class="metric-label">Final Equity</div>
-            <div class="metric-value {'positive' if params.get('equity', 0) > start_equity else 'negative'}">
-                ${params.get('equity', 0):,.2f}
+
+    <div class="hero-grid">
+        <div class="hero-card">
+            <div class="hero-label">Final Equity</div>
+            <div class="hero-value {'positive' if params.get('equity', 0) > start_equity else 'negative'}">
+                ${params.get('equity', 0):,.0f}
             </div>
         </div>
-        <div class="metric-card">
-            <div class="metric-label">Total P&L</div>
-            <div class="metric-value {'positive' if params.get('total_pnl_pct', 0) > 0 else 'negative'}">
+        <div class="hero-card">
+            <div class="hero-label">Total P&L</div>
+            <div class="hero-value {'positive' if params.get('total_pnl_pct', 0) > 0 else 'negative'}">
                 {params.get('total_pnl_pct', 0):+.1f}%
             </div>
         </div>
-        <div class="metric-card">
-            <div class="metric-label">Trades</div>
-            <div class="metric-value">{params.get('trades', 0)}</div>
-        </div>
-        <div class="metric-card">
-            <div class="metric-label">Trades/Year</div>
-            <div class="metric-value">{params.get('trades_per_year', 0):.1f}</div>
-        </div>
-        <div class="metric-card">
-            <div class="metric-label">Win Rate</div>
-            <div class="metric-value {'positive' if params.get('win_rate', 0) > 0.5 else 'negative'}">
-                {params.get('win_rate', 0) * 100:.1f}%
-            </div>
-        </div>
-        <div class="metric-card">
-            <div class="metric-label">Sharpe</div>
-            <div class="metric-value {'positive' if params.get('sharpe', 0) > 1 else 'negative'}">
+        <div class="hero-card">
+            <div class="hero-label">Sharpe Ratio</div>
+            <div class="hero-value {'positive' if params.get('sharpe', 0) > 1 else 'negative'}">
                 {params.get('sharpe', 0):.2f}
             </div>
         </div>
-        <div class="metric-card">
-            <div class="metric-label">Sortino</div>
-            <div class="metric-value">{params.get('sortino', 0):.2f}</div>
+    </div>
+
+    <div class="detail-list">
+        <div class="detail-row">
+            <span class="detail-label">Max Drawdown</span>
+            <span class="detail-value negative">{params.get('max_drawdown', 0):.1f}%</span>
         </div>
-        <div class="metric-card">
-            <div class="metric-label">Calmar</div>
-            <div class="metric-value">{params.get('calmar', 0):.2f}</div>
+        <div class="detail-row">
+            <span class="detail-label">Win Rate</span>
+            <span class="detail-value {'positive' if params.get('win_rate', 0) > 0.5 else 'negative'}">{params.get('win_rate', 0) * 100:.1f}%</span>
         </div>
-        <div class="metric-card">
-            <div class="metric-label">Max Drawdown</div>
-            <div class="metric-value negative">{params.get('max_drawdown', 0):.1f}%</div>
+        <div class="detail-row">
+            <span class="detail-label">Trades</span>
+            <span class="detail-value">{params.get('trades', 0)}</span>
         </div>
-        <div class="metric-card">
-            <div class="metric-label">Recovery Factor</div>
-            <div class="metric-value">{params.get('recovery_factor', 0):.2f}</div>
+        <div class="detail-row">
+            <span class="detail-label">Trades/Year</span>
+            <span class="detail-value">{params.get('trades_per_year', 0):.1f}</span>
         </div>
-        <div class="metric-card">
-            <div class="metric-label">Profit Factor</div>
-            <div class="metric-value">{params.get('profit_factor', 0):.2f}</div>
+        <div class="detail-row">
+            <span class="detail-label">Sortino</span>
+            <span class="detail-value">{params.get('sortino', 0):.2f}</span>
         </div>
-        <div class="metric-card">
-            <div class="metric-label">Expectancy</div>
-            <div class="metric-value">${params.get('expectancy', 0):.2f}</div>
+        <div class="detail-row">
+            <span class="detail-label">Calmar</span>
+            <span class="detail-value">{params.get('calmar', 0):.2f}</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Recovery Factor</span>
+            <span class="detail-value">{params.get('recovery_factor', 0):.2f}</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Profit Factor</span>
+            <span class="detail-value">{params.get('profit_factor', 0):.2f}</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Expectancy</span>
+            <span class="detail-value">${params.get('expectancy', 0):.2f}</span>
         </div>
     </div>
 
@@ -830,7 +903,7 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
     {perf_html}
 
     <footer>
-        QRE v0.3.0 | MACD+RSI | Anchored Walk-Forward
+        QRE v0.4.0 | MACD+RSI | Anchored Walk-Forward
     </footer>
 
     <script>
@@ -838,32 +911,32 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
             y: {json.dumps(equity_curve)},
             type: 'scatter',
             mode: 'lines',
-            line: {{ color: '#8be9fd', width: 2 }},
+            line: {{ color: '#86e1fc', width: 2 }},
             fill: 'tozeroy',
-            fillcolor: 'rgba(139, 233, 253, 0.1)'
+            fillcolor: 'rgba(134, 225, 252, 0.08)'
         }}], {{
-            paper_bgcolor: '#44475a',
-            plot_bgcolor: '#44475a',
-            font: {{ color: '#f8f8f2', size: 10 }},
+            paper_bgcolor: '#2f334d',
+            plot_bgcolor: '#2f334d',
+            font: {{ color: '#c8d3f5', size: 10 }},
             margin: {{ t: 20, b: 40, l: 60, r: 20 }},
-            xaxis: {{ gridcolor: '#282a36', title: 'Trade #' }},
-            yaxis: {{ gridcolor: '#282a36', title: 'Equity ($)' }}
+            xaxis: {{ gridcolor: '#3b4261', title: 'Trade #' }},
+            yaxis: {{ gridcolor: '#3b4261', title: 'Equity ($)' }}
         }});
 
         Plotly.newPlot('drawdown-chart', [{{
             y: {json.dumps(drawdown_curve)},
             type: 'scatter',
             mode: 'lines',
-            line: {{ color: '#ff5555', width: 2 }},
+            line: {{ color: '#ff757f', width: 2 }},
             fill: 'tozeroy',
-            fillcolor: 'rgba(255, 85, 85, 0.2)'
+            fillcolor: 'rgba(255, 117, 127, 0.15)'
         }}], {{
-            paper_bgcolor: '#44475a',
-            plot_bgcolor: '#44475a',
-            font: {{ color: '#f8f8f2', size: 10 }},
+            paper_bgcolor: '#2f334d',
+            plot_bgcolor: '#2f334d',
+            font: {{ color: '#c8d3f5', size: 10 }},
             margin: {{ t: 20, b: 40, l: 60, r: 20 }},
-            xaxis: {{ gridcolor: '#282a36', title: 'Trade #' }},
-            yaxis: {{ gridcolor: '#282a36', title: 'Drawdown (%)' }}
+            xaxis: {{ gridcolor: '#3b4261', title: 'Trade #' }},
+            yaxis: {{ gridcolor: '#3b4261', title: 'Drawdown (%)' }}
         }});
         {perf_js}
         {optuna_js}
