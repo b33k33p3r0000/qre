@@ -21,11 +21,11 @@ QRE Optimizer — MACD+RSI AWF
 =============================
 
 Presets:
-  1) Quick      —  2k trials, 1yr, 2 splits     (~5 min)
-  2) Standard   —  5k trials, 1yr, 3 splits     (~15 min)
-  3) Production — 10k trials, 1yr, 3 splits     (~30 min)
-  4) Deep       — 15k trials, 1yr, 4 splits     (~60 min)
-  5) Über       — 25k trials, 1yr, 4 splits     (~120 min)
+  1) Quick      —  2k trials, 1yr, 2 splits     (~15 min)
+  2) Standard   —  5k trials, 1yr, 3 splits     (~45 min)
+  3) Production — 10k trials, 1yr, 3 splits     (~90 min)
+  4) Deep       — 15k trials, 1yr, 4 splits     (~3 hrs)
+  5) Über       — 25k trials, 1yr, 4 splits     (~6 hrs)
   6) Custom     — You choose everything
 
 Pairs: BTC/USDC, SOL/USDC (or both)

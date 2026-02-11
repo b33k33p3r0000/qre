@@ -485,6 +485,7 @@ def monte_carlo_validation(
     n_simulations: int = 1000,
     start_equity: float = STARTING_EQUITY,
     seed: int = 42,
+    backtest_days: int = 365,
 ) -> MonteCarloResult:
     """
     v9.0 NEW: Monte Carlo validace pro odhad robustnosti strategie.
@@ -549,10 +550,11 @@ def monte_carlo_validation(
         max_dd = float(drawdown.min())
         max_dds.append(max_dd)
 
-        # Calculate Sharpe from shuffled returns
+        # Calculate Sharpe from shuffled returns (annualize by trades/year)
         returns = np.diff(equity_curve) / equity_curve[:-1]
+        trades_per_year = n_trades * 365 / max(backtest_days, 1)
         if len(returns) > 1 and np.std(returns) > 1e-12:
-            sharpe = float((np.mean(returns) / np.std(returns)) * np.sqrt(252))
+            sharpe = float((np.mean(returns) / np.std(returns)) * np.sqrt(trades_per_year))
         else:
             sharpe = 0.0
         sharpes.append(sharpe)

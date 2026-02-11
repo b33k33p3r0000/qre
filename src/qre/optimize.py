@@ -294,6 +294,7 @@ def run_optimization(
     full_metrics = calculate_metrics(
         full_result.trades, full_result.backtest_days,
         start_equity=STARTING_EQUITY,
+        price_data=base_df,
     )
 
     # Per-split metrics
@@ -314,6 +315,7 @@ def run_optimization(
             if tr.trades:
                 last_train_metrics = calculate_metrics(
                     tr.trades, tr.backtest_days, start_equity=STARTING_EQUITY,
+                    price_data=base_df, start_idx=MIN_WARMUP_BARS, end_idx=train_end,
                 )
 
         te_r = simulate_trades_fast(
@@ -323,12 +325,15 @@ def run_optimization(
             precomputed_rsi_gates=gates,
         )
         if te_r.trades:
-            tm = calculate_metrics(te_r.trades, te_r.backtest_days, start_equity=STARTING_EQUITY)
+            tm = calculate_metrics(
+                te_r.trades, te_r.backtest_days, start_equity=STARTING_EQUITY,
+                price_data=base_df, start_idx=train_end, end_idx=test_end,
+            )
             split_metrics.append({
                 "split": i + 1,
                 "test_equity": round(tm.equity, 2),
                 "test_trades": tm.trades,
-                "test_sharpe": round(tm.sharpe_ratio, 4),
+                "test_sharpe": round(tm.sharpe_ratio_time_based, 4),
             })
             if i == len(splits) - 1:
                 last_test_metrics = tm
@@ -341,7 +346,7 @@ def run_optimization(
         "trades_per_year": round(full_metrics.trades_per_year, 2),
         "win_rate": round(full_metrics.win_rate / 100, 4),
         "max_drawdown": round(full_metrics.max_drawdown, 2),
-        "sharpe": round(full_metrics.sharpe_ratio, 4),
+        "sharpe": round(full_metrics.sharpe_ratio_time_based, 4),
         "sortino": round(full_metrics.sortino_ratio, 4),
         "calmar": round(full_metrics.calmar_ratio, 4),
         "recovery_factor": round(full_metrics.recovery_factor, 4),
@@ -358,13 +363,13 @@ def run_optimization(
         best_params.update({
             "train_equity": round(last_train_metrics.equity, 2),
             "train_trades": last_train_metrics.trades,
-            "train_sharpe": round(last_train_metrics.sharpe_ratio, 4),
+            "train_sharpe": round(last_train_metrics.sharpe_ratio_time_based, 4),
         })
     if last_test_metrics:
         best_params.update({
             "test_equity": round(last_test_metrics.equity, 2),
             "test_trades": last_test_metrics.trades,
-            "test_sharpe": round(last_test_metrics.sharpe_ratio, 4),
+            "test_sharpe": round(last_test_metrics.sharpe_ratio_time_based, 4),
         })
     if last_train_metrics and last_test_metrics:
         best_params["test_train_ratio"] = (
@@ -375,7 +380,10 @@ def run_optimization(
     # 5. Monte Carlo
     if len(full_result.trades) >= MONTE_CARLO_MIN_TRADES:
         logger.info(f"Running Monte Carlo ({MONTE_CARLO_SIMULATIONS} simulations)...")
-        mc = monte_carlo_validation(full_result.trades, n_simulations=MONTE_CARLO_SIMULATIONS, seed=seed)
+        mc = monte_carlo_validation(
+            full_result.trades, n_simulations=MONTE_CARLO_SIMULATIONS, seed=seed,
+            backtest_days=full_result.backtest_days,
+        )
         best_params.update({
             "mc_sharpe_mean": mc.sharpe_mean,
             "mc_sharpe_ci_low": mc.sharpe_ci_low,
@@ -402,7 +410,7 @@ def run_optimization(
     save_report(outdir / f"report_{base}.html", best_params, trades_dicts, optuna_history=optuna_history)
 
     logger.info(f"Done {symbol}: Equity=${full_metrics.equity:,.2f}, "
-                f"Sharpe={full_metrics.sharpe_ratio:.2f}, Trades={full_metrics.trades}")
+                f"Sharpe={full_metrics.sharpe_ratio_time_based:.2f}, Trades={full_metrics.trades}")
 
     # 8. Notifications
     notify_complete(best_params)
