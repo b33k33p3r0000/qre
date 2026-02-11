@@ -36,6 +36,7 @@ from qre.config import (
     MIN_WARMUP_BARS,
     MONTE_CARLO_MIN_TRADES,
     MONTE_CARLO_SIMULATIONS,
+    SPLIT_FAIL_PENALTY,
     STARTING_EQUITY,
     STARTUP_TRIALS_RATIO,
     TF_LIST,
@@ -171,7 +172,16 @@ def build_objective(
         if not split_scores or all(s == 0 for s in split_scores):
             return 0.0
 
-        return float(np.mean([s for s in split_scores if s > 0]))
+        # Include zeros in mean — failed splits naturally reduce the score
+        base_score = float(np.mean(split_scores))
+
+        # Additional penalty per failed split (score=0)
+        n_failed = sum(1 for s in split_scores if s == 0)
+        if n_failed > 0:
+            penalty = n_failed * SPLIT_FAIL_PENALTY
+            base_score *= (1.0 - min(penalty, 0.80))
+
+        return base_score
 
     return objective
 

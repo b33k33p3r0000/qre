@@ -40,7 +40,7 @@ from qre.core.indicators import macd, rsi, stochrsi
 
 
 # MACD mode options
-MACD_MODES = ["crossover", "rising", "positive", "any"]
+MACD_MODES = ["crossover", "rising"]
 
 # RSI mode options (v2.0)
 RSI_MODES = ["extreme", "trend_filter"]

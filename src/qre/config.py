@@ -59,36 +59,36 @@ def get_slippage(symbol: str) -> float:
 
 SYMBOL_CONFIGS: Dict[str, Dict] = {
     "BTC/USDC": {
-        "min_trades_year": 80,
+        "min_trades_year": 100,
         "min_trades_test": 8,
         "max_drawdown_limit": 0.15,
-        "min_hold_min": 8,
-        "min_hold_max": 12,
-        "p_buy_min": 0.10,
-        "p_buy_max": 0.22,
+        "min_hold_min": 4,
+        "min_hold_max": 6,
+        "p_buy_min": 0.17,
+        "p_buy_max": 0.50,
         "volatility_class": "low",
         "threshold_tightness": 0.95,
     },
     "SOL/USDC": {
-        "min_trades_year": 80,
+        "min_trades_year": 100,
         "min_trades_test": 8,
         "max_drawdown_limit": 0.25,
-        "min_hold_min": 8,
-        "min_hold_max": 12,
-        "p_buy_min": 0.10,
-        "p_buy_max": 0.25,
+        "min_hold_min": 4,
+        "min_hold_max": 6,
+        "p_buy_min": 0.17,
+        "p_buy_max": 0.50,
         "volatility_class": "high",
         "threshold_tightness": 1.0,
     },
 }
 
 DEFAULT_SYMBOL_CONFIG: Dict = {
-    "min_trades_year": 80,
+    "min_trades_year": 100,
     "min_trades_test": 8,
     "max_drawdown_limit": 0.18,
-    "min_hold_min": 8,
-    "min_hold_max": 12,
-    "p_buy_min": 0.12,
+    "min_hold_min": 4,
+    "min_hold_max": 6,
+    "p_buy_min": 0.17,
     "p_buy_max": 0.50,
     "volatility_class": "medium",
     "threshold_tightness": 0.95,
@@ -103,7 +103,7 @@ def get_symbol_config(symbol: str) -> Dict:
 # TRADE COUNT CONSTRAINTS
 # =============================================================================
 
-MIN_TRADES_YEAR_HARD = 80
+MIN_TRADES_YEAR_HARD = 100
 MIN_TRADES_TEST_HARD = 8
 MAX_TRADES_YEAR = 500
 OVERTRADING_PENALTY = 0.15
@@ -128,6 +128,9 @@ MIN_TEST_SHARPE = 0.0
 
 MIN_TEST_SHARPE_TIME_BASED = 0.3
 MIN_TEST_TRAIN_RATIO_STRICT = 0.25
+
+# Split consistency (anti-overfit)
+SPLIT_FAIL_PENALTY = 0.15  # 15% additional penalty per failed split (score=0)
 
 # =============================================================================
 # OPTIMIZATION
@@ -204,7 +207,7 @@ BACKTEST_POSITION_PCT = 0.25  # Statických 25% pro všechny backtesty i EE
 # CATASTROPHIC STOP
 # =============================================================================
 
-CATASTROPHIC_STOP_PCT = 0.15  # -15% emergency exit
+CATASTROPHIC_STOP_PCT = 0.10  # -10% emergency exit
 
 # =============================================================================
 # DISCORD (optional)
