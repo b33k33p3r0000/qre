@@ -6,7 +6,12 @@ Only BTC/USDC and SOL/USDC. Only MACD+RSI strategy.
 """
 
 import os
+from pathlib import Path
 from typing import Dict
+
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 # =============================================================================
 # SYMBOLS & TIMEFRAMES
@@ -205,4 +210,5 @@ CATASTROPHIC_STOP_PCT = 0.15  # -15% emergency exit
 # DISCORD (optional)
 # =============================================================================
 
-DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "")
+DISCORD_WEBHOOK_RUNS = os.environ.get("DISCORD_WEBHOOK_RUNS", "")
+DISCORD_WEBHOOK_ALERTS = os.environ.get("DISCORD_WEBHOOK_ALERTS", "")

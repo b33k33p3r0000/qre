@@ -52,19 +52,16 @@ class TestDiscordNotify:
     @patch("qre.notify.requests.post")
     def test_sends_when_webhook_set(self, mock_post):
         mock_post.return_value = MagicMock(status_code=200)
-        with patch("qre.notify.DISCORD_WEBHOOK_URL", "https://discord.com/api/webhooks/test"):
-            result = discord_notify("test message")
+        result = discord_notify("test message", "https://discord.com/api/webhooks/test")
         assert result is True
         mock_post.assert_called_once()
 
     def test_returns_false_when_no_webhook(self):
-        with patch("qre.notify.DISCORD_WEBHOOK_URL", ""):
-            result = discord_notify("test message")
+        result = discord_notify("test message", "")
         assert result is False
 
     @patch("qre.notify.requests.post")
     def test_returns_false_on_error(self, mock_post):
         mock_post.side_effect = Exception("connection error")
-        with patch("qre.notify.DISCORD_WEBHOOK_URL", "https://discord.com/api/webhooks/test"):
-            result = discord_notify("test message")
+        result = discord_notify("test message", "https://discord.com/api/webhooks/test")
         assert result is False

@@ -4,6 +4,10 @@ QRE Discord Notifications
 ==========================
 Start + Complete notifications only. No progress, no heartbeat.
 Master Plan rule: "Notifikace = akce nebo problem."
+
+Channels:
+  #qre-runs   — start, info
+  #qre-alerts — complete results, overfit warnings
 """
 
 import logging
@@ -11,18 +15,18 @@ from typing import Any, Dict, Optional
 
 import requests
 
-from qre.config import DISCORD_WEBHOOK_URL
+from qre.config import DISCORD_WEBHOOK_ALERTS, DISCORD_WEBHOOK_RUNS
 
 logger = logging.getLogger("qre.notify")
 
 
-def discord_notify(msg: str, timeout: int = 8) -> bool:
+def discord_notify(msg: str, webhook_url: str, timeout: int = 8) -> bool:
     """Send message to Discord webhook. Returns True on success."""
-    if not DISCORD_WEBHOOK_URL:
+    if not webhook_url:
         return False
     try:
         response = requests.post(
-            DISCORD_WEBHOOK_URL,
+            webhook_url,
             json={"content": msg},
             timeout=timeout,
         )
@@ -96,12 +100,12 @@ def format_complete_message(params: Dict[str, Any]) -> str:
 
 
 def notify_start(**kwargs) -> bool:
-    """Send start notification. Returns True on success."""
+    """Send start notification to #qre-runs."""
     msg = format_start_message(**kwargs)
-    return discord_notify(msg)
+    return discord_notify(msg, DISCORD_WEBHOOK_RUNS)
 
 
 def notify_complete(params: Dict[str, Any]) -> bool:
-    """Send completion notification. Returns True on success."""
+    """Send completion notification to #qre-alerts."""
     msg = format_complete_message(params)
-    return discord_notify(msg)
+    return discord_notify(msg, DISCORD_WEBHOOK_ALERTS)
