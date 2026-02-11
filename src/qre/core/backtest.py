@@ -205,7 +205,7 @@ def trading_loop_numba(
                                    pnl_abs, pnl_pct, exit_reason, size, capital_at_entry]
         exit_reason: 0=signal, 1=trailing_stop, 2=eod, 3=catastrophic_stop, 4=max_hold
     """
-    starting_equity = STARTING_EQUITY  # v10.2: Use config value ($20,000)
+    starting_equity = STARTING_EQUITY
     cash = starting_equity
     position_size = 0.0
     in_position = False

@@ -32,12 +32,10 @@ from qre.config import (
     BASE_TF,
     DEFAULT_TRIALS,
     ENABLE_PRUNING,
-    MIN_PRUNING_WARMUP,
     MIN_STARTUP_TRIALS,
     MIN_WARMUP_BARS,
     MONTE_CARLO_MIN_TRADES,
     MONTE_CARLO_SIMULATIONS,
-    PRUNING_WARMUP_RATIO,
     STARTING_EQUITY,
     STARTUP_TRIALS_RATIO,
     TF_LIST,
@@ -95,7 +93,6 @@ def create_pruner(n_trials: int) -> optuna.pruners.BasePruner:
     """Create SuccessiveHalving pruner."""
     if not ENABLE_PRUNING:
         return optuna.pruners.NopPruner()
-    warmup = max(MIN_PRUNING_WARMUP, int(n_trials * PRUNING_WARMUP_RATIO))
     return optuna.pruners.SuccessiveHalvingPruner(
         min_resource=1,
         reduction_factor=3,
