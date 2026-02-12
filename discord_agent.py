@@ -1,7 +1,8 @@
-"""QRE Discord Agent — reports optimization status via /run command.
+"""QRE Discord Agent — reports optimization status via relay pattern.
 
-Lightweight agent that listens on Discord and responds to /run
-with current QRE optimization progress.
+Listens on #qre-control for request messages from VPS bot.
+When VPS bot receives /run, it posts QRE_REQUEST:run here.
+This agent responds with QRE_RESPONSE:<data>.
 
 Usage:
     python discord_agent.py
@@ -13,12 +14,10 @@ import logging
 import os
 import subprocess
 import sys
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 import discord
-from discord import app_commands
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -26,6 +25,10 @@ load_dotenv()
 QRE_ROOT = Path(__file__).parent.resolve()
 RESULTS_DIR = QRE_ROOT / "results"
 LOGS_DIR = QRE_ROOT / "logs"
+
+# Relay protocol markers (must match VPS bot)
+QRE_REQUEST = "QRE_REQUEST:"
+QRE_RESPONSE = "QRE_RESPONSE:"
 
 logger = logging.getLogger("qre.discord_agent")
 
@@ -114,22 +117,17 @@ def _find_latest_study(coin: str) -> dict | None:
 def _parse_total_trials(run_dir_name: str) -> int | None:
     """Try to find total trial count from the log file."""
     try:
-        # Logs are named qre_YYYY-MM-DD_HH-MM-SS.log
-        # Run dirs are named YYYY-MM-DD_HH-MM-SS_COIN
-        # Match by timestamp prefix
-        ts_prefix = run_dir_name.rsplit("_", 1)[0]  # e.g. 2026-02-12_15-30-45
+        ts_prefix = run_dir_name.rsplit("_", 1)[0]
 
         log_files = sorted(LOGS_DIR.glob("qre_*.log"), reverse=True)
         for log_file in log_files:
             if ts_prefix in log_file.name:
-                # Read last 100 lines looking for trial count
                 result = subprocess.run(
                     ["tail", "-100", str(log_file)],
                     capture_output=True, text=True, timeout=5,
                 )
                 for line in result.stdout.split("\n"):
                     if "trials" in line.lower() and "optimization" in line.lower():
-                        # "Starting AWF optimization: 10000 trials"
                         for word in line.split():
                             if word.isdigit() and int(word) > 100:
                                 return int(word)
@@ -153,15 +151,71 @@ def _guess_preset(n_total: int | None) -> str:
     return presets.get(n_total, f"Custom ({n_total} trials)")
 
 
+def _build_status_message() -> str:
+    """Build QRE status message."""
+    proc = _find_running_qre()
+
+    if proc is None:
+        # Not running — show last completed run
+        for coin in ["BTC", "SOL"]:
+            study = _find_latest_study(coin)
+            if study:
+                lines = [
+                    "\U0001f52c **QRE Optimization**",
+                    "\u251c\u2500\u2500 Status: \u23f9\ufe0f Not running",
+                    f"\u251c\u2500\u2500 Last run: {study['run_dir']}",
+                    f"\u251c\u2500\u2500 Trials: {study['n_complete']}",
+                ]
+                if study["best_value"] is not None:
+                    lines.append(
+                        f"\u2514\u2500\u2500 Best value: {study['best_value']:.4f}"
+                    )
+                return "\n".join(lines)
+
+        return (
+            "\U0001f52c **QRE Optimization**\n"
+            "\u2514\u2500\u2500 Status: \u23f9\ufe0f Not running (no previous runs found)"
+        )
+
+    # Running — show live progress
+    coin = proc["coin"]
+    study = _find_latest_study(coin)
+
+    lines = [
+        "\U0001f52c **QRE Optimization**",
+        f"\u251c\u2500\u2500 Status: \u2705 Running (PID {proc['pid']})",
+        f"\u251c\u2500\u2500 Coin: {coin}",
+    ]
+
+    if study:
+        preset = _guess_preset(study["n_total"])
+        lines.append(f"\u251c\u2500\u2500 Preset: {preset}")
+
+        if study["n_total"]:
+            pct = (study["n_complete"] / study["n_total"]) * 100
+            lines.append(
+                f"\u251c\u2500\u2500 Progress: {study['n_complete']} / "
+                f"{study['n_total']} trials ({pct:.0f}%)"
+            )
+        else:
+            lines.append(
+                f"\u251c\u2500\u2500 Progress: {study['n_complete']} trials"
+            )
+
+        if study["best_value"] is not None:
+            lines.append(
+                f"\u251c\u2500\u2500 Best value: {study['best_value']:.4f} (Sharpe)"
+            )
+
+    lines.append(f"\u2514\u2500\u2500 Elapsed: {proc['elapsed']}")
+    return "\n".join(lines)
+
+
 def main():
     token = os.getenv("DISCORD_BOT_TOKEN", "")
-    guild_id = os.getenv("DISCORD_GUILD_ID", "")
 
     if not token:
         print("ERROR: DISCORD_BOT_TOKEN not set in .env")
-        sys.exit(1)
-    if not guild_id:
-        print("ERROR: DISCORD_GUILD_ID not set in .env")
         sys.exit(1)
 
     logging.basicConfig(
@@ -170,81 +224,30 @@ def main():
     )
 
     intents = discord.Intents.default()
+    intents.message_content = True
     bot = discord.Client(intents=intents)
-    tree = app_commands.CommandTree(bot)
-    guild = discord.Object(id=int(guild_id))
-
-    @tree.command(
-        name="run",
-        description="Check QRE optimization status",
-        guild=guild,
-    )
-    async def run_status(interaction: discord.Interaction):
-        proc = _find_running_qre()
-
-        if proc is None:
-            # Not running — show last completed run
-            for coin in ["BTC", "SOL"]:
-                study = _find_latest_study(coin)
-                if study:
-                    lines = [
-                        "\U0001f52c **QRE Optimization**",
-                        "\u251c\u2500\u2500 Status: \u23f9\ufe0f Not running",
-                        f"\u251c\u2500\u2500 Last run: {study['run_dir']}",
-                        f"\u251c\u2500\u2500 Trials: {study['n_complete']}",
-                    ]
-                    if study["best_value"] is not None:
-                        lines.append(
-                            f"\u2514\u2500\u2500 Best value: {study['best_value']:.4f}"
-                        )
-                    await interaction.response.send_message("\n".join(lines))
-                    return
-
-            await interaction.response.send_message(
-                "\U0001f52c **QRE Optimization**\n"
-                "\u2514\u2500\u2500 Status: \u23f9\ufe0f Not running (no previous runs found)"
-            )
-            return
-
-        # Running — show live progress
-        coin = proc["coin"]
-        study = _find_latest_study(coin)
-
-        lines = [
-            "\U0001f52c **QRE Optimization**",
-            f"\u251c\u2500\u2500 Status: \u2705 Running (PID {proc['pid']})",
-            f"\u251c\u2500\u2500 Coin: {coin}",
-        ]
-
-        if study:
-            preset = _guess_preset(study["n_total"])
-            lines.append(f"\u251c\u2500\u2500 Preset: {preset}")
-
-            if study["n_total"]:
-                pct = (study["n_complete"] / study["n_total"]) * 100
-                lines.append(
-                    f"\u251c\u2500\u2500 Progress: {study['n_complete']} / "
-                    f"{study['n_total']} trials ({pct:.0f}%)"
-                )
-            else:
-                lines.append(
-                    f"\u251c\u2500\u2500 Progress: {study['n_complete']} trials"
-                )
-
-            if study["best_value"] is not None:
-                lines.append(
-                    f"\u251c\u2500\u2500 Best value: {study['best_value']:.4f} (Sharpe)"
-                )
-
-        lines.append(f"\u2514\u2500\u2500 Elapsed: {proc['elapsed']}")
-        await interaction.response.send_message("\n".join(lines))
 
     @bot.event
     async def on_ready():
-        await tree.sync(guild=guild)
-        logger.info(f"QRE Agent online as {bot.user}")
+        # NO tree.sync() — VPS bot owns all slash commands
+        logger.info(f"QRE Agent online as {bot.user} (relay mode)")
 
-    logger.info("Starting QRE Discord Agent...")
+    @bot.event
+    async def on_message(message):
+        # Only respond to our own relay requests
+        if message.author.id != bot.user.id:
+            return
+        if not message.content.startswith(QRE_REQUEST):
+            return
+
+        command = message.content[len(QRE_REQUEST):]
+        if command == "run":
+            status = _build_status_message()
+            await message.channel.send(f"{QRE_RESPONSE}{status}")
+            # Clean up request message
+            await message.delete()
+
+    logger.info("Starting QRE Discord Agent (relay mode)...")
     bot.run(token, log_handler=None)
 
 
