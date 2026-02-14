@@ -64,12 +64,12 @@ def health_check(params: dict[str, Any]) -> dict[str, dict[str, Any]]:
         "value": sharpe,
     }
 
-    # Max Drawdown (negative value, e.g. -0.04 = -4%)
-    # green: > -0.05, yellow: -0.05 to -0.10, red: < -0.10
+    # Max Drawdown (percentage, e.g. -1.43 = -1.43%)
+    # green: > -5%, yellow: -5% to -10%, red: < -10%
     dd = params["max_drawdown"]
-    if dd > -0.05:
+    if dd > -5.0:
         dd_status = "green"
-    elif dd >= -0.10:
+    elif dd >= -10.0:
         dd_status = "yellow"
     else:
         dd_status = "red"

@@ -26,7 +26,7 @@ from qre.analyze import (
 def good_params():
     return {
         "sharpe": 2.0,
-        "max_drawdown": -0.04,
+        "max_drawdown": -4.0,
         "trades_per_year": 120,
         "win_rate": 0.55,
         "profit_factor": 1.8,
@@ -46,7 +46,7 @@ def good_params():
 def bad_params():
     return {
         "sharpe": 0.3,
-        "max_drawdown": -0.15,
+        "max_drawdown": -15.0,
         "trades_per_year": 5,
         "win_rate": 0.35,
         "profit_factor": 0.9,
@@ -88,7 +88,7 @@ class TestHealthCheck:
     def test_yellow_zones(self, good_params):
         """Values in yellow ranges produce yellow status."""
         good_params["sharpe"] = 0.8          # yellow: 0.5–1.0
-        good_params["max_drawdown"] = -0.07  # yellow: -5% to -10%
+        good_params["max_drawdown"] = -7.0   # yellow: -5% to -10%
         good_params["trades_per_year"] = 50  # yellow: 30–80
         good_params["win_rate"] = 0.45       # yellow: 40%–50%
         good_params["profit_factor"] = 1.2   # yellow: 1.0–1.5
