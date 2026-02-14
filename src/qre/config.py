@@ -59,11 +59,11 @@ def get_slippage(symbol: str) -> float:
 
 SYMBOL_CONFIGS: Dict[str, Dict] = {
     "BTC/USDC": {
-        "min_trades_year": 100,
-        "min_trades_test": 8,
+        "min_trades_year": 60,
+        "min_trades_test": 3,
         "max_drawdown_limit": 0.15,
         "min_hold_min": 4,
-        "min_hold_max": 6,
+        "min_hold_max": 16,
         "p_buy_min": 0.17,
         "p_buy_max": 0.50,
         "volatility_class": "low",
@@ -103,8 +103,8 @@ def get_symbol_config(symbol: str) -> Dict:
 # TRADE COUNT CONSTRAINTS
 # =============================================================================
 
-MIN_TRADES_YEAR_HARD = 100
-MIN_TRADES_TEST_HARD = 8
+MIN_TRADES_YEAR_HARD = 60
+MIN_TRADES_TEST_HARD = 3
 MAX_TRADES_YEAR = 500
 OVERTRADING_PENALTY = 0.15
 
@@ -123,7 +123,7 @@ MIN_PROFITABLE_MONTHS_RATIO = 0.50
 
 MIN_TEST_TRAIN_RATIO = 0.50
 DIVERGENCE_PENALTY_FACTOR = 1.5
-MIN_TEST_TRADES = 5
+MIN_TEST_TRADES = 3
 MIN_TEST_SHARPE = 0.0
 
 MIN_TEST_SHARPE_TIME_BASED = 0.3

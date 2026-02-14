@@ -103,16 +103,20 @@ def _suggest_all_params(trial: optuna.trial.Trial, symbol: str = None) -> dict[s
     high_min = max(0.60 / tightness, 0.50)
     high_max = 0.95
 
+    # Fixed TF params (low Optuna importance per diagnose 2026-02-14)
+    fixed_tf = {"low_2h": 0.14, "high_6h": 0.83}
+
     for tf in TF_LIST:
         key = "24h" if tf == "1d" else tf
-        params[f"low_{key}"] = trial.suggest_float(f"low_{key}", low_min, low_max)
-        params[f"high_{key}"] = trial.suggest_float(f"high_{key}", high_min, high_max)
+        low_key, high_key = f"low_{key}", f"high_{key}"
+        params[low_key] = fixed_tf[low_key] if low_key in fixed_tf else trial.suggest_float(low_key, low_min, low_max)
+        params[high_key] = fixed_tf[high_key] if high_key in fixed_tf else trial.suggest_float(high_key, high_min, high_max)
 
-    # Gate params
+    # Gate params (6h, 8h fixed — low Optuna importance per diagnose 2026-02-14)
     params["rsi_gate_24h"] = trial.suggest_float("rsi_gate_24h", 40.0, 60.0)
     params["rsi_gate_12h"] = trial.suggest_float("rsi_gate_12h", 40.0, 60.0)
-    params["rsi_gate_8h"] = trial.suggest_float("rsi_gate_8h", 40.0, 60.0)
-    params["rsi_gate_6h"] = trial.suggest_float("rsi_gate_6h", 40.0, 60.0)
+    params["rsi_gate_8h"] = 46.0
+    params["rsi_gate_6h"] = 48.0
 
     # Metadata
     params["tf"] = "1h"
@@ -149,7 +153,7 @@ class MACDRSIStrategy(BaseStrategy):
         params["rsi_mode"] = trial.suggest_categorical("rsi_mode", RSI_MODES)
         params["rsi_upper"] = trial.suggest_int("rsi_upper", 60, 80)
         params["rsi_lower"] = trial.suggest_int("rsi_lower", 20, 40)
-        params["rsi_momentum_level"] = trial.suggest_int("rsi_momentum_level", 45, 55)
+        params["rsi_momentum_level"] = trial.suggest_int("rsi_momentum_level", 48, 55)
 
         return params
 

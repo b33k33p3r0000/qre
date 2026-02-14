@@ -24,7 +24,7 @@ class TestTradeCountHardConstraint:
         assert "trades_per_year" in reason.lower() or "80" in reason
 
     def test_fails_below_min_test_trades(self):
-        passed, reason = check_trade_count_hard_constraint(100, test_trades=5)
+        passed, reason = check_trade_count_hard_constraint(100, test_trades=2)
         assert passed is False
 
     def test_none_test_trades_skips_test_check(self):
@@ -81,7 +81,7 @@ class TestDivergencePenalty:
         assert result == 0.0
 
     def test_hard_fail_too_few_test_trades(self):
-        result = apply_divergence_penalty(50000.0, 48000.0, test_sharpe=1.5, test_trades=3)
+        result = apply_divergence_penalty(50000.0, 48000.0, test_sharpe=1.5, test_trades=2)
         assert result == 0.0
 
 
