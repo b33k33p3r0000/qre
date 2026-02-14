@@ -7,7 +7,10 @@ Design: docs/plans/2026-02-12-analyze-pipeline-design.md
 from __future__ import annotations
 
 import csv
+import json
 import math
+import os
+from datetime import UTC, datetime
 from pathlib import Path
 from statistics import median
 from typing import Any
@@ -408,3 +411,95 @@ def generate_suggestions(
         })
 
     return suggestions[:5]
+
+
+# --- Status emoji mapping ---
+_STATUS_EMOJI = {"green": "\U0001f7e2", "yellow": "\U0001f7e1", "red": "\U0001f534"}
+_VERDICT_EMOJI = {"PASS": "\u2705", "REVIEW": "\U0001f7e1", "FAIL": "\u274c"}
+
+
+def build_discord_embed(analysis: dict[str, Any]) -> str:
+    """Build compact Discord embed string from analysis dict.
+
+    Max 6000 chars for Discord webhook compatibility.
+
+    Args:
+        analysis: Full analysis dict with keys: run_name, symbol,
+            n_trials, n_splits, verdict, health, suggestions.
+
+    Returns:
+        Formatted string for Discord embed.
+    """
+    lines: list[str] = []
+
+    run_name = analysis.get("run_name", "unknown")
+    symbol = analysis.get("symbol", "?")
+    n_trials = analysis.get("n_trials", "?")
+    n_splits = analysis.get("n_splits", "?")
+    verdict = analysis.get("verdict", "?")
+
+    lines.append(f"\U0001f4ca RUN ANALYSIS: {run_name}")
+    lines.append(f"{symbol} \u00b7 {n_trials} trials \u00b7 AWF {n_splits} splits")
+    lines.append("")
+
+    verdict_emoji = _VERDICT_EMOJI.get(verdict, "?")
+    lines.append(f"VERDICT: {verdict_emoji} {verdict}")
+    lines.append("")
+
+    # Health Check section
+    health = analysis.get("health", {})
+    if health:
+        lines.append("Health Check")
+        for metric, info in health.items():
+            status = info.get("status", "?")
+            emoji = _STATUS_EMOJI.get(status, "\u2753")
+            lines.append(f"{emoji} {metric}: {status}")
+        lines.append("")
+
+    # Top Issues — red and yellow items
+    issues = [
+        (metric, info)
+        for metric, info in health.items()
+        if info.get("status") in ("red", "yellow")
+    ]
+    if issues:
+        lines.append("Top Issues")
+        for metric, info in issues:
+            status = info.get("status", "?")
+            emoji = _STATUS_EMOJI.get(status, "\u2753")
+            value = info.get("value", "?")
+            lines.append(f"{emoji} {metric} = {value}")
+        lines.append("")
+
+    # Suggestions section
+    suggestions = analysis.get("suggestions", [])
+    if suggestions:
+        lines.append("Suggestions")
+        for i, s in enumerate(suggestions, 1):
+            lines.append(f"{i}. {s.get('action', '?')}")
+        lines.append("")
+
+    embed = "\n".join(lines)
+
+    # Truncate to 6000 chars if needed
+    if len(embed) > 6000:
+        embed = embed[:5997] + "..."
+
+    return embed
+
+
+def save_analysis(analysis: dict[str, Any], path: str | Path) -> None:
+    """Save analysis dict to JSON file with added timestamp.
+
+    Args:
+        analysis: Full analysis dict.
+        path: Output file path.
+    """
+    output = dict(analysis)
+    output["timestamp"] = datetime.now(UTC).isoformat()
+
+    path = Path(path)
+    os.makedirs(path.parent, exist_ok=True)
+
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(output, f, indent=2, ensure_ascii=False)

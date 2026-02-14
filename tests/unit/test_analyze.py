@@ -2,6 +2,7 @@
 """Unit tests for QRE post-run analysis pipeline."""
 
 import csv
+import json
 import math
 
 import pytest
@@ -9,10 +10,12 @@ import pytest
 from qre.analyze import (
     analyze_thresholds,
     analyze_trades,
+    build_discord_embed,
     check_robustness,
     compute_verdict,
     generate_suggestions,
     health_check,
+    save_analysis,
 )
 
 
@@ -461,3 +464,75 @@ class TestGenerateSuggestions:
 
         suggestions = generate_suggestions(health, thresholds, trades, robustness)
         assert len(suggestions) <= 5
+
+
+# --- build_discord_embed tests ---
+
+
+@pytest.fixture
+def full_analysis():
+    """A complete analysis dict for testing embed and save."""
+    return {
+        "run_name": "btc_run_042",
+        "symbol": "BTC/USD",
+        "n_trials": 200,
+        "n_splits": 4,
+        "verdict": "FAIL",
+        "health": {
+            "sharpe": {"status": "green", "value": 2.0},
+            "max_drawdown": {"status": "red", "value": -0.12},
+            "trades_per_year": {"status": "red", "value": 15},
+            "win_rate": {"status": "yellow", "value": 0.45},
+            "profit_factor": {"status": "green", "value": 1.6},
+            "expectancy": {"status": "green", "value": 120.0},
+            "train_test_sharpe": {"status": "yellow", "value": 1.5},
+            "split_consistency": {"status": "green", "value": 0},
+        },
+        "suggestions": [
+            {
+                "priority": "high",
+                "action": "Lower p_buy to reduce required buy votes",
+                "reason": "Too few trades",
+                "impact": "More trades",
+            },
+            {
+                "priority": "high",
+                "action": "Tighten stop-loss",
+                "reason": "High catastrophic rate",
+                "impact": "Better risk management",
+            },
+        ],
+    }
+
+
+class TestBuildDiscordEmbed:
+    def test_embed_under_6000_chars(self, full_analysis):
+        """Full analysis → embed length <= 6000 chars (Discord limit)."""
+        embed = build_discord_embed(full_analysis)
+        assert len(embed) <= 6000
+
+    def test_embed_contains_verdict(self, full_analysis):
+        """Verdict string appears in embed."""
+        embed = build_discord_embed(full_analysis)
+        assert "FAIL" in embed
+
+
+# --- save_analysis tests ---
+
+
+class TestSaveAnalysis:
+    def test_saves_json(self, full_analysis, tmp_path):
+        """Saves to path, loadable as JSON, verdict preserved."""
+        path = tmp_path / "analysis.json"
+        save_analysis(full_analysis, path)
+        with open(path) as f:
+            loaded = json.load(f)
+        assert loaded["verdict"] == "FAIL"
+
+    def test_adds_timestamp(self, full_analysis, tmp_path):
+        """Saved JSON has 'timestamp' key."""
+        path = tmp_path / "analysis.json"
+        save_analysis(full_analysis, path)
+        with open(path) as f:
+            loaded = json.load(f)
+        assert "timestamp" in loaded
