@@ -7,7 +7,10 @@ import math
 
 import pytest
 
+from unittest.mock import patch
+
 from qre.analyze import (
+    analyze_run,
     analyze_thresholds,
     analyze_trades,
     build_discord_embed,
@@ -536,3 +539,70 @@ class TestSaveAnalysis:
         with open(path) as f:
             loaded = json.load(f)
         assert "timestamp" in loaded
+
+
+# --- analyze_run orchestrator tests ---
+
+
+class TestAnalyzeRun:
+    def _make_full_params(self, good_params):
+        """Merge good_params with threshold + strategy params for full pipeline."""
+        full = dict(good_params)
+        full.update({
+            # threshold params
+            "p_buy": 0.25, "k_sell": 2,
+            "macd_fast": 8, "macd_slow": 22, "macd_signal": 6,
+            "macd_mode": "rising",
+            "rsi_mode": "trend_filter",
+            "rsi_gate_6h": 48, "rsi_gate_8h": 50,
+            "rsi_gate_12h": 52, "rsi_gate_24h": 45,
+            # strategy meta
+            "symbol": "BTC/USDC", "n_trials": 200, "n_splits": 4,
+            "run_timestamp": "2026-02-14_test-run",
+        })
+        for tf in ["2h", "4h", "6h", "8h", "12h", "24h"]:
+            full[f"low_{tf}"] = 0.20
+            full[f"high_{tf}"] = 0.80
+        return full
+
+    def test_orchestrator_produces_complete_output(self, good_params, trades_csv, tmp_path):
+        """Full pipeline: creates analysis.json, returns verdict/health/suggestions."""
+        full_params = self._make_full_params(good_params)
+
+        # Build run dir structure: tmp_path/2026-02-14_test-run/BTC/
+        run_dir = tmp_path / "2026-02-14_test-run"
+        symbol_dir = run_dir / "BTC"
+        symbol_dir.mkdir(parents=True)
+
+        # Write best_params.json
+        with open(symbol_dir / "best_params.json", "w") as f:
+            json.dump(full_params, f)
+
+        # Copy trades CSV into symbol dir
+        import shutil
+        shutil.copy(trades_csv, symbol_dir / "trades_BTC_USDC_1h_FULL.csv")
+
+        # No DISCORD_WEBHOOK_ALERTS env var → no discord call
+        result = analyze_run(str(run_dir))
+
+        # Verify result structure
+        assert result["verdict"] == "PASS"  # good_params → all green → PASS
+        assert "health" in result
+        assert "trades" in result
+        assert "thresholds" in result
+        assert "robustness" in result
+        assert "suggestions" in result
+        assert "findings" in result
+
+        # Health has expected metrics
+        health = result["health"]
+        assert "sharpe" in health
+        assert "max_drawdown" in health
+
+        # analysis.json was saved
+        analysis_path = symbol_dir / "analysis.json"
+        assert analysis_path.exists()
+        with open(analysis_path) as f:
+            saved = json.load(f)
+        assert saved["verdict"] == "PASS"
+        assert "timestamp" in saved

@@ -8,12 +8,15 @@ from __future__ import annotations
 
 import csv
 import json
+import logging
 import math
 import os
 from datetime import UTC, datetime
 from pathlib import Path
 from statistics import median
 from typing import Any
+
+log = logging.getLogger(__name__)
 
 # --- Threshold analysis constants ---
 BUY_CAP = 0.6
@@ -503,3 +506,176 @@ def save_analysis(analysis: dict[str, Any], path: str | Path) -> None:
 
     with open(path, "w", encoding="utf-8") as f:
         json.dump(output, f, indent=2, ensure_ascii=False)
+
+
+# --- Orchestrator helpers ---
+
+
+def _find_symbol_dir(run_dir: str | Path) -> Path:
+    """Find the symbol subdirectory inside a run directory.
+
+    Skips 'checkpoints' dir. Looks for a subdirectory containing
+    best_params.json.
+
+    Args:
+        run_dir: Path to the run directory (e.g. results/2026-02-14_12-00-00/).
+
+    Returns:
+        Path to the symbol subdirectory.
+
+    Raises:
+        FileNotFoundError: If no symbol directory with best_params.json is found.
+    """
+    run_path = Path(run_dir)
+    for child in sorted(run_path.iterdir()):
+        if not child.is_dir():
+            continue
+        if child.name == "checkpoints":
+            continue
+        if (child / "best_params.json").exists():
+            return child
+    raise FileNotFoundError(f"No symbol directory with best_params.json in {run_dir}")
+
+
+def _build_findings(
+    health: dict[str, dict[str, Any]],
+    trades: dict[str, Any],
+    thresholds: dict[str, Any],
+    robustness: dict[str, Any],
+) -> list[dict[str, str]]:
+    """Collect red/yellow health items + high catastrophic + overfit into findings list.
+
+    Each finding has keys: severity, metric, value, detail.
+
+    Args:
+        health: Dict from health_check().
+        trades: Dict from analyze_trades().
+        thresholds: Dict from analyze_thresholds().
+        robustness: Dict from check_robustness().
+
+    Returns:
+        List of finding dicts sorted by severity (red first, then yellow).
+    """
+    findings: list[dict[str, str]] = []
+
+    # Collect reds and yellows from health
+    for metric, info in health.items():
+        status = info.get("status", "green")
+        if status in ("red", "yellow"):
+            findings.append({
+                "severity": status,
+                "metric": metric,
+                "value": str(info.get("value", "?")),
+                "detail": f"{metric} is {status}",
+            })
+
+    # High catastrophic stop rate
+    cat_pct = trades.get("catastrophic_pct", 0)
+    if cat_pct > 0.4:
+        findings.append({
+            "severity": "red",
+            "metric": "catastrophic_pct",
+            "value": f"{cat_pct:.0%}",
+            "detail": f"Catastrophic stop rate {cat_pct:.0%} exceeds 40% threshold",
+        })
+
+    # High overfit risk
+    if robustness.get("overfit_risk") == "high":
+        findings.append({
+            "severity": "red",
+            "metric": "overfit_risk",
+            "value": f"{robustness.get('overfit_score', 0):.2f}",
+            "detail": f"Overfit risk is high (score {robustness.get('overfit_score', 0):.2f})",
+        })
+
+    # Sort: red first, then yellow
+    severity_order = {"red": 0, "yellow": 1}
+    findings.sort(key=lambda f: severity_order.get(f["severity"], 2))
+
+    return findings
+
+
+def analyze_run(run_dir: str | Path) -> dict[str, Any]:
+    """Main orchestrator — run full analysis pipeline on an optimizer run.
+
+    Steps:
+        1. Find symbol subdirectory (skip 'checkpoints', look for best_params.json)
+        2. Load best_params.json
+        3. Find trades CSV (glob trades_*.csv)
+        4. Run: health_check, analyze_trades, analyze_thresholds, check_robustness
+        5. Compute verdict from health
+        6. Build findings list
+        7. Generate suggestions
+        8. Save analysis.json to symbol dir
+        9. Send Discord embed if DISCORD_WEBHOOK_ALERTS env var exists
+        10. Return full analysis dict
+
+    Args:
+        run_dir: Path to the run directory (e.g. results/2026-02-14_12-00-00/).
+
+    Returns:
+        Full analysis dict with all results.
+    """
+    run_path = Path(run_dir)
+    log.info("analyze_run: starting analysis of %s", run_path)
+
+    # 1. Find symbol dir
+    symbol_dir = _find_symbol_dir(run_path)
+    log.info("analyze_run: found symbol dir %s", symbol_dir.name)
+
+    # 2. Load best_params.json
+    params_path = symbol_dir / "best_params.json"
+    with open(params_path, encoding="utf-8") as f:
+        params = json.load(f)
+
+    # 3. Find trades CSV
+    trades_csvs = list(symbol_dir.glob("trades_*.csv"))
+    if not trades_csvs:
+        raise FileNotFoundError(f"No trades CSV found in {symbol_dir}")
+    trades_csv_path = trades_csvs[0]
+
+    # 4. Run analysis functions
+    health = health_check(params)
+    trades = analyze_trades(trades_csv_path)
+    thresholds = analyze_thresholds(params)
+    robustness = check_robustness(params)
+
+    # 5. Compute verdict
+    verdict = compute_verdict(health)
+
+    # 6. Build findings
+    findings = _build_findings(health, trades, thresholds, robustness)
+
+    # 7. Generate suggestions
+    suggestions = generate_suggestions(health, thresholds, trades, robustness)
+
+    # 8. Build full analysis dict
+    analysis: dict[str, Any] = {
+        "run_name": run_path.name,
+        "symbol": params.get("symbol", symbol_dir.name),
+        "n_trials": params.get("n_trials", "?"),
+        "n_splits": params.get("n_splits", "?"),
+        "verdict": verdict,
+        "health": health,
+        "trades": trades,
+        "thresholds": thresholds,
+        "robustness": robustness,
+        "findings": findings,
+        "suggestions": suggestions,
+    }
+
+    # 9. Save analysis.json
+    save_analysis(analysis, symbol_dir / "analysis.json")
+    log.info("analyze_run: saved analysis.json → %s", symbol_dir / "analysis.json")
+
+    # 10. Discord notification
+    webhook_url = os.environ.get("DISCORD_WEBHOOK_ALERTS", "")
+    if webhook_url:
+        from qre.notify import discord_notify
+
+        embed = build_discord_embed(analysis)
+        discord_notify(embed, webhook_url)
+        log.info("analyze_run: sent Discord embed")
+
+    log.info("analyze_run: done — verdict=%s", verdict)
+    return analysis
