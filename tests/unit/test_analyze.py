@@ -2,10 +2,15 @@
 """Unit tests for QRE post-run analysis pipeline."""
 
 import csv
+import math
 
 import pytest
 
-from qre.analyze import analyze_trades, health_check
+from qre.analyze import (
+    analyze_thresholds,
+    analyze_trades,
+    health_check,
+)
 
 
 @pytest.fixture
@@ -111,6 +116,72 @@ class TestHealthCheck:
         ]
         result = health_check(good_params)
         assert result["split_consistency"]["status"] == "red"
+
+
+# --- analyze_thresholds tests ---
+
+
+@pytest.fixture
+def threshold_params():
+    params = {
+        "p_buy": 0.25, "k_sell": 2,
+        "kB": 5, "dB": 3,
+        "macd_fast": 8, "macd_slow": 22, "macd_signal": 6,
+        "macd_mode": "rising",
+        "rsi_mode": "trend_filter",
+        "rsi_lower": 32, "rsi_upper": 60, "rsi_momentum_level": 46,
+        "rsi_gate_6h": 48, "rsi_gate_8h": 50,
+        "rsi_gate_12h": 52, "rsi_gate_24h": 45,
+    }
+    for tf in ["2h", "4h", "6h", "8h", "12h", "24h"]:
+        params[f"low_{tf}"] = 0.20
+        params[f"high_{tf}"] = 0.80
+    params["low_24h"] = 0.05
+    params["high_24h"] = 0.92
+    return params
+
+
+class TestAnalyzeThresholds:
+    def test_required_votes(self, threshold_params):
+        """ceil(0.25 * 6) = 2 required buy votes."""
+        result = analyze_thresholds(threshold_params)
+        assert result["required_buy_votes"] == math.ceil(0.25 * 6)
+        assert result["required_buy_votes"] == 2
+
+    def test_threshold_width(self, threshold_params):
+        """2h width = high - low = 0.80 - 0.20 = 0.60."""
+        result = analyze_thresholds(threshold_params)
+        tf_2h = result["tf_analysis"]["2h"]
+        assert tf_2h["width"] == pytest.approx(0.60)
+
+    def test_dead_tf_detection(self, threshold_params):
+        """24h width = 0.92 - 0.05 = 0.87 > 0.8 → dead."""
+        result = analyze_thresholds(threshold_params)
+        tf_24h = result["tf_analysis"]["24h"]
+        assert tf_24h["width"] == pytest.approx(0.87)
+        assert tf_24h["dead"] is True
+
+    def test_cap_collision_buy(self, threshold_params):
+        """low_2h = 0.65 > BUY_CAP(0.6) → buy_cap_collision."""
+        threshold_params["low_2h"] = 0.65
+        result = analyze_thresholds(threshold_params)
+        tf_2h = result["tf_analysis"]["2h"]
+        assert tf_2h["buy_cap_collision"] is True
+
+    def test_macd_spread(self, threshold_params):
+        """MACD spread = slow - fast = 22 - 8 = 14."""
+        result = analyze_thresholds(threshold_params)
+        assert result["macd_spread"] == 14
+
+    def test_rsi_gates(self, threshold_params):
+        """4 RSI gates with correct values."""
+        result = analyze_thresholds(threshold_params)
+        gates = result["rsi_gates"]
+        assert len(gates) == 4
+        assert gates["6h"] == 48
+        assert gates["8h"] == 50
+        assert gates["12h"] == 52
+        assert gates["24h"] == 45
 
 
 # --- analyze_trades tests ---

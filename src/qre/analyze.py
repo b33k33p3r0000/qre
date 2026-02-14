@@ -7,9 +7,16 @@ Design: docs/plans/2026-02-12-analyze-pipeline-design.md
 from __future__ import annotations
 
 import csv
+import math
 from pathlib import Path
 from statistics import median
 from typing import Any
+
+# --- Threshold analysis constants ---
+BUY_CAP = 0.6
+SELL_CAP = 0.4
+TF_LIST = ["2h", "4h", "6h", "8h", "12h", "24h"]
+RSI_GATE_TFS = ["6h", "8h", "12h", "24h"]
 
 
 def _classify(value: float, green_range: tuple, yellow_range: tuple) -> str:
@@ -198,4 +205,66 @@ def analyze_trades(trades_csv_path: str | Path) -> dict[str, Any]:
         "hold_bars": hold_stats,
         "top_winners": winners,
         "top_losers": losers,
+    }
+
+
+def analyze_thresholds(params: dict[str, Any]) -> dict[str, Any]:
+    """Analyze voting-system thresholds — dead TFs, cap collisions, MACD/RSI.
+
+    Evaluates each timeframe's low/high thresholds for width, dead zones,
+    aggressive zones, and cap collisions against BUY_CAP/SELL_CAP.
+
+    Args:
+        params: Optimizer result params containing p_buy, k_sell,
+            low_<tf>, high_<tf> for each TF, MACD and RSI settings.
+
+    Returns:
+        Dict with p_buy, required_buy_votes, k_sell, tf_analysis,
+        macd_spread, macd_mode, rsi_mode, rsi_gates.
+    """
+    p_buy = params["p_buy"]
+    required_buy_votes = math.ceil(p_buy * len(TF_LIST))
+
+    tf_analysis: dict[str, dict[str, Any]] = {}
+    for tf in TF_LIST:
+        low = params[f"low_{tf}"]
+        high = params[f"high_{tf}"]
+        width = high - low
+        dead = width > 0.8
+        aggressive = width < 0.3
+        buy_cap_collision = low > BUY_CAP
+        sell_cap_collision = high < SELL_CAP
+        effective_low = min(low, BUY_CAP) if buy_cap_collision else low
+        effective_high = max(high, SELL_CAP) if sell_cap_collision else high
+
+        tf_analysis[tf] = {
+            "low": low,
+            "high": high,
+            "width": width,
+            "dead": dead,
+            "aggressive": aggressive,
+            "buy_cap_collision": buy_cap_collision,
+            "sell_cap_collision": sell_cap_collision,
+            "effective_low": effective_low,
+            "effective_high": effective_high,
+        }
+
+    macd_fast = params["macd_fast"]
+    macd_slow = params["macd_slow"]
+
+    rsi_gates: dict[str, float] = {}
+    for tf in RSI_GATE_TFS:
+        key = f"rsi_gate_{tf}"
+        if key in params:
+            rsi_gates[tf] = params[key]
+
+    return {
+        "p_buy": p_buy,
+        "required_buy_votes": required_buy_votes,
+        "k_sell": params["k_sell"],
+        "tf_analysis": tf_analysis,
+        "macd_spread": macd_slow - macd_fast,
+        "macd_mode": params["macd_mode"],
+        "rsi_mode": params["rsi_mode"],
+        "rsi_gates": rsi_gates,
     }
