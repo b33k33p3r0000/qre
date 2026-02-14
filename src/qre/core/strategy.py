@@ -40,7 +40,7 @@ from qre.core.indicators import macd, rsi, stochrsi
 
 
 # MACD mode options
-MACD_MODES = ["crossover", "rising"]
+MACD_MODES = ["crossover", "rising", "positive"]
 
 # RSI mode options (v2.0)
 RSI_MODES = ["extreme", "trend_filter"]
@@ -257,11 +257,10 @@ class MACDRSIStrategy(BaseStrategy):
             tf_ts = df_tf.index.values.astype(np.int64)
             base_to_tf_idx = precompute_timeframe_indices(base_ts, tf_ts)
 
-            for bar_idx in range(n_bars):
-                tf_row_idx = base_to_tf_idx[bar_idx]
-                if tf_row_idx >= 2 and tf_row_idx < len(tf_buy):
-                    buy_votes_per_tf[tf_idx, bar_idx] = tf_buy[tf_row_idx] and additional_condition[bar_idx]
-                    sell_votes_per_tf[tf_idx, bar_idx] = tf_sell[tf_row_idx]
+            valid = (base_to_tf_idx >= 2) & (base_to_tf_idx < len(tf_buy))
+            clipped_idx = np.clip(base_to_tf_idx, 0, max(len(tf_buy) - 1, 0))
+            buy_votes_per_tf[tf_idx] = valid & tf_buy[clipped_idx] & additional_condition
+            sell_votes_per_tf[tf_idx] = valid & tf_sell[clipped_idx]
 
         # Pre-compute RSI gates
         rsi_gate_signals = np.zeros((4, n_bars), dtype=np.bool_)
@@ -283,10 +282,9 @@ class MACDRSIStrategy(BaseStrategy):
             tf_ts = df_tf.index.values.astype(np.int64)
             base_to_tf_idx = precompute_timeframe_indices(base_ts, tf_ts)
 
-            for bar_idx in range(n_bars):
-                tf_row_idx = base_to_tf_idx[bar_idx]
-                if tf_row_idx >= 1 and tf_row_idx < len(tf_gate):
-                    rsi_gate_signals[gate_idx, bar_idx] = tf_gate[tf_row_idx]
+            valid = (base_to_tf_idx >= 1) & (base_to_tf_idx < len(tf_gate))
+            clipped_idx = np.clip(base_to_tf_idx, 0, max(len(tf_gate) - 1, 0))
+            rsi_gate_signals[gate_idx] = valid & tf_gate[clipped_idx]
 
         return buy_votes_per_tf, sell_votes_per_tf, rsi_gate_signals
 
