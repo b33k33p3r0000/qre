@@ -21,11 +21,11 @@ QRE Optimizer — MACD+RSI AWF
 =============================
 
 Presets:
-  1) Quick      —  2k trials, 1yr, 2 splits     (~15 min)
-  2) Standard   —  5k trials, 1yr, 3 splits     (~45 min)
-  3) Production — 10k trials, 1yr, 3 splits     (~90 min)
+  1) Quick      —  2k trials, 1yr, 2 splits     (~10 min)
+  2) Standard   —  5k trials, 1yr, 3 splits     (~30 min)
+  3) Production — 10k trials, 1yr, 3 splits     (~70 min)
   4) Deep       — 15k trials, 1yr, 4 splits     (~3 hrs)
-  5) Über       — 25k trials, 1yr, 4 splits     (~6 hrs)
+  5) Über       — 25k trials, 1yr, 4 splits     (~7 hrs)
   6) Custom     — You choose everything
 
 Pairs: BTC/USDC, SOL/USDC (or both)
@@ -43,6 +43,7 @@ Usage:
   ./run.sh 3 --hours 17520                 # 2yr history
   ./run.sh 3 --skip-recent 720            # Skip last month
   ./run.sh attach               # Attach to running/latest log
+  ./run.sh kill                 # Kill running optimizer
   ./run.sh logs                 # List recent log files
 
 EOF
@@ -85,20 +86,103 @@ while [[ $# -gt 0 ]]; do
         --skip-recent) SKIP_RECENT="$2"; shift ;;
         --fg) FOREGROUND=true ;;
         attach)
-            LATEST=$(ls -t "$LOG_DIR"/*.log 2>/dev/null | head -1)
-            if [ -z "$LATEST" ]; then
-                echo "No log files found in $LOG_DIR"
-                exit 1
+            # Find actively written logs (modified in last 5 min)
+            ACTIVE_LOGS=()
+            while IFS= read -r f; do
+                ACTIVE_LOGS+=("$f")
+            done < <(find "$LOG_DIR" -name "*.log" -mmin -5 -type f 2>/dev/null | sort -r)
+
+            if [ ${#ACTIVE_LOGS[@]} -eq 0 ]; then
+                # No active logs — fall back to latest
+                LATEST=$(ls -t "$LOG_DIR"/*.log 2>/dev/null | head -1)
+                if [ -z "$LATEST" ]; then
+                    echo "No log files found in $LOG_DIR"
+                    exit 1
+                fi
+                echo "No active runs. Showing latest log:"
+                echo "  $(basename "$LATEST")"
+                echo "(Ctrl+C to detach)"
+                echo ""
+                tail -f "$LATEST"
+            elif [ ${#ACTIVE_LOGS[@]} -eq 1 ]; then
+                echo "Attaching to: $(basename "${ACTIVE_LOGS[0]}")"
+                echo "(Ctrl+C to detach — run continues in background)"
+                echo ""
+                tail -f "${ACTIVE_LOGS[0]}"
+            else
+                echo "Multiple active runs detected:"
+                echo ""
+                for i in "${!ACTIVE_LOGS[@]}"; do
+                    LOG_NAME=$(basename "${ACTIVE_LOGS[$i]}")
+                    LAST_LINE=$(tail -1 "${ACTIVE_LOGS[$i]}" 2>/dev/null | head -c 80 || true)
+                    echo "  $((i+1))) $LOG_NAME"
+                    [ -n "$LAST_LINE" ] && echo "     $LAST_LINE"
+                done
+                echo ""
+                read -p "Select run (1-${#ACTIVE_LOGS[@]}): " pick
+                pick=$((pick - 1))
+                if [ "$pick" -ge 0 ] && [ "$pick" -lt ${#ACTIVE_LOGS[@]} ]; then
+                    echo ""
+                    echo "Attaching to: $(basename "${ACTIVE_LOGS[$pick]}")"
+                    echo "(Ctrl+C to detach — run continues in background)"
+                    echo ""
+                    tail -f "${ACTIVE_LOGS[$pick]}"
+                else
+                    echo "Invalid choice"
+                    exit 1
+                fi
             fi
-            echo "Attaching to: $LATEST"
-            echo "(Ctrl+C to detach — run continues in background)"
-            echo ""
-            tail -f "$LATEST"
             exit 0
             ;;
         logs)
             echo "Recent logs:"
             ls -lht "$LOG_DIR"/*.log 2>/dev/null | head -10
+            exit 0
+            ;;
+        kill)
+            # Find QRE optimizer processes (macOS-compatible)
+            PIDS=()
+            CMDS=()
+            while IFS= read -r pid; do
+                cmd=$(ps -p "$pid" -o args= 2>/dev/null || true)
+                PIDS+=("$pid")
+                CMDS+=("$cmd")
+            done < <(pgrep -f "python.*qre\.optimize" 2>/dev/null || true)
+
+            if [ ${#PIDS[@]} -eq 0 ]; then
+                echo "No QRE optimizer runs found."
+                exit 0
+            elif [ ${#PIDS[@]} -eq 1 ]; then
+                echo "Killing QRE run (PID ${PIDS[0]}):"
+                echo "  ${CMDS[0]}"
+                echo ""
+                kill -2 "${PIDS[0]}" 2>/dev/null || true
+                echo "Sent SIGINT (graceful stop)."
+            else
+                echo "Multiple QRE runs detected:"
+                echo ""
+                for i in "${!PIDS[@]}"; do
+                    echo "  $((i+1))) PID ${PIDS[$i]}: ${CMDS[$i]}"
+                done
+                echo "  a) Kill all"
+                echo ""
+                read -p "Select run to kill (1-${#PIDS[@]}, a=all): " pick
+                if [ "$pick" = "a" ] || [ "$pick" = "A" ]; then
+                    for pid in "${PIDS[@]}"; do
+                        kill -2 "$pid" 2>/dev/null || true
+                    done
+                    echo "Sent SIGINT to all ${#PIDS[@]} runs."
+                else
+                    idx=$((pick - 1))
+                    if [ "$idx" -ge 0 ] && [ "$idx" -lt ${#PIDS[@]} ]; then
+                        kill -2 "${PIDS[$idx]}" 2>/dev/null || true
+                        echo "Sent SIGINT to PID ${PIDS[$idx]}."
+                    else
+                        echo "Invalid choice"
+                        exit 1
+                    fi
+                fi
+            fi
             exit 0
             ;;
         -h|--help) show_presets; exit 0 ;;
