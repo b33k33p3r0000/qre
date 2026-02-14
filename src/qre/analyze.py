@@ -268,3 +268,41 @@ def analyze_thresholds(params: dict[str, Any]) -> dict[str, Any]:
         "rsi_mode": params["rsi_mode"],
         "rsi_gates": rsi_gates,
     }
+
+
+def check_robustness(params: dict[str, Any]) -> dict[str, Any]:
+    """Evaluate optimization robustness -- overfit, splits, Monte Carlo.
+
+    Computes overfit score from train/test sharpe divergence,
+    counts positive splits, and passes through Monte Carlo results.
+
+    Args:
+        params: Optimizer result params containing train_sharpe, test_sharpe,
+            split_results, and optionally mc_sharpe_mean, mc_confidence.
+
+    Returns:
+        Dict with train_sharpe, test_sharpe, sharpe_diff, overfit_score,
+        overfit_risk, splits_positive, splits_total, splits_pct_positive,
+        split_details, mc_sharpe_mean, mc_confidence.
+    """
+    train_s = params.get("train_sharpe", 0)
+    test_s = params.get("test_sharpe", 0)
+    overfit_score = (train_s - test_s) / train_s if train_s != 0 else 0
+    overfit_risk = "high" if overfit_score > 0.5 else ("medium" if overfit_score > 0.3 else "low")
+
+    splits = params.get("split_results", [])
+    pos = sum(1 for s in splits if s.get("test_sharpe", 0) > 0)
+
+    return {
+        "train_sharpe": train_s,
+        "test_sharpe": test_s,
+        "sharpe_diff": abs(train_s - test_s),
+        "overfit_score": overfit_score,
+        "overfit_risk": overfit_risk,
+        "splits_positive": pos,
+        "splits_total": len(splits),
+        "splits_pct_positive": pos / len(splits) if splits else 0,
+        "split_details": splits,
+        "mc_sharpe_mean": params.get("mc_sharpe_mean"),
+        "mc_confidence": params.get("mc_confidence"),
+    }

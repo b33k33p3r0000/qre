@@ -9,6 +9,7 @@ import pytest
 from qre.analyze import (
     analyze_thresholds,
     analyze_trades,
+    check_robustness,
     health_check,
 )
 
@@ -182,6 +183,37 @@ class TestAnalyzeThresholds:
         assert gates["8h"] == 50
         assert gates["12h"] == 52
         assert gates["24h"] == 45
+
+
+# --- check_robustness tests ---
+
+
+class TestCheckRobustness:
+    def test_overfit_score(self, good_params):
+        """good_params → (2.5 - 2.0) / 2.5 = 0.2."""
+        result = check_robustness(good_params)
+        assert result["overfit_score"] == pytest.approx(0.2)
+
+    def test_high_overfit(self, bad_params):
+        """bad_params → (4.0 - 0.5) / 4.0 = 0.875, risk = 'high'."""
+        result = check_robustness(bad_params)
+        assert result["overfit_score"] == pytest.approx(0.875)
+        assert result["overfit_risk"] == "high"
+
+    def test_split_stats(self, good_params):
+        """good_params → 4/4 positive, pct = 1.0."""
+        result = check_robustness(good_params)
+        assert result["splits_positive"] == 4
+        assert result["splits_total"] == 4
+        assert result["splits_pct_positive"] == pytest.approx(1.0)
+
+    def test_monte_carlo_from_params(self, good_params):
+        """MC fields passed through from params."""
+        good_params["mc_sharpe_mean"] = 1.8
+        good_params["mc_confidence"] = 0.95
+        result = check_robustness(good_params)
+        assert result["mc_sharpe_mean"] == 1.8
+        assert result["mc_confidence"] == 0.95
 
 
 # --- analyze_trades tests ---
