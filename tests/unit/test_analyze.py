@@ -10,6 +10,8 @@ from qre.analyze import (
     analyze_thresholds,
     analyze_trades,
     check_robustness,
+    compute_verdict,
+    generate_suggestions,
     health_check,
 )
 
@@ -358,3 +360,104 @@ class TestAnalyzeTrades:
         """Total trade count = 5."""
         result = analyze_trades(trades_csv)
         assert result["total_trades"] == 5
+
+
+# --- compute_verdict tests ---
+
+
+class TestComputeVerdict:
+    def test_pass_all_green(self):
+        """All green metrics → PASS."""
+        health = {
+            "sharpe": {"status": "green", "value": 2.0},
+            "max_drawdown": {"status": "green", "value": -0.03},
+            "trades_per_year": {"status": "green", "value": 120},
+            "win_rate": {"status": "green", "value": 0.55},
+            "profit_factor": {"status": "green", "value": 1.8},
+        }
+        assert compute_verdict(health) == "PASS"
+
+    def test_review_on_red(self):
+        """1 red metric → REVIEW."""
+        health = {
+            "sharpe": {"status": "red", "value": 0.3},
+            "max_drawdown": {"status": "green", "value": -0.03},
+            "trades_per_year": {"status": "green", "value": 120},
+        }
+        assert compute_verdict(health) == "REVIEW"
+
+    def test_fail_on_multiple_red(self):
+        """2+ red metrics → FAIL."""
+        health = {
+            "sharpe": {"status": "red", "value": 0.3},
+            "max_drawdown": {"status": "red", "value": -0.15},
+            "trades_per_year": {"status": "green", "value": 120},
+        }
+        assert compute_verdict(health) == "FAIL"
+
+    def test_pass_with_few_yellows(self):
+        """2 yellows → PASS."""
+        health = {
+            "sharpe": {"status": "yellow", "value": 0.8},
+            "max_drawdown": {"status": "yellow", "value": -0.07},
+            "trades_per_year": {"status": "green", "value": 120},
+        }
+        assert compute_verdict(health) == "PASS"
+
+    def test_review_with_many_yellows(self):
+        """3+ yellows → REVIEW."""
+        health = {
+            "sharpe": {"status": "yellow", "value": 0.8},
+            "max_drawdown": {"status": "yellow", "value": -0.07},
+            "trades_per_year": {"status": "yellow", "value": 50},
+            "win_rate": {"status": "green", "value": 0.55},
+        }
+        assert compute_verdict(health) == "REVIEW"
+
+
+# --- generate_suggestions tests ---
+
+
+class TestGenerateSuggestions:
+    def test_low_trades_suggests_lower_p_buy(self):
+        """Low trades + high required_buy_votes → suggest lowering p_buy."""
+        health = {
+            "trades_per_year": {"status": "red", "value": 5},
+            "sharpe": {"status": "green", "value": 2.0},
+        }
+        thresholds = {"required_buy_votes": 3, "macd_mode": "rising"}
+        trades = {"catastrophic_pct": 0.1}
+        robustness = {"overfit_risk": "low"}
+
+        suggestions = generate_suggestions(health, thresholds, trades, robustness)
+        actions = [s["action"] for s in suggestions]
+        assert any("p_buy" in a.lower() for a in actions)
+
+    def test_high_catastrophic_suggests_change(self):
+        """High catastrophic_pct → high priority suggestion."""
+        health = {
+            "trades_per_year": {"status": "green", "value": 120},
+            "sharpe": {"status": "green", "value": 2.0},
+        }
+        thresholds = {"required_buy_votes": 2, "macd_mode": "rising"}
+        trades = {"catastrophic_pct": 0.65}
+        robustness = {"overfit_risk": "low"}
+
+        suggestions = generate_suggestions(health, thresholds, trades, robustness)
+        assert any(s["priority"] == "high" for s in suggestions)
+
+    def test_max_5_suggestions(self):
+        """Many problems → max 5 suggestions returned."""
+        health = {
+            "trades_per_year": {"status": "red", "value": 5},
+            "sharpe": {"status": "red", "value": 0.3},
+            "max_drawdown": {"status": "red", "value": -0.15},
+            "win_rate": {"status": "red", "value": 0.35},
+            "profit_factor": {"status": "red", "value": 0.8},
+        }
+        thresholds = {"required_buy_votes": 4, "macd_mode": "crossover"}
+        trades = {"catastrophic_pct": 0.65}
+        robustness = {"overfit_risk": "high"}
+
+        suggestions = generate_suggestions(health, thresholds, trades, robustness)
+        assert len(suggestions) <= 5

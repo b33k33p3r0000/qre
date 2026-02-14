@@ -306,3 +306,105 @@ def check_robustness(params: dict[str, Any]) -> dict[str, Any]:
         "mc_sharpe_mean": params.get("mc_sharpe_mean"),
         "mc_confidence": params.get("mc_confidence"),
     }
+
+
+def compute_verdict(health: dict[str, dict[str, Any]]) -> str:
+    """Compute overall verdict from health check results.
+
+    Rules:
+        2+ reds  → FAIL
+        1 red OR 3+ yellows → REVIEW
+        else → PASS
+
+    Args:
+        health: Dict from health_check(), mapping metric name to
+            {"status": "green"|"yellow"|"red", "value": ...}.
+
+    Returns:
+        "PASS", "REVIEW", or "FAIL".
+    """
+    reds = sum(1 for m in health.values() if m.get("status") == "red")
+    yellows = sum(1 for m in health.values() if m.get("status") == "yellow")
+
+    if reds >= 2:
+        return "FAIL"
+    if reds >= 1 or yellows >= 3:
+        return "REVIEW"
+    return "PASS"
+
+
+def generate_suggestions(
+    health: dict[str, dict[str, Any]],
+    thresholds: dict[str, Any],
+    trades: dict[str, Any],
+    robustness: dict[str, Any],
+) -> list[dict[str, str]]:
+    """Generate actionable suggestions by cross-referencing analysis results.
+
+    Returns max 5 suggestions. Each suggestion has keys:
+        priority: "high" or "medium"
+        action: what to do
+        reason: why
+        impact: expected effect
+
+    Args:
+        health: Dict from health_check().
+        thresholds: Dict from analyze_thresholds().
+        trades: Dict from analyze_trades().
+        robustness: Dict from check_robustness().
+    """
+    suggestions: list[dict[str, str]] = []
+
+    low_trades = health.get("trades_per_year", {}).get("status") == "red"
+    low_sharpe = health.get("sharpe", {}).get("status") == "red"
+    high_p_buy = thresholds.get("required_buy_votes", 0) >= 3
+    high_catastrophic = trades.get("catastrophic_pct", 0) > 0.4
+    macd_crossover = thresholds.get("macd_mode") == "crossover"
+    high_overfit = robustness.get("overfit_risk") == "high"
+
+    # Rule 1: Low trades + high p_buy → lower p_buy
+    if low_trades and high_p_buy:
+        suggestions.append({
+            "priority": "high",
+            "action": "Lower p_buy to reduce required buy votes",
+            "reason": "Too few trades per year with strict voting threshold",
+            "impact": "More signals will pass the vote, increasing trade frequency",
+        })
+
+    # Rule 2: High catastrophic_pct → adjust thresholds/stops
+    if high_catastrophic:
+        suggestions.append({
+            "priority": "high",
+            "action": "Tighten stop-loss or adjust entry thresholds",
+            "reason": f"Catastrophic stop rate is {trades['catastrophic_pct']:.0%}, well above 40% threshold",
+            "impact": "Fewer catastrophic exits, better risk management",
+        })
+
+    # Rule 3: Strict MACD mode + low trades → switch to rising
+    if macd_crossover and low_trades:
+        suggestions.append({
+            "priority": "medium",
+            "action": "Switch MACD mode from crossover to rising",
+            "reason": "Crossover mode is restrictive and contributes to low trade count",
+            "impact": "More MACD signals, potentially more trades",
+        })
+
+    # Rule 4: High overfit risk → broader search ranges
+    if high_overfit:
+        suggestions.append({
+            "priority": "high",
+            "action": "Broaden Optuna search ranges to reduce overfitting",
+            "reason": f"Overfit risk is {robustness['overfit_risk']}",
+            "impact": "Parameters less likely to be curve-fitted to training data",
+        })
+
+    # Rule 5: Low sharpe → suggest RSI/MACD changes
+    if low_sharpe:
+        suggestions.append({
+            "priority": "medium",
+            "action": "Review RSI and MACD parameter ranges",
+            "reason": "Sharpe ratio is critically low",
+            "impact": "Better signal quality may improve risk-adjusted returns",
+        })
+
+    return suggestions[:5]
