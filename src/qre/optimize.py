@@ -45,7 +45,7 @@ from qre.config import (
     TPE_CONSIDER_ENDPOINTS,
     TPE_N_EI_CANDIDATES,
 )
-from qre.core.backtest import simulate_trades_fast
+from qre.core.backtest import simulate_trades_fast, precompute_timeframe_indices
 from qre.core.metrics import calculate_metrics, monte_carlo_validation
 from qre.core.strategy import MACDRSIStrategy
 from qre.data.fetch import DataCache, load_all_data
@@ -114,10 +114,44 @@ def build_objective(
     base_df = data[BASE_TF]
     total_bars = len(base_df)
 
+    # Pre-compute TF index maps (data-dependent only, constant between trials)
+    base_ts = base_df.index.values.astype(np.int64)
+    tf_index_maps = {}
+    for tf in TF_LIST:
+        if tf in data and len(data[tf]) > 0:
+            tf_ts = data[tf].index.values.astype(np.int64)
+            tf_index_maps[tf] = precompute_timeframe_indices(base_ts, tf_ts)
+
+    # Pre-compute indicator cache (data-dependent only, not param-dependent)
+    from qre.core.indicators import rsi as compute_rsi, stochrsi as compute_stochrsi
+    from qre.config import RSI_LENGTH, STOCH_LENGTH
+
+    precomputed_cache = {}
+    precomputed_cache["base_rsi"] = compute_rsi(base_df["close"], RSI_LENGTH).values.astype(np.float64)
+
+    precomputed_cache["gate_rsi"] = {}
+    for tf in ["1d", "12h", "8h", "6h"]:
+        if tf in data and len(data[tf]) > 0:
+            precomputed_cache["gate_rsi"][tf] = compute_rsi(data[tf]["close"], RSI_LENGTH).values.astype(np.float64)
+
+    # StochRSI K/D: kB ∈ {2,3,4}, dB ∈ {2,3,4} → 9 combos × 6 TFs = max 54 precomputes
+    precomputed_cache["stochrsi"] = {}
+    for kB in range(2, 5):
+        for dB in range(2, 5):
+            for tf in TF_LIST:
+                if tf in data and len(data[tf]) > 0:
+                    k_line, d_line = compute_stochrsi(data[tf]["close"], STOCH_LENGTH, STOCH_LENGTH, kB, dB)
+                    precomputed_cache["stochrsi"][(kB, dB, tf)] = (
+                        k_line.values.astype(np.float64),
+                        d_line.values.astype(np.float64),
+                    )
+
     def objective(trial: optuna.trial.Trial) -> float:
         params = strategy.get_optuna_params(trial, symbol)
 
-        buy_signals, sell_signals, rsi_gates = strategy.precompute_signals(data, params)
+        buy_signals, sell_signals, rsi_gates = strategy.precompute_signals(
+            data, params, tf_index_maps=tf_index_maps, precomputed_cache=precomputed_cache,
+        )
 
         split_scores = []
         for split in splits:

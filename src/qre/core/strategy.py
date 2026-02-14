@@ -66,6 +66,8 @@ class BaseStrategy(ABC):
         self,
         data: dict[str, Any],
         params: dict[str, Any],
+        tf_index_maps: dict[str, np.ndarray] | None = None,
+        precomputed_cache: dict[str, Any] | None = None,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         pass
 
@@ -158,6 +160,8 @@ class MACDRSIStrategy(BaseStrategy):
         self,
         data: dict[str, Any],
         params: dict[str, Any],
+        tf_index_maps: dict[str, np.ndarray] | None = None,
+        precomputed_cache: dict[str, Any] | None = None,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Precompute buy/sell signály.
@@ -221,8 +225,10 @@ class MACDRSIStrategy(BaseStrategy):
             macd_bullish = crossover | rising | positive
 
         # Compute RSI (on base TF)
-        base_rsi = rsi(base["close"], RSI_LENGTH)
-        base_rsi_vals = base_rsi.values.astype(np.float64)
+        if precomputed_cache and "base_rsi" in precomputed_cache:
+            base_rsi_vals = precomputed_cache["base_rsi"]
+        else:
+            base_rsi_vals = rsi(base["close"], RSI_LENGTH).values.astype(np.float64)
 
         # RSI condition based on mode (v2.0)
         if rsi_mode == "extreme":
@@ -248,14 +254,21 @@ class MACDRSIStrategy(BaseStrategy):
                 continue
 
             df_tf = data[tf]
-            k_line, d_line = stochrsi(df_tf["close"], STOCH_LENGTH, STOCH_LENGTH, k_smooth, d_smooth)
-            k_vals = k_line.values.astype(np.float64)
-            d_vals = d_line.values.astype(np.float64)
+            cache_key = (k_smooth, d_smooth, tf)
+            if precomputed_cache and "stochrsi" in precomputed_cache and cache_key in precomputed_cache["stochrsi"]:
+                k_vals, d_vals = precomputed_cache["stochrsi"][cache_key]
+            else:
+                k_line, d_line = stochrsi(df_tf["close"], STOCH_LENGTH, STOCH_LENGTH, k_smooth, d_smooth)
+                k_vals = k_line.values.astype(np.float64)
+                d_vals = d_line.values.astype(np.float64)
 
             tf_buy, tf_sell = precompute_crossover_signals(k_vals, d_vals, low_thresholds[tf], high_thresholds[tf])
 
-            tf_ts = df_tf.index.values.astype(np.int64)
-            base_to_tf_idx = precompute_timeframe_indices(base_ts, tf_ts)
+            if tf_index_maps is not None and tf in tf_index_maps:
+                base_to_tf_idx = tf_index_maps[tf]
+            else:
+                tf_ts = df_tf.index.values.astype(np.int64)
+                base_to_tf_idx = precompute_timeframe_indices(base_ts, tf_ts)
 
             valid = (base_to_tf_idx >= 2) & (base_to_tf_idx < len(tf_buy))
             clipped_idx = np.clip(base_to_tf_idx, 0, max(len(tf_buy) - 1, 0))
@@ -276,11 +289,17 @@ class MACDRSIStrategy(BaseStrategy):
                 continue
 
             df_tf = data[tf]
-            rsi_vals = rsi(df_tf["close"], RSI_LENGTH).values.astype(np.float64)
+            if precomputed_cache and "gate_rsi" in precomputed_cache and tf in precomputed_cache["gate_rsi"]:
+                rsi_vals = precomputed_cache["gate_rsi"][tf]
+            else:
+                rsi_vals = rsi(df_tf["close"], RSI_LENGTH).values.astype(np.float64)
             tf_gate = precompute_rsi_gate(rsi_vals, threshold)
 
-            tf_ts = df_tf.index.values.astype(np.int64)
-            base_to_tf_idx = precompute_timeframe_indices(base_ts, tf_ts)
+            if tf_index_maps is not None and tf in tf_index_maps:
+                base_to_tf_idx = tf_index_maps[tf]
+            else:
+                tf_ts = df_tf.index.values.astype(np.int64)
+                base_to_tf_idx = precompute_timeframe_indices(base_ts, tf_ts)
 
             valid = (base_to_tf_idx >= 1) & (base_to_tf_idx < len(tf_gate))
             clipped_idx = np.clip(base_to_tf_idx, 0, max(len(tf_gate) - 1, 0))
