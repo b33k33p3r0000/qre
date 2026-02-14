@@ -6,6 +6,9 @@ Design: docs/plans/2026-02-12-analyze-pipeline-design.md
 
 from __future__ import annotations
 
+import csv
+from pathlib import Path
+from statistics import median
 from typing import Any
 
 
@@ -120,3 +123,79 @@ def health_check(params: dict[str, Any]) -> dict[str, dict[str, Any]]:
     result["split_consistency"] = {"status": sc_status, "value": neg_count}
 
     return result
+
+
+def analyze_trades(trades_csv_path: str | Path) -> dict[str, Any]:
+    """Analyze trades CSV — exit reasons, hold time stats, top winners/losers.
+
+    Args:
+        trades_csv_path: Path to trades CSV with columns:
+            entry_ts, entry_price, exit_ts, exit_price, hold_bars,
+            size, capital_at_entry, pnl_abs, pnl_pct, symbol, reason
+
+    Returns:
+        Dict with keys: total_trades, exit_reasons, catastrophic_pct,
+        hold_bars, top_winners, top_losers.
+    """
+    trades: list[dict[str, Any]] = []
+    with open(trades_csv_path, newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            trades.append({
+                "entry_ts": row["entry_ts"],
+                "exit_ts": row["exit_ts"],
+                "hold_bars": int(row["hold_bars"]),
+                "pnl_abs": float(row["pnl_abs"]),
+                "pnl_pct": float(row["pnl_pct"]),
+                "symbol": row["symbol"],
+                "reason": row["reason"],
+            })
+
+    total = len(trades)
+
+    # Exit reason breakdown: count, avg_pnl, pct per reason
+    reason_groups: dict[str, list[dict[str, Any]]] = {}
+    for t in trades:
+        reason_groups.setdefault(t["reason"], []).append(t)
+
+    exit_reasons: dict[str, dict[str, Any]] = {}
+    for reason, group in reason_groups.items():
+        count = len(group)
+        avg_pnl = sum(t["pnl_abs"] for t in group) / count
+        exit_reasons[reason] = {
+            "count": count,
+            "avg_pnl": avg_pnl,
+            "pct": count / total if total > 0 else 0.0,
+        }
+
+    # Catastrophic stop percentage
+    cat_count = exit_reasons.get("catastrophic_stop", {}).get("count", 0)
+    catastrophic_pct = cat_count / total if total > 0 else 0.0
+
+    # Hold bars stats
+    hold_values = [t["hold_bars"] for t in trades]
+    hold_stats = {
+        "min": min(hold_values) if hold_values else 0,
+        "max": max(hold_values) if hold_values else 0,
+        "median": median(hold_values) if hold_values else 0,
+    }
+
+    # Top 3 winners (positive pnl, sorted desc) and all losers (negative pnl, sorted asc)
+    winners = sorted(
+        [t for t in trades if t["pnl_abs"] > 0],
+        key=lambda t: t["pnl_abs"],
+        reverse=True,
+    )[:3]
+    losers = sorted(
+        [t for t in trades if t["pnl_abs"] < 0],
+        key=lambda t: t["pnl_abs"],
+    )
+
+    return {
+        "total_trades": total,
+        "exit_reasons": exit_reasons,
+        "catastrophic_pct": catastrophic_pct,
+        "hold_bars": hold_stats,
+        "top_winners": winners,
+        "top_losers": losers,
+    }
