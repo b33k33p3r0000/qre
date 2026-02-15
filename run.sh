@@ -149,6 +149,28 @@ while [[ $# -gt 0 ]]; do
                 CMDS+=("$cmd")
             done < <(pgrep -f "python.*qre\.optimize" 2>/dev/null || true)
 
+            # Escalating kill: SIGTERM -> wait 3s -> SIGKILL
+            _kill_pid() {
+                local pid=$1
+                kill "$pid" 2>/dev/null || true
+                echo "Sent SIGTERM to PID $pid..."
+                for i in 1 2 3; do
+                    sleep 1
+                    if ! kill -0 "$pid" 2>/dev/null; then
+                        echo "PID $pid terminated."
+                        return 0
+                    fi
+                done
+                echo "Still running — sending SIGKILL..."
+                kill -9 "$pid" 2>/dev/null || true
+                sleep 0.5
+                if ! kill -0 "$pid" 2>/dev/null; then
+                    echo "PID $pid killed."
+                else
+                    echo "WARNING: PID $pid may still be running."
+                fi
+            }
+
             if [ ${#PIDS[@]} -eq 0 ]; then
                 echo "No QRE optimizer runs found."
                 exit 0
@@ -156,8 +178,7 @@ while [[ $# -gt 0 ]]; do
                 echo "Killing QRE run (PID ${PIDS[0]}):"
                 echo "  ${CMDS[0]}"
                 echo ""
-                kill -2 "${PIDS[0]}" 2>/dev/null || true
-                echo "Sent SIGINT (graceful stop)."
+                _kill_pid "${PIDS[0]}"
             else
                 echo "Multiple QRE runs detected:"
                 echo ""
@@ -169,14 +190,12 @@ while [[ $# -gt 0 ]]; do
                 read -p "Select run to kill (1-${#PIDS[@]}, a=all): " pick
                 if [ "$pick" = "a" ] || [ "$pick" = "A" ]; then
                     for pid in "${PIDS[@]}"; do
-                        kill -2 "$pid" 2>/dev/null || true
+                        _kill_pid "$pid"
                     done
-                    echo "Sent SIGINT to all ${#PIDS[@]} runs."
                 else
                     idx=$((pick - 1))
                     if [ "$idx" -ge 0 ] && [ "$idx" -lt ${#PIDS[@]} ]; then
-                        kill -2 "${PIDS[$idx]}" 2>/dev/null || true
-                        echo "Sent SIGINT to PID ${PIDS[$idx]}."
+                        _kill_pid "${PIDS[$idx]}"
                     else
                         echo "Invalid choice"
                         exit 1
