@@ -26,7 +26,48 @@ MACD+RSI optimizer pro BTC/USDC a SOL/USDC. Optuna TPE s Anchored Walk-Forward v
 
 ## BTC Market Analysis — Training Data Strategy
 
-### Significant Drawdowns (>15%), 2022-2026
+### Historical Drawdowns (>15%), 2016-2026
+
+```
+                    BTC/USD — 10Y Drawdowns (log scale)
+
+ $126k ┤                                                              ★ ATH
+       │                                                            ╭╱╲
+  $69k ┤                                    ★ ATH               ╭──╯   ╲ ⑥
+       │                                   ╱╲                  ╱  -47.6% ╲
+  $32k ┤                             ④   ╱  ╲  ⑤            ╱             ╰─ $70k
+       │                           -50% ╱    ╲ -76%    ╭───╯
+  $20k ┤              ★ ATH            ╱      ╲       ╱
+       │             ╱╲               ╱        ╲     ╱
+   $7k ┤            ╱  ╲  ②         ╱          ╰───╯
+       │           ╱    ╲ -81.6%  ╱
+   $3k ┤     ╭─╮ ╱      ╰──────╯
+       │    ╱ ① ╲╱
+  $430 ┤───╯ -18.7%
+       ├──────┼──────┼──────┼──────┼──────┼──────┤
+      2016  2017   2018   2019   2021   2023   2026
+```
+
+| # | Období | Peak | Trough | Propad | Trvání |
+|---|--------|------|--------|--------|--------|
+| 1 | Propad 2016 | $750 (Jun 2016) | $610 (Sep 2016) | **-18.7%** | 92 dní |
+| 2 | Bear 2017-18 | $20,089 (Dec 2017) | $3,700 (Dec 2018) | **-81.6%** | 381 dní |
+| 3 | COVID 2020 | ~$10,000 (Feb 2020) | $4,800 (Mar 2020) | **-52%** | ~35 dní |
+| 4 | 2021 Q2 Propad | $64,000 (Apr 2021) | $32,000 (Jul 2021) | **-50.0%** | 78 dní |
+| 5 | Bear 2021-22 | $68,789 (Nov 2021) | $16,500 (Nov 2022) | **-76.0%** | 370 dní |
+| 6 | Propad 2025-26 | $126,000 (Oct 2025) | $66,000 (Feb 2026) | **-47.6%** | 123 dní |
+
+Roční performance:
+
+| 2016 | 2017 | 2018 | 2019 | 2020 | 2021 | 2022 | 2023 | 2024 | 2025 |
+|------|------|------|------|------|------|------|------|------|------|
+| +120.9% | +1315.6% | -73.6% | +87.0% | +302.8% | +59.3% | -65.3% | +151.5% | +128.2% | -8.8% |
+
+**Pattern:** BTC cykluje ~4 roky. Major bear markets (-65% až -82%) přicházejí po ATH cyklech. Mezi nimi korekce -18% až -50%.
+
+*Zdroj: Binance/Yahoo Finance/CoinDesk, generováno 2026-02-15*
+
+### Recent Drawdowns (detail), 2022-2026
 
 ```
                     BTC/USD — Major Drawdowns (4Y)

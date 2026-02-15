@@ -12,54 +12,64 @@ if [ -f "venv/bin/activate" ]; then
 fi
 
 # =============================================================================
-# PRESETS
+# HELP
 # =============================================================================
 
-show_presets() {
+show_help() {
     cat << 'EOF'
 QRE Optimizer — MACD+RSI AWF
 =============================
 
 Presets:
-  1) Quick      —  2k trials, 1yr, 2 splits     (~10 min)
-  2) Standard   —  5k trials, 1yr, 3 splits     (~30 min)
-  3) Production — 10k trials, 1yr, 3 splits     (~70 min)
-  4) Deep       — 15k trials, 1yr, 4 splits     (~3 hrs)
-  5) Über       — 25k trials, 1yr, 4 splits     (~7 hrs)
-  6) Custom     — You choose everything
+  1) Test        —  2k trials, ~2yr, 2 splits    (~5 min)
+  2) Prod        — 10k trials, ~2yr, 3 splits    (~60 min)
+  3) Deep        — 15k trials, ~2yr, 4 splits    (~120 min)
+  4) Über        — 25k trials, ~2yr, 4 splits    (~300 min)
+  5) Custom      — You choose everything
 
-Pairs: BTC/USDC, SOL/USDC (or both)
+All presets use --hours 18600 --skip-recent 1080 by default
+(~2yr data, skip last 45 days). Override with --full or manual flags.
 
-Overrides (apply to any preset):
-  --hours N          History length (default from preset)
-  --trials N         Trial count (e.g., --trials 25000 for SOL)
-  --skip-recent N    Skip most recent N hours (720 = 1 month)
-  --fg               Run in foreground (default: background)
+Pairs:
+  --btc                BTC/USDC only
+  --sol                SOL/USDC only
+  --both               Both pairs (default)
 
-Usage:
-  ./run.sh 3 --btc              # Background, Production BTC
-  ./run.sh 3 --btc --fg         # Foreground (watch live)
-  ./run.sh 3 --sol --trials 25000          # SOL, 25k trials
-  ./run.sh 3 --hours 17520                 # 2yr history
-  ./run.sh 3 --skip-recent 720            # Skip last month
-  ./run.sh attach               # Attach to running/latest log
-  ./run.sh kill                 # Kill running optimizer
-  ./run.sh logs                 # List recent log files
+Options:
+  --trials N           Override trial count
+  --hours N            Override history length in hours
+  --splits N           Override number of AWF splits
+  --skip-recent N      Skip most recent N hours from training data
+  --tag NAME           Run tag (e.g. 'test-v1')
+  --full               Full data, no skip (--hours 8760 --skip-recent 0)
+  --fg                 Run in foreground (default: background)
+
+Examples:
+  ./run.sh 2 --btc                    # Prod, BTC, background
+  ./run.sh 2 --btc --fg               # Prod, BTC, foreground
+  ./run.sh 4 --sol                    # Über, SOL
+  ./run.sh 2 --btc --full             # Prod, full data (no skip)
+  ./run.sh 5 --btc --trials 8000      # Custom trials
+
+Process management:
+  ./run.sh attach          Attach to running/latest log
+  ./run.sh kill            Kill running optimizer
+  ./run.sh logs            List recent log files
 
 EOF
 }
 
 # =============================================================================
-# DEFAULTS
+# DEFAULTS (2yr window + skip recent 45 days)
 # =============================================================================
 
 TRIALS=10000
-HOURS=8760
+HOURS=18600
 SPLITS=""
 PAIRS="both"
 TAG=""
 PRESET=""
-SKIP_RECENT=0
+SKIP_RECENT=1080
 FOREGROUND=false
 LOG_DIR="$SCRIPT_DIR/logs"
 mkdir -p "$LOG_DIR"
@@ -70,12 +80,11 @@ mkdir -p "$LOG_DIR"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        1) PRESET="quick" ;;
-        2) PRESET="standard" ;;
-        3) PRESET="production" ;;
-        4) PRESET="deep" ;;
-        5) PRESET="uber" ;;
-        6) PRESET="custom" ;;
+        1) PRESET="test" ;;
+        2) PRESET="production" ;;
+        3) PRESET="deep" ;;
+        4) PRESET="uber" ;;
+        5) PRESET="custom" ;;
         --btc) PAIRS="btc" ;;
         --sol) PAIRS="sol" ;;
         --both) PAIRS="both" ;;
@@ -84,6 +93,7 @@ while [[ $# -gt 0 ]]; do
         --splits) SPLITS="$2"; shift ;;
         --tag) TAG="$2"; shift ;;
         --skip-recent) SKIP_RECENT="$2"; shift ;;
+        --full) HOURS=8760; SKIP_RECENT=0 ;;
         --fg) FOREGROUND=true ;;
         attach)
             # Find actively written logs (modified in last 5 min)
@@ -204,8 +214,8 @@ while [[ $# -gt 0 ]]; do
             fi
             exit 0
             ;;
-        -h|--help) show_presets; exit 0 ;;
-        *) echo "Unknown option: $1"; show_presets; exit 1 ;;
+        -h|--help) show_help; exit 0 ;;
+        *) echo "Unknown option: $1"; show_help; exit 1 ;;
     esac
     shift
 done
@@ -215,28 +225,26 @@ done
 # =============================================================================
 
 case "$PRESET" in
-    quick)      TRIALS=2000;  HOURS=8760;  SPLITS=2 ;;
-    standard)   TRIALS=5000;  HOURS=8760;  SPLITS=3 ;;
-    production) TRIALS=10000; HOURS=8760;  SPLITS=3 ;;
-    deep)       TRIALS=15000; HOURS=8760;  SPLITS=4 ;;
-    uber)       TRIALS=25000; HOURS=8760;  SPLITS=4 ;;
+    test)       TRIALS=2000;  SPLITS=2 ;;
+    production) TRIALS=10000; SPLITS=3 ;;
+    deep)       TRIALS=15000; SPLITS=4 ;;
+    uber)       TRIALS=25000; SPLITS=4 ;;
     custom)     ;; # Use --trials, --hours, --splits from args
     "")
         # Interactive mode
         echo ""
-        show_presets
-        read -p "Select preset (1-6): " choice
+        show_help
+        read -p "Select preset (1-5): " choice
         case "$choice" in
-            1) TRIALS=2000;  HOURS=8760;  SPLITS=2 ;;
-            2) TRIALS=5000;  HOURS=8760;  SPLITS=3 ;;
-            3) TRIALS=10000; HOURS=8760;  SPLITS=3 ;;
-            4) TRIALS=15000; HOURS=8760;  SPLITS=4 ;;
-            5) TRIALS=25000; HOURS=8760;  SPLITS=4 ;;
-            6)
+            1) TRIALS=2000;  SPLITS=2 ;;
+            2) TRIALS=10000; SPLITS=3 ;;
+            3) TRIALS=15000; SPLITS=4 ;;
+            4) TRIALS=25000; SPLITS=4 ;;
+            5)
                 read -p "Trials [10000]: " TRIALS; TRIALS="${TRIALS:-10000}"
-                read -p "Hours [8760]: " HOURS; HOURS="${HOURS:-8760}"
+                read -p "Hours [18600]: " HOURS; HOURS="${HOURS:-18600}"
                 read -p "Splits [3]: " SPLITS; SPLITS="${SPLITS:-3}"
-                read -p "Skip recent hours [0]: " SKIP_RECENT; SKIP_RECENT="${SKIP_RECENT:-0}"
+                read -p "Skip recent hours [1080]: " SKIP_RECENT; SKIP_RECENT="${SKIP_RECENT:-1080}"
                 ;;
             *) echo "Invalid choice"; exit 1 ;;
         esac
