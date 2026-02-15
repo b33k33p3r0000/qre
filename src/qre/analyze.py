@@ -416,14 +416,15 @@ def generate_suggestions(
     return suggestions[:5]
 
 
-# --- Status emoji mapping ---
-_STATUS_EMOJI = {"green": "\U0001f7e2", "yellow": "\U0001f7e1", "red": "\U0001f534"}
-_VERDICT_EMOJI = {"PASS": "\u2705", "REVIEW": "\U0001f7e1", "FAIL": "\u274c"}
+# --- Status tag mapping ---
+_STATUS_TAG = {"green": "[ok]", "yellow": "[!!]", "red": "[XX]"}
+_STATUS_ORDER = {"green": 0, "yellow": 1, "red": 2}
 
 
 def build_discord_embed(analysis: dict[str, Any]) -> str:
     """Build compact Discord embed string from analysis dict.
 
+    Single code block format matching Optimization Completed style.
     Max 6000 chars for Discord webhook compatibility.
 
     Args:
@@ -440,54 +441,70 @@ def build_discord_embed(analysis: dict[str, Any]) -> str:
     n_trials = analysis.get("n_trials", "?")
     n_splits = analysis.get("n_splits", "?")
     verdict = analysis.get("verdict", "?")
+    sep = "=" * 30
+    thin = "\u2500" * 30
 
-    lines.append(f"\U0001f4ca RUN ANALYSIS: {run_name}")
-    lines.append(f"{symbol} \u00b7 {n_trials} trials \u00b7 AWF {n_splits} splits")
-    lines.append("")
+    # Header
+    lines.append("```")
+    lines.append("RUN ANALYSIS")
+    lines.append(sep)
+    lines.append(f"Run:      {run_name}")
+    lines.append(f"Symbol:   {symbol}")
+    trials_str = f"{n_trials:,}" if isinstance(n_trials, int) else str(n_trials)
+    lines.append(f"Trials:   {trials_str} \u00b7 AWF {n_splits} splits")
+    lines.append(thin)
+    lines.append(f"VERDICT:  {verdict}")
+    lines.append(thin)
 
-    verdict_emoji = _VERDICT_EMOJI.get(verdict, "?")
-    lines.append(f"VERDICT: {verdict_emoji} {verdict}")
-    lines.append("")
-
-    # Health Check section
+    # Health Check section — sorted: ok first, then !!, then XX
     health = analysis.get("health", {})
     if health:
-        lines.append("Health Check")
-        for metric, info in health.items():
-            status = info.get("status", "?")
-            emoji = _STATUS_EMOJI.get(status, "\u2753")
-            value = info.get("value", "")
-            lines.append(f"{emoji} {metric}: {value}")
         lines.append("")
+        lines.append("Health Check")
+        max_name = max(len(m) for m in health)
+        sorted_health = sorted(
+            health.items(),
+            key=lambda x: _STATUS_ORDER.get(x[1].get("status", "green"), 0),
+        )
+        for metric, info in sorted_health:
+            status = info.get("status", "green")
+            tag = _STATUS_TAG.get(status, "[??]")
+            value = info.get("value", "")
+            lines.append(f"  {tag} {metric:<{max_name}}  {value}")
 
-    # Top Issues — red and yellow items
+    # Top Issues — red and yellow items only
     issues = [
         (metric, info)
         for metric, info in health.items()
         if info.get("status") in ("red", "yellow")
     ]
     if issues:
+        issues.sort(
+            key=lambda x: _STATUS_ORDER.get(x[1].get("status", "green"), 0),
+        )
+        lines.append("")
         lines.append("Top Issues")
         for metric, info in issues:
-            status = info.get("status", "?")
-            emoji = _STATUS_EMOJI.get(status, "\u2753")
+            status = info.get("status", "yellow")
+            tag = _STATUS_TAG.get(status, "[??]")
             value = info.get("value", "?")
-            lines.append(f"{emoji} {metric} = {value}")
-        lines.append("")
+            lines.append(f"  {tag} {metric} = {value}")
 
     # Suggestions section
     suggestions = analysis.get("suggestions", [])
     if suggestions:
+        lines.append("")
         lines.append("Suggestions")
         for i, s in enumerate(suggestions, 1):
-            lines.append(f"{i}. {s.get('action', '?')}")
-        lines.append("")
+            lines.append(f"  {i}. {s.get('action', '?')}")
+
+    lines.append("```")
 
     embed = "\n".join(lines)
 
     # Truncate to 6000 chars if needed
     if len(embed) > 6000:
-        embed = embed[:5997] + "..."
+        embed = embed[:5993] + "\n..."
 
     return embed
 
@@ -608,7 +625,7 @@ def analyze_run(run_dir: str | Path) -> dict[str, Any]:
         6. Build findings list
         7. Generate suggestions
         8. Save analysis.json to symbol dir
-        9. Send Discord embed if DISCORD_WEBHOOK_ALERTS env var exists
+        9. Send Discord embed if DISCORD_WEBHOOK_RUNS env var exists
         10. Return full analysis dict
 
     Args:
@@ -670,7 +687,7 @@ def analyze_run(run_dir: str | Path) -> dict[str, Any]:
     log.info("analyze_run: saved analysis.json → %s", symbol_dir / "analysis.json")
 
     # 10. Discord notification
-    webhook_url = os.environ.get("DISCORD_WEBHOOK_ALERTS", "")
+    webhook_url = os.environ.get("DISCORD_WEBHOOK_RUNS", "")
     if webhook_url:
         from qre.notify import discord_notify
 

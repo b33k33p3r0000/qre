@@ -6,8 +6,7 @@ Start + Complete notifications only. No progress, no heartbeat.
 Master Plan rule: "Notifikace = akce nebo problem."
 
 Channels:
-  #qre-runs   — start, info
-  #qre-alerts — complete results, overfit warnings
+  #qre-runs   — start, complete, run analysis (all in one channel)
 """
 
 import logging
@@ -15,7 +14,7 @@ from typing import Any, Dict, Optional
 
 import requests
 
-from qre.config import DISCORD_WEBHOOK_ALERTS, DISCORD_WEBHOOK_RUNS
+from qre.config import DISCORD_WEBHOOK_RUNS
 
 logger = logging.getLogger("qre.notify")
 
@@ -106,6 +105,6 @@ def notify_start(**kwargs) -> bool:
 
 
 def notify_complete(params: Dict[str, Any]) -> bool:
-    """Send completion notification to #qre-alerts."""
+    """Send completion notification to #qre-runs."""
     msg = format_complete_message(params)
-    return discord_notify(msg, DISCORD_WEBHOOK_ALERTS)
+    return discord_notify(msg, DISCORD_WEBHOOK_RUNS)

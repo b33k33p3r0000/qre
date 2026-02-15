@@ -214,4 +214,3 @@ CATASTROPHIC_STOP_PCT = 0.10  # -10% emergency exit
 # =============================================================================
 
 DISCORD_WEBHOOK_RUNS = os.environ.get("DISCORD_WEBHOOK_RUNS", "")
-DISCORD_WEBHOOK_ALERTS = os.environ.get("DISCORD_WEBHOOK_ALERTS", "")

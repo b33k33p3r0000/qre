@@ -582,7 +582,7 @@ class TestAnalyzeRun:
         import shutil
         shutil.copy(trades_csv, symbol_dir / "trades_BTC_USDC_1h_FULL.csv")
 
-        # No DISCORD_WEBHOOK_ALERTS env var → no discord call
+        # No DISCORD_WEBHOOK_RUNS env var → no discord call
         result = analyze_run(str(run_dir))
 
         # Verify result structure
