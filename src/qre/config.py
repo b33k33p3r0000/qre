@@ -64,7 +64,7 @@ SYMBOL_CONFIGS: Dict[str, Dict] = {
         "max_drawdown_limit": 0.15,
         "min_hold_min": 4,
         "min_hold_max": 16,
-        "p_buy_min": 0.17,
+        "p_buy_min": 0.10,
         "p_buy_max": 0.50,
         "volatility_class": "low",
         "threshold_tightness": 0.95,
