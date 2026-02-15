@@ -15,7 +15,7 @@ from qre.config import STARTING_EQUITY
 from qre.core.backtest import simulate_trades_fast
 from qre.core.metrics import calculate_metrics
 from qre.core.strategy import MACDRSIStrategy
-from qre.data.fetch import DataCache, load_all_data
+from qre.data.fetch import load_all_data
 
 
 LEGACY_RESULTS = Path.home() / "projects" / "optimizer" / "results"
@@ -57,13 +57,12 @@ def find_legacy_trades(run_timestamp: str, symbol: str = "BTC/USDC") -> pd.DataF
 
 
 def _load_data_and_run(symbol: str, params: dict):
-    """Load shared cache data and run QRE backtest with given params."""
+    """Load fresh data and run QRE backtest with given params."""
     import ccxt
 
     exchange = ccxt.binance({"enableRateLimit": True})
-    cache = DataCache(str(LEGACY_CACHE))
     hours = params.get("hours", 8760)
-    data = load_all_data(exchange, symbol, hours, cache)
+    data = load_all_data(exchange, symbol, hours)
 
     strategy = MACDRSIStrategy()
     buy_s, sell_s, gates = strategy.precompute_signals(data, params)

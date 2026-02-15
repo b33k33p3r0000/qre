@@ -48,7 +48,7 @@ from qre.config import (
 from qre.core.backtest import simulate_trades_fast, precompute_timeframe_indices
 from qre.core.metrics import calculate_metrics, monte_carlo_validation
 from qre.core.strategy import MACDRSIStrategy
-from qre.data.fetch import DataCache, load_all_data
+from qre.data.fetch import load_all_data
 from qre.hooks import run_post_hooks, run_pre_hooks
 from qre.hooks.auto_diagnose import register_auto_diagnose
 from qre.io import save_json, save_trades_csv
@@ -230,7 +230,6 @@ def run_optimization(
     seed: int = 42,
     timeout: int = 0,
     results_dir: str = "results",
-    cache_dir: str = "cache",
     run_tag: Optional[str] = None,
     skip_recent_hours: int = 0,
 ) -> Dict[str, Any]:
@@ -254,11 +253,10 @@ def run_optimization(
     notify_start(symbol=symbol, n_trials=n_trials, hours=hours, n_splits=n_splits or 3, run_tag=run_tag)
 
     exchange = ccxt.binance({"enableRateLimit": True})
-    cache = DataCache(cache_dir)
 
-    # 1. Fetch data
+    # 1. Fetch fresh data (always from API, no disk cache)
     logger.info(f"Loading {symbol} data ({hours}h history)...")
-    data = load_all_data(exchange, symbol, hours, cache)
+    data = load_all_data(exchange, symbol, hours)
 
     # Trim recent data if requested
     if skip_recent_hours > 0:
@@ -497,7 +495,6 @@ def main():
     parser.add_argument("--skip-recent", type=int, default=0,
                         help="Skip most recent N hours of data (e.g., 720 = skip last month)")
     parser.add_argument("--results-dir", type=str, default="results")
-    parser.add_argument("--cache-dir", type=str, default="cache")
 
     args = parser.parse_args()
 
@@ -512,7 +509,6 @@ def main():
         seed=args.seed,
         timeout=args.timeout,
         results_dir=args.results_dir,
-        cache_dir=args.cache_dir,
         run_tag=args.tag,
         skip_recent_hours=args.skip_recent,
     )
