@@ -456,7 +456,8 @@ def build_discord_embed(analysis: dict[str, Any]) -> str:
         for metric, info in health.items():
             status = info.get("status", "?")
             emoji = _STATUS_EMOJI.get(status, "\u2753")
-            lines.append(f"{emoji} {metric}: {status}")
+            value = info.get("value", "")
+            lines.append(f"{emoji} {metric}: {value}")
         lines.append("")
 
     # Top Issues — red and yellow items
