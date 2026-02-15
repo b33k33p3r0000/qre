@@ -113,8 +113,8 @@ def health_check(params: dict[str, Any]) -> dict[str, dict[str, Any]]:
     result["expectancy"] = {"status": exp_status, "value": exp}
 
     # Train/test sharpe divergence: green diff < 1.0, yellow 1.0–2.0, red > 2.0
-    train_s = params["train_sharpe"]
-    test_s = params["test_sharpe"]
+    train_s = params.get("train_sharpe", 0)
+    test_s = params.get("test_sharpe", 0)
     diff = abs(train_s - test_s)
     if diff < 1.0:
         tt_status = "green"
@@ -233,8 +233,8 @@ def analyze_thresholds(params: dict[str, Any]) -> dict[str, Any]:
 
     tf_analysis: dict[str, dict[str, Any]] = {}
     for tf in TF_LIST:
-        low = params[f"low_{tf}"]
-        high = params[f"high_{tf}"]
+        low = params.get(f"low_{tf}", 0.20)
+        high = params.get(f"high_{tf}", 0.80)
         width = high - low
         dead = width > 0.8
         aggressive = width < 0.3

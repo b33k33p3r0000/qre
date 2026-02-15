@@ -103,20 +103,26 @@ def _suggest_all_params(trial: optuna.trial.Trial, symbol: str = None) -> dict[s
     high_min = max(0.60 / tightness, 0.50)
     high_max = 0.95
 
-    # Fixed TF params (low Optuna importance per diagnose 2026-02-14)
+    # Fixed TF params use degenerate range (low==high) so Optuna tracks them in trial.params
     fixed_tf = {"low_2h": 0.14, "high_6h": 0.83}
 
     for tf in TF_LIST:
         key = "24h" if tf == "1d" else tf
         low_key, high_key = f"low_{key}", f"high_{key}"
-        params[low_key] = fixed_tf[low_key] if low_key in fixed_tf else trial.suggest_float(low_key, low_min, low_max)
-        params[high_key] = fixed_tf[high_key] if high_key in fixed_tf else trial.suggest_float(high_key, high_min, high_max)
+        if low_key in fixed_tf:
+            params[low_key] = trial.suggest_float(low_key, fixed_tf[low_key], fixed_tf[low_key])
+        else:
+            params[low_key] = trial.suggest_float(low_key, low_min, low_max)
+        if high_key in fixed_tf:
+            params[high_key] = trial.suggest_float(high_key, fixed_tf[high_key], fixed_tf[high_key])
+        else:
+            params[high_key] = trial.suggest_float(high_key, high_min, high_max)
 
     # Gate params (6h, 8h fixed — low Optuna importance per diagnose 2026-02-14)
     params["rsi_gate_24h"] = trial.suggest_float("rsi_gate_24h", 40.0, 60.0)
     params["rsi_gate_12h"] = trial.suggest_float("rsi_gate_12h", 40.0, 60.0)
-    params["rsi_gate_8h"] = 46.0
-    params["rsi_gate_6h"] = 48.0
+    params["rsi_gate_8h"] = trial.suggest_float("rsi_gate_8h", 46.0, 46.0)
+    params["rsi_gate_6h"] = trial.suggest_float("rsi_gate_6h", 48.0, 48.0)
 
     # Metadata
     params["tf"] = "1h"
