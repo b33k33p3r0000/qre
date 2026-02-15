@@ -126,7 +126,7 @@ Roční performance: 2022 -65.3% | 2023 +151.5% | 2024 +128.2% | 2025 -8.8%
 **Production run command:**
 
 ```bash
-./run.sh 6 --btc --hours 18600 --skip-recent 1080 --trials 25000 --splits 4 --tag 2yr-skip-prod
+./run.sh 4 --btc --tag 2yr-skip-prod
 ```
 
 - `--hours 18600` = ~2 roky dat (775 dní)

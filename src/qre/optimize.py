@@ -60,7 +60,7 @@ logger = logging.getLogger("qre.optimize")
 
 
 def compute_awf_splits(
-    total_hours: int, n_splits: Optional[int] = None
+    total_hours: int, n_splits: Optional[int] = None, test_size: float = 0.15
 ) -> Optional[List[Dict[str, float]]]:
     """Compute Anchored Walk-Forward splits based on data length."""
     if total_hours < ANCHORED_WF_MIN_DATA_HOURS:
@@ -69,8 +69,8 @@ def compute_awf_splits(
     if n_splits is not None and n_splits >= 2:
         splits = []
         train_start = 0.50
-        train_step = 0.40 / n_splits
-        test_size = 0.10
+        available = 1.0 - train_start - test_size
+        train_step = available / n_splits
         for i in range(n_splits):
             train_end = train_start + (i + 1) * train_step
             test_end = min(train_end + test_size, 1.0)
@@ -232,6 +232,7 @@ def run_optimization(
     results_dir: str = "results",
     run_tag: Optional[str] = None,
     skip_recent_hours: int = 0,
+    test_size: float = 0.15,
 ) -> Dict[str, Any]:
     """
     Run full AWF optimization pipeline for a single symbol.
@@ -272,7 +273,7 @@ def run_optimization(
     logger.info(f"Loaded {total_bars} bars for {symbol}")
 
     # 2. Compute splits
-    splits = compute_awf_splits(total_bars, n_splits)
+    splits = compute_awf_splits(total_bars, n_splits, test_size=test_size)
     if splits is None:
         raise ValueError(f"Data too short for AWF: {total_bars} bars < {ANCHORED_WF_MIN_DATA_HOURS}")
 
@@ -495,6 +496,8 @@ def main():
     parser.add_argument("--skip-recent", type=int, default=0,
                         help="Skip most recent N hours of data (e.g., 720 = skip last month)")
     parser.add_argument("--results-dir", type=str, default="results")
+    parser.add_argument("--test-size", type=float, default=0.15,
+                        help="Test window size as fraction (default: 0.15 = 15%%)")
 
     args = parser.parse_args()
 
@@ -511,6 +514,7 @@ def main():
         results_dir=args.results_dir,
         run_tag=args.tag,
         skip_recent_hours=args.skip_recent,
+        test_size=args.test_size,
     )
 
     print(f"\nResult: {result['symbol']}")

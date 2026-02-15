@@ -23,8 +23,8 @@ QRE Optimizer — MACD+RSI AWF
 Presets:
   1) Test        —  2k trials, ~2yr, 2 splits    (~5 min)
   2) Prod        — 10k trials, ~2yr, 3 splits    (~60 min)
-  3) Deep        — 15k trials, ~2yr, 4 splits    (~120 min)
-  4) Über        — 25k trials, ~2yr, 4 splits    (~300 min)
+  3) Deep        — 15k trials, ~2yr, 3 splits    (~120 min)
+  4) Über        — 25k trials, ~2yr, 3 splits    (~300 min)
   5) Custom      — You choose everything
 
 All presets use --hours 18600 --skip-recent 1080 by default
@@ -227,8 +227,8 @@ done
 case "$PRESET" in
     test)       TRIALS=2000;  SPLITS=2 ;;
     production) TRIALS=10000; SPLITS=3 ;;
-    deep)       TRIALS=15000; SPLITS=4 ;;
-    uber)       TRIALS=25000; SPLITS=4 ;;
+    deep)       TRIALS=15000; SPLITS=3 ;;
+    uber)       TRIALS=25000; SPLITS=3 ;;
     custom)     ;; # Use --trials, --hours, --splits from args
     "")
         # Interactive mode
@@ -238,8 +238,8 @@ case "$PRESET" in
         case "$choice" in
             1) TRIALS=2000;  SPLITS=2 ;;
             2) TRIALS=10000; SPLITS=3 ;;
-            3) TRIALS=15000; SPLITS=4 ;;
-            4) TRIALS=25000; SPLITS=4 ;;
+            3) TRIALS=15000; SPLITS=3 ;;
+            4) TRIALS=25000; SPLITS=3 ;;
             5)
                 read -p "Trials [10000]: " TRIALS; TRIALS="${TRIALS:-10000}"
                 read -p "Hours [18600]: " HOURS; HOURS="${HOURS:-18600}"
