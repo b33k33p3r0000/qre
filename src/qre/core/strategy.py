@@ -1,20 +1,15 @@
 """
-MACD + RSI Strategy v2.0 (Evidence-Based)
-==========================================
+Chio Extreme Strategy v3.0
+==========================
 
-Kombinuje baseline StochRSI s MACD momentum a RSI filtrem.
+MACD signal-line crossover + RSI extreme zones.
 
 Evidence:
 - Chio (2022): MACD + RSI achieved win rates of 84%, 86%, 78% on US equities
-- Kang (2021): Default MACD (12,26,9) has ~32% win rate - "almost a contra-indicator"
-- Zatwarnicki (2023): RSI as momentum indicator (50 midline) outperforms mean-reversion on crypto
+- Entry: MACD crossover AND RSI in extreme zone (oversold/overbought)
+- Exit: Opposite signal (symmetric flip)
 
-Two RSI Modes:
-- EXTREME: RSI < 40 for buy (highest win rate 84-86%, fewer trades)
-- TREND_FILTER: RSI > 50 for buy (more trades, 55-65% win rate)
-
-Transferred from optimizer with audit. Removed: strategy registry, ADX filter,
-multi-strategy support. Inlined suggest_all_params from phases.py.
+6 Optuna parameters only. Single timeframe (1H).
 """
 
 from abc import ABC, abstractmethod
@@ -23,31 +18,12 @@ from typing import Any
 import numpy as np
 import optuna
 
-from qre.config import (
-    BASE_TF,
-    DEFAULT_SYMBOL_CONFIG,
-    RSI_LENGTH,
-    STOCH_LENGTH,
-    TF_LIST,
-    get_symbol_config,
-)
-from qre.core.backtest import (
-    precompute_crossover_signals,
-    precompute_rsi_gate,
-    precompute_timeframe_indices,
-)
-from qre.core.indicators import macd, rsi, stochrsi
-
-
-# MACD mode options
-MACD_MODES = ["crossover", "rising", "positive"]
-
-# RSI mode options (v2.0)
-RSI_MODES = ["extreme", "trend_filter"]
+from qre.config import BASE_TF
+from qre.core.indicators import macd, rsi
 
 
 class BaseStrategy(ABC):
-    """Abstraktní base třída pro trading strategie."""
+    """Abstract base class for trading strategies."""
 
     name: str = "base"
     version: str = "1.0.0"
@@ -66,9 +42,8 @@ class BaseStrategy(ABC):
         self,
         data: dict[str, Any],
         params: dict[str, Any],
-        tf_index_maps: dict[str, np.ndarray] | None = None,
         precomputed_cache: dict[str, Any] | None = None,
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         pass
 
     def get_default_params(self) -> dict[str, Any]:
@@ -78,145 +53,66 @@ class BaseStrategy(ABC):
         return True
 
 
-def _suggest_all_params(trial: optuna.trial.Trial, symbol: str = None) -> dict[str, Any]:
-    """
-    Suggest all baseline Optuna parameters (inlined from optimizer phases.py).
-
-    Core params: kB, dB, k_sell, min_hold, p_buy
-    Threshold params: low_X, high_X for each timeframe
-    Gate params: rsi_gate_24h, 12h, 8h, 6h
-    """
-    cfg = get_symbol_config(symbol) if symbol else DEFAULT_SYMBOL_CONFIG
-    params = {}
-
-    # Core params
-    params["kB"] = trial.suggest_int("kB", 2, 4)
-    params["dB"] = trial.suggest_int("dB", 2, 4)
-    params["k_sell"] = trial.suggest_int("k_sell", 1, 3)
-    params["min_hold"] = trial.suggest_int("min_hold", cfg["min_hold_min"], cfg["min_hold_max"])
-    params["p_buy"] = trial.suggest_float("p_buy", cfg["p_buy_min"], cfg["p_buy_max"])
-
-    # Threshold params (per timeframe)
-    tightness = cfg.get("threshold_tightness", 1.0)
-    low_min = 0.05
-    low_max = min(0.40 * tightness, 0.50)
-    high_min = max(0.60 / tightness, 0.50)
-    high_max = 0.95
-
-    # Narrowed TF ranges (low Optuna importance per diagnose 2026-02-14)
-    narrowed_tf = {
-        "low_2h": (0.08, 0.22),    # was full range, center ~0.14
-        "high_6h": (0.72, 0.92),   # was full range, center ~0.83
-    }
-
-    for tf in TF_LIST:
-        key = "24h" if tf == "1d" else tf
-        low_key, high_key = f"low_{key}", f"high_{key}"
-        if low_key in narrowed_tf:
-            lo, hi = narrowed_tf[low_key]
-            params[low_key] = trial.suggest_float(low_key, lo, hi)
-        else:
-            params[low_key] = trial.suggest_float(low_key, low_min, low_max)
-        if high_key in narrowed_tf:
-            lo, hi = narrowed_tf[high_key]
-            params[high_key] = trial.suggest_float(high_key, lo, hi)
-        else:
-            params[high_key] = trial.suggest_float(high_key, high_min, high_max)
-
-    # Gate params (6h, 8h narrowed — low Optuna importance per diagnose 2026-02-14)
-    params["rsi_gate_24h"] = trial.suggest_float("rsi_gate_24h", 40.0, 60.0)
-    params["rsi_gate_12h"] = trial.suggest_float("rsi_gate_12h", 40.0, 60.0)
-    params["rsi_gate_8h"] = trial.suggest_float("rsi_gate_8h", 42.0, 50.0)
-    params["rsi_gate_6h"] = trial.suggest_float("rsi_gate_6h", 44.0, 52.0)
-
-    # Metadata
-    params["tf"] = "1h"
-    params["range"] = "FULL"
-    params["n_votes"] = len(TF_LIST)
-
-    return params
-
-
 class MACDRSIStrategy(BaseStrategy):
     """
-    MACD + RSI evidence-based strategie.
+    Chio Extreme: MACD crossover + RSI extreme zones.
 
-    Rank #2 podle evidence-based analýzy:
-    - Nejsilnější empirická evidence (Chio 2022: 84-86% WR)
-    - Dva RSI módy: extreme (highest WR) vs trend_filter (more trades)
+    Buy:  MACD bullish crossover AND RSI < rsi_lower (oversold)
+    Sell: MACD bearish crossover AND RSI > rsi_upper (overbought)
     """
 
     name = "macd_rsi"
-    version = "2.0.0"
-    description = "Evidence-based: MACD momentum + RSI (extreme/trend_filter modes)"
+    version = "3.0.0"
+    description = "Chio Extreme: MACD crossover + RSI extreme zones"
 
     def get_optuna_params(self, trial: optuna.trial.Trial, symbol: str | None = None) -> dict[str, Any]:
-        """Vrátí Optuna parametry."""
-        params = _suggest_all_params(trial, symbol)
+        """6 Optuna parameters with evidence-based ranges."""
+        params = {}
 
-        # MACD parameters (v2.0: evidence-based ranges)
         params["macd_fast"] = trial.suggest_int("macd_fast", 5, 15)
-        params["macd_slow"] = trial.suggest_int("macd_slow", 17, 35)
-        params["macd_signal"] = trial.suggest_int("macd_signal", 3, 12)
-        params["macd_mode"] = trial.suggest_categorical("macd_mode", MACD_MODES)
+        params["macd_slow"] = trial.suggest_int("macd_slow", 17, 30)
 
-        # RSI mode (v2.0)
-        params["rsi_mode"] = trial.suggest_categorical("rsi_mode", RSI_MODES)
-        params["rsi_upper"] = trial.suggest_int("rsi_upper", 60, 80)
+        # Constraint: macd_fast must be < macd_slow
+        if params["macd_fast"] >= params["macd_slow"]:
+            raise optuna.TrialPruned("macd_fast >= macd_slow")
+
+        params["macd_signal"] = trial.suggest_int("macd_signal", 3, 12)
+        params["rsi_period"] = trial.suggest_int("rsi_period", 3, 25)
         params["rsi_lower"] = trial.suggest_int("rsi_lower", 20, 40)
-        params["rsi_momentum_level"] = trial.suggest_int("rsi_momentum_level", 48, 55)
+        params["rsi_upper"] = trial.suggest_int("rsi_upper", 60, 80)
 
         return params
 
     def get_required_indicators(self) -> list[str]:
-        return ["stochrsi", "rsi", "macd"]
+        return ["macd", "rsi"]
 
     def precompute_signals(
         self,
         data: dict[str, Any],
         params: dict[str, Any],
-        tf_index_maps: dict[str, np.ndarray] | None = None,
         precomputed_cache: dict[str, Any] | None = None,
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """
-        Precompute buy/sell signály.
+        Precompute 1D buy/sell signal arrays.
 
-        v2.0 Logic:
-        - EXTREME MODE: MACD bullish AND RSI < rsi_lower (value entry)
-        - TREND_FILTER MODE: MACD bullish AND RSI > rsi_momentum_level (momentum confirmation)
+        Buy:  MACD bullish crossover AND RSI < rsi_lower
+        Sell: MACD bearish crossover AND RSI > rsi_upper
         """
         base = data[BASE_TF]
         n_bars = len(base)
-        total_timeframes = len(TF_LIST)
 
-        # Baseline parameters
-        k_smooth = int(params.get("kB", 3))
-        d_smooth = int(params.get("dB", 3))
-
-        low_thresholds = {tf: float(params.get(f"low_{'24h' if tf == '1d' else tf}", 0.2)) for tf in TF_LIST}
-        high_thresholds = {tf: float(params.get(f"high_{'24h' if tf == '1d' else tf}", 0.8)) for tf in TF_LIST}
-
-        rsi_gate_24h = float(params.get("rsi_gate_24h", 50))
-        rsi_gate_12h = float(params.get("rsi_gate_12h", 50))
-        rsi_gate_8h = float(params.get("rsi_gate_8h", 50))
-        rsi_gate_6h = float(params.get("rsi_gate_6h", 50))
-
-        # MACD parameters
+        # MACD params
         macd_fast = int(params.get("macd_fast", 8))
         macd_slow = int(params.get("macd_slow", 21))
         macd_signal_period = int(params.get("macd_signal", 9))
-        macd_mode = params.get("macd_mode", "rising")
 
-        # RSI parameters (v2.0)
-        rsi_mode = params.get("rsi_mode", "trend_filter")
-        rsi_upper = int(params.get("rsi_upper", 65))
-        rsi_lower = int(params.get("rsi_lower", 35))
-        rsi_momentum_level = int(params.get("rsi_momentum_level", 50))
+        # RSI params
+        rsi_period = int(params.get("rsi_period", 14))
+        rsi_lower = int(params.get("rsi_lower", 30))
+        rsi_upper = int(params.get("rsi_upper", 70))
 
-        base_ts = base.index.values.astype(np.int64)
-
-        # Compute MACD (on base TF)
-        macd_line, signal_line, histogram = macd(base["close"], macd_fast, macd_slow, macd_signal_period)
+        # Compute MACD
+        macd_line, signal_line, _ = macd(base["close"], macd_fast, macd_slow, macd_signal_period)
         macd_vals = macd_line.values.astype(np.float64)
         signal_vals = signal_line.values.astype(np.float64)
 
@@ -226,117 +122,36 @@ class MACDRSIStrategy(BaseStrategy):
         macd_prev[0] = np.nan
         signal_prev[0] = np.nan
 
-        # MACD conditions based on mode
-        if macd_mode == "crossover":
-            macd_bullish = (macd_prev < signal_prev) & (macd_vals > signal_vals)
-        elif macd_mode == "rising":
-            macd_bullish = macd_vals > macd_prev
-        elif macd_mode == "positive":
-            macd_bullish = macd_vals > 0
-        else:  # "any"
-            crossover = (macd_prev < signal_prev) & (macd_vals > signal_vals)
-            rising = macd_vals > macd_prev
-            positive = macd_vals > 0
-            macd_bullish = crossover | rising | positive
+        # MACD crossover signals
+        macd_bullish_cross = (macd_prev <= signal_prev) & (macd_vals > signal_vals)
+        macd_bearish_cross = (macd_prev >= signal_prev) & (macd_vals < signal_vals)
 
-        # Compute RSI (on base TF)
-        if precomputed_cache and "base_rsi" in precomputed_cache:
-            base_rsi_vals = precomputed_cache["base_rsi"]
+        # Compute RSI
+        if precomputed_cache and "rsi" in precomputed_cache and rsi_period in precomputed_cache["rsi"]:
+            rsi_vals = precomputed_cache["rsi"][rsi_period]
         else:
-            base_rsi_vals = rsi(base["close"], RSI_LENGTH).values.astype(np.float64)
+            rsi_vals = rsi(base["close"], rsi_period).values.astype(np.float64)
 
-        # RSI condition based on mode (v2.0)
-        if rsi_mode == "extreme":
-            rsi_entry_condition = base_rsi_vals < rsi_lower
-            rsi_not_overbought = base_rsi_vals < rsi_upper
-            rsi_condition = rsi_entry_condition & rsi_not_overbought
-        else:  # trend_filter
-            rsi_condition = base_rsi_vals > rsi_momentum_level
+        # RSI extreme zone conditions
+        rsi_oversold = rsi_vals < rsi_lower
+        rsi_overbought = rsi_vals > rsi_upper
 
-        # Additional entry condition (no ADX filter in QRE)
-        additional_condition = macd_bullish & rsi_condition
+        # Handle NaN — no signal where any indicator is NaN
+        has_nan = np.isnan(macd_vals) | np.isnan(signal_vals) | np.isnan(rsi_vals)
 
-        # Handle NaN
-        has_nan = np.isnan(macd_vals) | np.isnan(base_rsi_vals)
-        additional_condition = np.where(has_nan, False, additional_condition)
+        # Combined signals
+        buy_signal = macd_bullish_cross & rsi_oversold & ~has_nan
+        sell_signal = macd_bearish_cross & rsi_overbought & ~has_nan
 
-        # Pre-compute StochRSI & crossovers
-        buy_votes_per_tf = np.zeros((total_timeframes, n_bars), dtype=np.bool_)
-        sell_votes_per_tf = np.zeros((total_timeframes, n_bars), dtype=np.bool_)
-
-        for tf_idx, tf in enumerate(TF_LIST):
-            if tf not in data or len(data[tf]) == 0:
-                continue
-
-            df_tf = data[tf]
-            cache_key = (k_smooth, d_smooth, tf)
-            if precomputed_cache and "stochrsi" in precomputed_cache and cache_key in precomputed_cache["stochrsi"]:
-                k_vals, d_vals = precomputed_cache["stochrsi"][cache_key]
-            else:
-                k_line, d_line = stochrsi(df_tf["close"], STOCH_LENGTH, STOCH_LENGTH, k_smooth, d_smooth)
-                k_vals = k_line.values.astype(np.float64)
-                d_vals = d_line.values.astype(np.float64)
-
-            tf_buy, tf_sell = precompute_crossover_signals(k_vals, d_vals, low_thresholds[tf], high_thresholds[tf])
-
-            if tf_index_maps is not None and tf in tf_index_maps:
-                base_to_tf_idx = tf_index_maps[tf]
-            else:
-                tf_ts = df_tf.index.values.astype(np.int64)
-                base_to_tf_idx = precompute_timeframe_indices(base_ts, tf_ts)
-
-            valid = (base_to_tf_idx >= 2) & (base_to_tf_idx < len(tf_buy))
-            clipped_idx = np.clip(base_to_tf_idx, 0, max(len(tf_buy) - 1, 0))
-            buy_votes_per_tf[tf_idx] = valid & tf_buy[clipped_idx] & additional_condition
-            sell_votes_per_tf[tf_idx] = valid & tf_sell[clipped_idx]
-
-        # Pre-compute RSI gates
-        rsi_gate_signals = np.zeros((4, n_bars), dtype=np.bool_)
-        gate_configs = [
-            ("1d", rsi_gate_24h),
-            ("12h", rsi_gate_12h),
-            ("8h", rsi_gate_8h),
-            ("6h", rsi_gate_6h),
-        ]
-
-        for gate_idx, (tf, threshold) in enumerate(gate_configs):
-            if tf not in data or len(data[tf]) == 0:
-                continue
-
-            df_tf = data[tf]
-            if precomputed_cache and "gate_rsi" in precomputed_cache and tf in precomputed_cache["gate_rsi"]:
-                rsi_vals = precomputed_cache["gate_rsi"][tf]
-            else:
-                rsi_vals = rsi(df_tf["close"], RSI_LENGTH).values.astype(np.float64)
-            tf_gate = precompute_rsi_gate(rsi_vals, threshold)
-
-            if tf_index_maps is not None and tf in tf_index_maps:
-                base_to_tf_idx = tf_index_maps[tf]
-            else:
-                tf_ts = df_tf.index.values.astype(np.int64)
-                base_to_tf_idx = precompute_timeframe_indices(base_ts, tf_ts)
-
-            valid = (base_to_tf_idx >= 1) & (base_to_tf_idx < len(tf_gate))
-            clipped_idx = np.clip(base_to_tf_idx, 0, max(len(tf_gate) - 1, 0))
-            rsi_gate_signals[gate_idx] = valid & tf_gate[clipped_idx]
-
-        return buy_votes_per_tf, sell_votes_per_tf, rsi_gate_signals
+        return buy_signal.astype(np.bool_), sell_signal.astype(np.bool_)
 
     def get_default_params(self) -> dict[str, Any]:
-        """Vrátí defaultní hodnoty (v12.9: z impruvment-v1 runu)."""
+        """Default params (midpoint of Optuna ranges)."""
         return {
-            "kB": 3, "dB": 2, "k_sell": 1, "min_hold": 8, "p_buy": 0.14,
-            "low_2h": 0.2, "high_2h": 0.8,
-            "low_4h": 0.2, "high_4h": 0.8,
-            "low_6h": 0.2, "high_6h": 0.8,
-            "low_8h": 0.2, "high_8h": 0.8,
-            "low_12h": 0.2, "high_12h": 0.8,
-            "low_24h": 0.2, "high_24h": 0.8,
-            "rsi_gate_24h": 50, "rsi_gate_12h": 50,
-            "rsi_gate_8h": 50, "rsi_gate_6h": 50,
-            "macd_fast": 7, "macd_slow": 28, "macd_signal": 8,
-            "macd_mode": "any",
-            "rsi_mode": "trend_filter",
-            "rsi_upper": 73, "rsi_lower": 32,
-            "rsi_momentum_level": 47,
+            "macd_fast": 10,
+            "macd_slow": 23,
+            "macd_signal": 7,
+            "rsi_period": 14,
+            "rsi_lower": 30,
+            "rsi_upper": 70,
         }

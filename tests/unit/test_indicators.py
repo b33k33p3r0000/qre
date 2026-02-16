@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from qre.core.indicators import rsi, stochrsi, macd
+from qre.core.indicators import rsi, macd
 
 
 class TestRSI:
@@ -42,23 +42,21 @@ class TestRSI:
         assert not np.allclose(r14.values[30:], r21.values[30:], equal_nan=True)
 
 
-class TestStochRSI:
-    def test_stochrsi_range(self):
-        """StochRSI should be between 0 and 1."""
-        np.random.seed(42)
-        prices = pd.Series(100 + np.cumsum(np.random.randn(200)))
-        k, d = stochrsi(prices, rsi_len=21, stoch_len=14, k_smooth=3, d_smooth=3)
-        valid_k = k.dropna()
-        valid_d = d.dropna()
-        assert (valid_k >= 0).all() and (valid_k <= 1).all()
-        assert (valid_d >= 0).all() and (valid_d <= 1).all()
+class TestNoRemovedIndicators:
+    def test_no_stochrsi(self):
+        """stochrsi removed — not needed for Chio Extreme."""
+        import qre.core.indicators as mod
+        assert not hasattr(mod, "stochrsi")
 
-    def test_stochrsi_output_shape(self):
-        """StochRSI returns two Series of same length as input."""
-        prices = pd.Series(np.random.randn(100) + 100)
-        k, d = stochrsi(prices, rsi_len=21, stoch_len=14, k_smooth=3, d_smooth=3)
-        assert len(k) == len(prices)
-        assert len(d) == len(prices)
+    def test_no_macd_rising(self):
+        """macd_rising removed — only crossover mode."""
+        import qre.core.indicators as mod
+        assert not hasattr(mod, "macd_rising")
+
+    def test_no_ema(self):
+        """standalone ema removed — MACD computes EMA internally."""
+        import qre.core.indicators as mod
+        assert not hasattr(mod, "ema")
 
 
 class TestMACD:
