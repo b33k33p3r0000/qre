@@ -4,14 +4,14 @@ QRE Optimizer
 Anchored Walk-Forward optimization with Optuna.
 
 Single entry point: run_optimization(symbol, hours, n_trials, ...)
-  1. Fetch data (OHLCV all timeframes)
+  1. Fetch data (OHLCV)
   2. Compute AWF splits
   3. Run Optuna study (TPE sampler, SHA pruner)
   4. Final evaluation with best params
   5. Monte Carlo validation
   6. Save results (JSON + CSV)
 
-Only AWF mode. Only MACD+RSI strategy.
+Only AWF mode. Only Chio Extreme (MACD+RSI) strategy.
 """
 
 import logging
@@ -37,15 +37,12 @@ from qre.config import (
     MIN_WARMUP_BARS,
     MONTE_CARLO_MIN_TRADES,
     MONTE_CARLO_SIMULATIONS,
-    SPLIT_FAIL_PENALTY,
     STARTING_EQUITY,
     STARTUP_TRIALS_RATIO,
-    TF_LIST,
-    TF_MS,
     TPE_CONSIDER_ENDPOINTS,
     TPE_N_EI_CANDIDATES,
 )
-from qre.core.backtest import simulate_trades_fast, precompute_timeframe_indices
+from qre.core.backtest import simulate_trades_fast
 from qre.core.metrics import calculate_metrics, monte_carlo_validation
 from qre.core.strategy import MACDRSIStrategy
 from qre.data.fetch import load_all_data
@@ -114,43 +111,20 @@ def build_objective(
     base_df = data[BASE_TF]
     total_bars = len(base_df)
 
-    # Pre-compute TF index maps (data-dependent only, constant between trials)
-    base_ts = base_df.index.values.astype(np.int64)
-    tf_index_maps = {}
-    for tf in TF_LIST:
-        if tf in data and len(data[tf]) > 0:
-            tf_ts = data[tf].index.values.astype(np.int64)
-            tf_index_maps[tf] = precompute_timeframe_indices(base_ts, tf_ts)
+    # Pre-compute RSI for all possible Optuna periods (3-25)
+    from qre.core.indicators import rsi as compute_rsi
 
-    # Pre-compute indicator cache (data-dependent only, not param-dependent)
-    from qre.core.indicators import rsi as compute_rsi, stochrsi as compute_stochrsi
-    from qre.config import RSI_LENGTH, STOCH_LENGTH
-
-    precomputed_cache = {}
-    precomputed_cache["base_rsi"] = compute_rsi(base_df["close"], RSI_LENGTH).values.astype(np.float64)
-
-    precomputed_cache["gate_rsi"] = {}
-    for tf in ["1d", "12h", "8h", "6h"]:
-        if tf in data and len(data[tf]) > 0:
-            precomputed_cache["gate_rsi"][tf] = compute_rsi(data[tf]["close"], RSI_LENGTH).values.astype(np.float64)
-
-    # StochRSI K/D: kB ∈ {2,3,4}, dB ∈ {2,3,4} → 9 combos × 6 TFs = max 54 precomputes
-    precomputed_cache["stochrsi"] = {}
-    for kB in range(2, 5):
-        for dB in range(2, 5):
-            for tf in TF_LIST:
-                if tf in data and len(data[tf]) > 0:
-                    k_line, d_line = compute_stochrsi(data[tf]["close"], STOCH_LENGTH, STOCH_LENGTH, kB, dB)
-                    precomputed_cache["stochrsi"][(kB, dB, tf)] = (
-                        k_line.values.astype(np.float64),
-                        d_line.values.astype(np.float64),
-                    )
+    precomputed_cache = {"rsi": {}}
+    for period in range(3, 26):
+        precomputed_cache["rsi"][period] = compute_rsi(
+            base_df["close"], period
+        ).values.astype(np.float64)
 
     def objective(trial: optuna.trial.Trial) -> float:
         params = strategy.get_optuna_params(trial, symbol)
 
-        buy_signals, sell_signals, rsi_gates = strategy.precompute_signals(
-            data, params, tf_index_maps=tf_index_maps, precomputed_cache=precomputed_cache,
+        buy_signal, sell_signal = strategy.precompute_signals(
+            data, params, precomputed_cache=precomputed_cache,
         )
 
         split_scores = []
@@ -160,11 +134,8 @@ def build_objective(
 
             # TRAIN
             train_result = simulate_trades_fast(
-                symbol, data, params,
+                symbol, data, buy_signal, sell_signal,
                 start_idx=MIN_WARMUP_BARS, end_idx=train_end,
-                precomputed_buy_signals=buy_signals,
-                precomputed_sell_signals=sell_signals,
-                precomputed_rsi_gates=rsi_gates,
             )
             if not train_result.trades:
                 split_scores.append(0.0)
@@ -177,47 +148,24 @@ def build_objective(
 
             # TEST
             test_result = simulate_trades_fast(
-                symbol, data, params,
+                symbol, data, buy_signal, sell_signal,
                 start_idx=train_end, end_idx=test_end,
-                precomputed_buy_signals=buy_signals,
-                precomputed_sell_signals=sell_signals,
-                precomputed_rsi_gates=rsi_gates,
             )
             if not test_result.trades or len(test_result.trades) < 3:
                 split_scores.append(0.0)
                 continue
 
-            test_metrics = calculate_metrics(
-                test_result.trades, test_result.backtest_days,
-                start_equity=STARTING_EQUITY,
-            )
-
             penalized = apply_all_penalties(
                 train_metrics.equity,
                 train_metrics.trades_per_year,
-                train_metrics.short_hold_ratio,
-                train_metrics.max_drawdown,
-                train_metrics.monthly_returns,
-                train_equity=train_metrics.equity,
-                test_equity=test_metrics.equity,
-                test_sharpe=test_metrics.sharpe_ratio,
-                test_trades=test_metrics.trades,
+                test_trades=len(test_result.trades),
             )
             split_scores.append(penalized)
 
         if not split_scores or all(s == 0 for s in split_scores):
             return 0.0
 
-        # Include zeros in mean — failed splits naturally reduce the score
-        base_score = float(np.mean(split_scores))
-
-        # Additional penalty per failed split (score=0)
-        n_failed = sum(1 for s in split_scores if s == 0)
-        if n_failed > 0:
-            penalty = n_failed * SPLIT_FAIL_PENALTY
-            base_score *= (1.0 - min(penalty, 0.80))
-
-        return base_score
+        return float(np.mean(split_scores))
 
     return objective
 
@@ -238,8 +186,7 @@ def run_optimization(
     Run full AWF optimization pipeline for a single symbol.
 
     Args:
-        skip_recent_hours: Drop the most recent N hours of data before optimizing.
-            Useful for excluding anomalous recent periods (e.g., 720 = skip last month).
+        skip_recent_hours: Drop the most recent N hours of 1H data before optimizing.
 
     Returns best_params dict with all metrics.
     """
@@ -255,19 +202,15 @@ def run_optimization(
 
     exchange = ccxt.binance({"enableRateLimit": True})
 
-    # 1. Fetch fresh data (always from API, no disk cache)
+    # 1. Fetch fresh data
     logger.info(f"Loading {symbol} data ({hours}h history)...")
     data = load_all_data(exchange, symbol, hours)
 
-    # Trim recent data if requested
+    # Trim recent data if requested (1H base TF: 1 bar = 1 hour)
     if skip_recent_hours > 0:
-        skip_bars = skip_recent_hours  # 1h base TF → 1 bar = 1 hour
-        for tf in data:
-            tf_multiplier = TF_MS[tf] // TF_MS[BASE_TF]
-            tf_skip = max(1, skip_bars // tf_multiplier)
-            if tf_skip < len(data[tf]):
-                data[tf] = data[tf].iloc[:-tf_skip]
-        logger.info(f"Trimmed {skip_recent_hours}h ({skip_bars} bars) of recent data")
+        if skip_recent_hours < len(data[BASE_TF]):
+            data[BASE_TF] = data[BASE_TF].iloc[:-skip_recent_hours]
+        logger.info(f"Trimmed {skip_recent_hours}h of recent data")
 
     total_bars = len(data[BASE_TF])
     logger.info(f"Loaded {total_bars} bars for {symbol}")
@@ -308,7 +251,7 @@ def run_optimization(
         load_if_exists=True,
     )
 
-    # Graceful shutdown: SIGTERM → study.stop() so pipeline completes
+    # Graceful shutdown: SIGTERM → study.stop()
     def _graceful_stop(signum, frame):
         logger.info("Received SIGTERM — stopping optimization gracefully...")
         study.stop()
@@ -337,20 +280,14 @@ def run_optimization(
     base_df = data[BASE_TF]
     best_params.update({
         "symbol": symbol, "tf": "1h", "range": "FULL",
-        "n_votes": len(TF_LIST),
         "optimization_mode": "anchored_walk_forward",
         "n_splits": len(splits), "n_trials": completed_trials,
         "n_trials_requested": n_trials,
         "strategy": strategy.name, "strategy_version": strategy.version,
     })
 
-    buy_s, sell_s, gates = strategy.precompute_signals(data, best_params)
-    full_result = simulate_trades_fast(
-        symbol, data, best_params,
-        precomputed_buy_signals=buy_s,
-        precomputed_sell_signals=sell_s,
-        precomputed_rsi_gates=gates,
-    )
+    buy_s, sell_s = strategy.precompute_signals(data, best_params)
+    full_result = simulate_trades_fast(symbol, data, buy_s, sell_s)
     full_metrics = calculate_metrics(
         full_result.trades, full_result.backtest_days,
         start_equity=STARTING_EQUITY,
@@ -367,10 +304,8 @@ def run_optimization(
 
         if i == len(splits) - 1:
             tr = simulate_trades_fast(
-                symbol, data, best_params,
+                symbol, data, buy_s, sell_s,
                 start_idx=MIN_WARMUP_BARS, end_idx=train_end,
-                precomputed_buy_signals=buy_s, precomputed_sell_signals=sell_s,
-                precomputed_rsi_gates=gates,
             )
             if tr.trades:
                 last_train_metrics = calculate_metrics(
@@ -379,10 +314,8 @@ def run_optimization(
                 )
 
         te_r = simulate_trades_fast(
-            symbol, data, best_params,
+            symbol, data, buy_s, sell_s,
             start_idx=train_end, end_idx=test_end,
-            precomputed_buy_signals=buy_s, precomputed_sell_signals=sell_s,
-            precomputed_rsi_gates=gates,
         )
         if te_r.trades:
             tm = calculate_metrics(
@@ -462,7 +395,6 @@ def run_optimization(
 
     # 7. HTML report
     trades_dicts = [t._asdict() if hasattr(t, '_asdict') else t for t in full_result.trades]
-    # Extract optimization history for report visualization
     optuna_history = []
     for trial in study.trials:
         if trial.state == optuna.trial.TrialState.COMPLETE:
@@ -485,7 +417,7 @@ def main():
     """CLI entry point."""
     import argparse
 
-    parser = argparse.ArgumentParser(description="QRE Optimizer — MACD+RSI AWF")
+    parser = argparse.ArgumentParser(description="QRE Optimizer — Chio Extreme AWF")
     parser.add_argument("--symbol", type=str, default="BTC/USDC", choices=["BTC/USDC", "SOL/USDC"])
     parser.add_argument("--hours", type=int, default=8760)
     parser.add_argument("--trials", type=int, default=DEFAULT_TRIALS)
