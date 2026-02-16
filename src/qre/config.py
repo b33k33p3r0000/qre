@@ -54,83 +54,13 @@ def get_slippage(symbol: str) -> float:
 
 
 # =============================================================================
-# PER-PAIR CONFIGURATION
-# =============================================================================
-
-SYMBOL_CONFIGS: Dict[str, Dict] = {
-    "BTC/USDC": {
-        "min_trades_year": 60,
-        "min_trades_test": 3,
-        "max_drawdown_limit": 0.15,
-        "min_hold_min": 4,
-        "min_hold_max": 16,
-        "p_buy_min": 0.10,
-        "p_buy_max": 0.50,
-        "volatility_class": "low",
-        "threshold_tightness": 0.95,
-    },
-    "SOL/USDC": {
-        "min_trades_year": 100,
-        "min_trades_test": 8,
-        "max_drawdown_limit": 0.25,
-        "min_hold_min": 4,
-        "min_hold_max": 6,
-        "p_buy_min": 0.17,
-        "p_buy_max": 0.50,
-        "volatility_class": "high",
-        "threshold_tightness": 1.0,
-    },
-}
-
-DEFAULT_SYMBOL_CONFIG: Dict = {
-    "min_trades_year": 100,
-    "min_trades_test": 8,
-    "max_drawdown_limit": 0.18,
-    "min_hold_min": 4,
-    "min_hold_max": 6,
-    "p_buy_min": 0.17,
-    "p_buy_max": 0.50,
-    "volatility_class": "medium",
-    "threshold_tightness": 0.95,
-}
-
-
-def get_symbol_config(symbol: str) -> Dict:
-    return SYMBOL_CONFIGS.get(symbol, DEFAULT_SYMBOL_CONFIG)
-
-
-# =============================================================================
 # TRADE COUNT CONSTRAINTS
 # =============================================================================
 
-MIN_TRADES_YEAR_HARD = 60
+MIN_TRADES_YEAR_HARD = 30
 MIN_TRADES_TEST_HARD = 3
 MAX_TRADES_YEAR = 500
 OVERTRADING_PENALTY = 0.15
-
-# =============================================================================
-# PENALTIES
-# =============================================================================
-
-MIN_HOLD_BARS = 3
-SHORT_HOLD_PENALTY = 0.25
-MAX_SHORT_HOLD_RATIO = 0.15
-
-MAX_ACCEPTABLE_DRAWDOWN = 0.10
-DRAWDOWN_PENALTY_FACTOR = 1.5
-
-MIN_PROFITABLE_MONTHS_RATIO = 0.50
-
-MIN_TEST_TRAIN_RATIO = 0.50
-DIVERGENCE_PENALTY_FACTOR = 1.5
-MIN_TEST_TRADES = 3
-MIN_TEST_SHARPE = 0.0
-
-MIN_TEST_SHARPE_TIME_BASED = 0.3
-MIN_TEST_TRAIN_RATIO_STRICT = 0.25
-
-# Split consistency (anti-overfit)
-SPLIT_FAIL_PENALTY = 0.15  # 15% additional penalty per failed split (score=0)
 
 # =============================================================================
 # OPTIMIZATION
@@ -189,7 +119,6 @@ MAX_API_RETRIES = 5
 
 MIN_WARMUP_BARS = 200
 RSI_LENGTH = 21
-STOCH_LENGTH = 14
 
 # =============================================================================
 # FUNDED ACCOUNT
@@ -207,7 +136,14 @@ BACKTEST_POSITION_PCT = 0.25  # Statických 25% pro všechny backtesty i EE
 # CATASTROPHIC STOP
 # =============================================================================
 
-CATASTROPHIC_STOP_PCT = 0.10  # -10% emergency exit
+CATASTROPHIC_STOP_PCT = 0.15  # -15% emergency exit
+
+# =============================================================================
+# STRATEGY
+# =============================================================================
+
+LONG_ONLY = False  # True = long only, False = long + short
+MIN_HOLD_HOURS = 2  # Minimum bars before exit signal can trigger
 
 # =============================================================================
 # DISCORD (optional)

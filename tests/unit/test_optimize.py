@@ -1,10 +1,10 @@
 # tests/unit/test_optimize.py
-"""Unit tests for QRE optimizer orchestration."""
+"""Unit tests for QRE optimizer (post-redesign)."""
 
 import numpy as np
 import pandas as pd
 import pytest
-from unittest.mock import MagicMock, patch
+import optuna
 
 from qre.optimize import (
     compute_awf_splits,
@@ -62,26 +62,65 @@ class TestCreatePruner:
 
 
 class TestBuildObjective:
-    """Test that build_objective returns a callable that Optuna can use."""
-
     def test_returns_callable(self):
+        np.random.seed(42)
+        n = 500
+        dates = pd.date_range("2025-01-01", periods=n, freq="1h")
+        close = 100 + np.cumsum(np.random.randn(n) * 0.3)
         mock_data = {"1h": pd.DataFrame(
-            {"open": [1.0]*500, "high": [2.0]*500, "low": [0.5]*500, "close": [1.5]*500},
-            index=pd.date_range("2025-01-01", periods=500, freq="1h"),
+            {"open": close, "high": close + 1, "low": close - 1, "close": close},
+            index=dates,
         )}
         splits = [{"train_end": 0.70, "test_end": 0.85}]
-
-        objective = build_objective(
-            symbol="BTC/USDC",
-            data=mock_data,
-            splits=splits,
-        )
+        objective = build_objective(symbol="BTC/USDC", data=mock_data, splits=splits)
         assert callable(objective)
+
+    def test_objective_runs_without_error(self):
+        """Objective produces a float or raises TrialPruned."""
+        np.random.seed(42)
+        n = 500
+        dates = pd.date_range("2025-01-01", periods=n, freq="1h")
+        close = 100 + np.cumsum(np.random.randn(n) * 0.3)
+        mock_data = {"1h": pd.DataFrame(
+            {"open": close, "high": close + 1, "low": close - 1, "close": close},
+            index=dates,
+        )}
+        splits = [{"train_end": 0.70, "test_end": 0.85}]
+        objective = build_objective(symbol="BTC/USDC", data=mock_data, splits=splits)
+
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
+        study = optuna.create_study()
+        # Run a few trials — some may prune (macd_fast >= macd_slow)
+        completed = 0
+        for _ in range(20):
+            trial = study.ask()
+            try:
+                result = objective(trial)
+                assert isinstance(result, float)
+                study.tell(trial, result)
+                completed += 1
+            except optuna.TrialPruned:
+                study.tell(trial, state=optuna.trial.TrialState.PRUNED)
+        assert completed > 0
+
+
+class TestNoLegacyImports:
+    def test_no_split_fail_penalty(self):
+        """SPLIT_FAIL_PENALTY removed from optimizer."""
+        import qre.optimize as mod
+        import inspect
+        source = inspect.getsource(mod)
+        assert "SPLIT_FAIL_PENALTY" not in source
+
+    def test_no_stochrsi_in_optimizer(self):
+        """No StochRSI references in optimizer."""
+        import qre.optimize as mod
+        import inspect
+        source = inspect.getsource(mod)
+        assert "stochrsi" not in source.lower()
 
 
 class TestOptimizeImports:
-    """Verify report + notify wiring is present in optimize module."""
-
     def test_notify_importable(self):
         from qre.optimize import notify_start, notify_complete
         assert callable(notify_start)

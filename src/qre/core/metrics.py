@@ -26,7 +26,7 @@ warnings.filterwarnings(
     message="Converting to PeriodArray/Index representation will drop timezone information",
 )
 
-from qre.config import MIN_HOLD_BARS, STARTING_EQUITY
+from qre.config import MIN_HOLD_HOURS, STARTING_EQUITY
 
 
 @dataclass
@@ -113,7 +113,7 @@ def calculate_annualized_trades(trades: List[Dict], backtest_days: int) -> float
     return len(trades) / years if years > 0 else 0.0
 
 
-def calculate_short_hold_ratio(trades: List[Dict], min_hold: int = MIN_HOLD_BARS) -> float:
+def calculate_short_hold_ratio(trades: List[Dict], min_hold: int = MIN_HOLD_HOURS) -> float:
     """Spočítá poměr obchodů s krátkým držením."""
     if not trades:
         return 0.0

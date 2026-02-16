@@ -1,4 +1,6 @@
-"""Unit tests for QRE backtest engine."""
+"""Unit tests for QRE backtest engine (post-redesign)."""
+
+import inspect
 
 import numpy as np
 import pandas as pd
@@ -6,151 +8,165 @@ import pytest
 
 from qre.core.backtest import (
     simulate_trades_fast,
-    precompute_crossover_signals,
-    precompute_rsi_gate,
     precompute_timeframe_indices,
     BacktestResult,
 )
 
 
-class TestPrecomputeFunctions:
-    def test_crossover_signals_shape(self):
-        """precompute_crossover_signals returns two arrays of same length."""
-        k = np.random.rand(100)
-        d = np.random.rand(100)
-        buy, sell = precompute_crossover_signals(k, d, 0.2, 0.8)
-        assert len(buy) == 100
-        assert len(sell) == 100
-
-    def test_crossover_signals_boolean(self):
-        """Crossover signals should be boolean-like."""
-        k = np.random.rand(100)
-        d = np.random.rand(100)
-        buy, sell = precompute_crossover_signals(k, d, 0.2, 0.8)
-        assert set(np.unique(buy)).issubset({0, 1, True, False})
-
-    def test_rsi_gate_shape(self):
-        """precompute_rsi_gate returns array of same length."""
-        rsi_vals = np.random.rand(100) * 100
-        gate = precompute_rsi_gate(rsi_vals, 50.0)
-        assert len(gate) == 100
-
-    def test_rsi_gate_logic(self):
-        """RSI gate is True when RSI > threshold."""
-        rsi_vals = np.array([30.0, 60.0, np.nan, 80.0])
-        gate = precompute_rsi_gate(rsi_vals, 50.0)
-        assert gate[0] == False  # 30 < 50
-        assert gate[1] == True   # 60 > 50
-        assert gate[2] == False  # NaN
-        assert gate[3] == True   # 80 > 50
-
-    def test_timeframe_indices_shape(self):
-        """precompute_timeframe_indices returns array matching base length."""
-        base_ts = np.arange(0, 100 * 3600000, 3600000, dtype=np.int64)  # 1h bars
-        tf_ts = np.arange(0, 100 * 3600000, 4 * 3600000, dtype=np.int64)  # 4h bars
-        idx = precompute_timeframe_indices(base_ts, tf_ts)
-        assert len(idx) == len(base_ts)
-
-
-def _make_ohlcv_data(n_bars=500):
-    """Helper: create multi-timeframe OHLCV DataFrames for backtest.
-
-    Index must be DatetimeIndex (simulate_trades_fast uses .total_seconds() and .isoformat()).
-    """
-    np.random.seed(42)
-    # Base timeframe (1h)
+def _make_1h_data(n_bars=500, seed=42):
+    """Helper: create 1H OHLCV data."""
+    np.random.seed(seed)
     dates = pd.date_range("2025-01-01", periods=n_bars, freq="1h")
     close = 100 + np.cumsum(np.random.randn(n_bars) * 0.3)
     high = close + np.abs(np.random.randn(n_bars) * 0.5)
     low = close - np.abs(np.random.randn(n_bars) * 0.5)
     open_ = close + np.random.randn(n_bars) * 0.1
-
-    base_df = pd.DataFrame(
-        {"open": open_, "high": high, "low": low, "close": close},
-        index=dates,
-    )
-
-    data = {"1h": base_df}
-
-    # Higher timeframes via subsampling
-    tf_configs = [("2h", 2), ("4h", 4), ("6h", 6), ("8h", 8), ("12h", 12), ("1d", 24)]
-    for tf, factor in tf_configs:
-        tf_len = n_bars // factor
-        if tf_len < 10:
-            continue
-        tf_idx = dates[::factor][:tf_len]
-        data[tf] = pd.DataFrame(
-            {
-                "open": open_[::factor][:tf_len],
-                "high": high[::factor][:tf_len],
-                "low": low[::factor][:tf_len],
-                "close": close[::factor][:tf_len],
-            },
-            index=tf_idx,
+    return {
+        "1h": pd.DataFrame(
+            {"open": open_, "high": high, "low": low, "close": close},
+            index=dates,
         )
+    }
 
-    return data
+
+def _make_signals(n_bars, buy_bars=None, sell_bars=None):
+    """Helper: create 1D buy/sell signal arrays."""
+    buy = np.zeros(n_bars, dtype=np.bool_)
+    sell = np.zeros(n_bars, dtype=np.bool_)
+    if buy_bars:
+        for b in buy_bars:
+            buy[b] = True
+    if sell_bars:
+        for s in sell_bars:
+            sell[s] = True
+    return buy, sell
+
+
+class TestPrecomputeTimeframeIndices:
+    def test_shape(self):
+        """Maps base timestamps to TF indices correctly."""
+        base_ts = np.arange(0, 100 * 3600000, 3600000, dtype=np.int64)
+        tf_ts = np.arange(0, 100 * 3600000, 4 * 3600000, dtype=np.int64)
+        idx = precompute_timeframe_indices(base_ts, tf_ts)
+        assert len(idx) == len(base_ts)
+
+
+class TestNoLegacyFunctions:
+    def test_no_crossover_signals(self):
+        """precompute_crossover_signals removed — StochRSI eliminated."""
+        import qre.core.backtest as mod
+        assert not hasattr(mod, "precompute_crossover_signals")
+
+    def test_no_rsi_gate(self):
+        """precompute_rsi_gate removed — RSI gates eliminated."""
+        import qre.core.backtest as mod
+        assert not hasattr(mod, "precompute_rsi_gate")
+
+    def test_simplified_signature(self):
+        """No legacy params: no plugin arrays, no precomputed_rsi_gates."""
+        sig = inspect.signature(simulate_trades_fast)
+        param_names = set(sig.parameters.keys())
+        for legacy in ["filter_mask", "gate_mask", "position_mult",
+                        "precomputed_buy_signals", "precomputed_sell_signals",
+                        "precomputed_rsi_gates", "params"]:
+            assert legacy not in param_names, f"Legacy param {legacy} found"
+        assert "buy_signal" in param_names
+        assert "sell_signal" in param_names
 
 
 class TestSimulateTradesFast:
     def test_returns_backtest_result(self):
         """simulate_trades_fast returns BacktestResult."""
-        data = _make_ohlcv_data(n_bars=500)
-        params = {
-            "kB": 3, "dB": 2, "k_sell": 1, "min_hold": 8,
-            "p_buy": 0.2,
-            "low_2h": 0.2, "high_2h": 0.8,
-            "low_4h": 0.2, "high_4h": 0.8,
-            "low_6h": 0.2, "high_6h": 0.8,
-            "low_8h": 0.2, "high_8h": 0.8,
-            "low_12h": 0.2, "high_12h": 0.8,
-            "low_24h": 0.2, "high_24h": 0.8,
-            "rsi_gate_24h": 50, "rsi_gate_12h": 50,
-            "rsi_gate_8h": 50, "rsi_gate_6h": 50,
-        }
-        result = simulate_trades_fast("BTC/USDC", data, params)
+        data = _make_1h_data()
+        n = len(data["1h"])
+        buy, sell = _make_signals(n, buy_bars=[250], sell_bars=[300])
+        result = simulate_trades_fast("BTC/USDC", data, buy, sell)
         assert isinstance(result, BacktestResult)
         assert isinstance(result.trades, list)
         assert result.equity >= 0
 
-    def test_with_precomputed_signals(self):
-        """simulate_trades_fast works with pre-computed signals."""
-        data = _make_ohlcv_data(n_bars=500)
-        n_bars = len(data["1h"])
-        params = {
-            "kB": 3, "dB": 2, "k_sell": 1, "min_hold": 8,
-            "p_buy": 0.2,
-        }
-        # Pre-compute simple signals
-        buy_signals = np.zeros((6, n_bars), dtype=np.bool_)
-        buy_signals[:, ::50] = True  # Buy every 50 bars on all TFs
-        sell_signals = np.ones((6, n_bars), dtype=np.bool_)
-        rsi_gates = np.ones((4, n_bars), dtype=np.bool_)
+    def test_direction_in_trades(self):
+        """Trades have direction field (long/short)."""
+        data = _make_1h_data()
+        n = len(data["1h"])
+        buy, sell = _make_signals(n, buy_bars=[250], sell_bars=[300])
+        result = simulate_trades_fast("BTC/USDC", data, buy, sell)
+        for trade in result.trades:
+            assert "direction" in trade
+            assert trade["direction"] in ("long", "short")
 
-        result = simulate_trades_fast(
-            "BTC/USDC", data, params,
-            precomputed_buy_signals=buy_signals,
-            precomputed_sell_signals=sell_signals,
-            precomputed_rsi_gates=rsi_gates,
-        )
-        assert isinstance(result, BacktestResult)
+    def test_long_only_no_shorts(self):
+        """With long_only=True, no short trades."""
+        data = _make_1h_data()
+        n = len(data["1h"])
+        buy, sell = _make_signals(n, buy_bars=[250, 350], sell_bars=[300, 400])
+        result = simulate_trades_fast("BTC/USDC", data, buy, sell, long_only=True)
+        for trade in result.trades:
+            assert trade["direction"] == "long"
+
+    def test_short_trade_exists(self):
+        """With long_only=False, sell signal when flat opens a short."""
+        data = _make_1h_data()
+        n = len(data["1h"])
+        buy, sell = _make_signals(n, sell_bars=[250])
+        result = simulate_trades_fast("BTC/USDC", data, buy, sell, long_only=False)
+        assert len(result.trades) >= 1
+        assert any(t["direction"] == "short" for t in result.trades)
 
     def test_pnl_finite(self):
         """All trade PnLs should be finite."""
-        data = _make_ohlcv_data(n_bars=500)
-        n_bars = len(data["1h"])
-        params = {"kB": 3, "dB": 2, "k_sell": 1, "min_hold": 3, "p_buy": 0.15}
-
-        buy_signals = np.zeros((6, n_bars), dtype=np.bool_)
-        buy_signals[:, 210::80] = True
-        sell_signals = np.ones((6, n_bars), dtype=np.bool_)
-        rsi_gates = np.ones((4, n_bars), dtype=np.bool_)
-
-        result = simulate_trades_fast(
-            "BTC/USDC", data, params,
-            precomputed_buy_signals=buy_signals,
-            precomputed_sell_signals=sell_signals,
-            precomputed_rsi_gates=rsi_gates,
-        )
+        data = _make_1h_data()
+        n = len(data["1h"])
+        buy, sell = _make_signals(n, buy_bars=[250, 350], sell_bars=[300, 400])
+        result = simulate_trades_fast("BTC/USDC", data, buy, sell)
         for trade in result.trades:
             assert np.isfinite(trade["pnl_abs"]), f"Non-finite PnL: {trade}"
+            assert np.isfinite(trade["pnl_pct"]), f"Non-finite PnL%: {trade}"
+
+    def test_catastrophic_stop(self):
+        """Huge price drop triggers catastrophic stop for long."""
+        n = 500
+        dates = pd.date_range("2025-01-01", periods=n, freq="1h")
+        close = np.full(n, 100.0)
+        close[260:] = 50.0  # 50% crash after entry
+        high = close + 1.0
+        low = close - 1.0
+        data = {"1h": pd.DataFrame(
+            {"open": close.copy(), "high": high, "low": low, "close": close},
+            index=dates,
+        )}
+        buy, sell = _make_signals(n, buy_bars=[250])
+        result = simulate_trades_fast("BTC/USDC", data, buy, sell)
+        assert len(result.trades) >= 1
+        assert any(t["reason"] == "catastrophic_stop" for t in result.trades)
+
+    def test_force_close_at_end(self):
+        """Open position is closed at end of data."""
+        data = _make_1h_data()
+        n = len(data["1h"])
+        buy, sell = _make_signals(n, buy_bars=[490])
+        result = simulate_trades_fast("BTC/USDC", data, buy, sell)
+        assert len(result.trades) >= 1
+        assert any(t["reason"] == "force_close" for t in result.trades)
+
+    def test_min_hold_respected(self):
+        """Cannot exit before min_hold bars."""
+        data = _make_1h_data()
+        n = len(data["1h"])
+        # Buy at 250, sell at 251 (too early), sell at 253 (ok)
+        buy, sell = _make_signals(n, buy_bars=[250], sell_bars=[251, 253])
+        result = simulate_trades_fast("BTC/USDC", data, buy, sell)
+        for trade in result.trades:
+            if trade["reason"] != "force_close":
+                assert trade["hold_bars"] >= 2, f"Exited too early: {trade['hold_bars']} bars"
+
+    def test_position_flip(self):
+        """Sell signal closes long and opens short (when not long_only)."""
+        data = _make_1h_data()
+        n = len(data["1h"])
+        buy, sell = _make_signals(n, buy_bars=[250], sell_bars=[260])
+        result = simulate_trades_fast("BTC/USDC", data, buy, sell, long_only=False)
+        # Should have 2 trades: long closed by signal, short force-closed at end
+        directions = [t["direction"] for t in result.trades]
+        assert "long" in directions
+        assert "short" in directions
