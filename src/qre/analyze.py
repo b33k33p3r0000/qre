@@ -17,9 +17,9 @@ from typing import Any
 
 log = logging.getLogger(__name__)
 
-# --- Chio Extreme param analysis constants ---
-MACD_SPREAD_HEALTHY = (10, 20)
-RSI_ZONE_WIDTH_HEALTHY = (30, 50)
+# --- Thresholds aligned with /diagnose skill (Chio Extreme v3.0) ---
+# MACD spread: <8 yellow, 8-18 green, >18 yellow
+# RSI zone width: <30 red, 30-40 yellow, 40-55 green, >55 yellow
 
 
 def _classify(value: float, green_range: tuple, yellow_range: tuple) -> str:
@@ -45,7 +45,7 @@ def health_check(params: dict[str, Any]) -> dict[str, dict[str, Any]]:
     Thresholds:
         Sharpe:            green 1.0–3.5,  yellow 0.5–5.0,  red otherwise
         Max Drawdown:      green > -5%,    yellow -5% to -10%, red < -10%
-        Trades/year:       green 80–500,   yellow 30–800,    red otherwise
+        Trades/year:       green 30–500,   yellow 30–800,    red otherwise
         Win Rate:          green >= 50%,   yellow 40%–50%,   red < 40%
         Profit Factor:     green >= 1.5,   yellow 1.0–1.5,   red < 1.0
         Expectancy:        green >= $100,  yellow $0–$100,   red < $0
@@ -72,10 +72,10 @@ def health_check(params: dict[str, Any]) -> dict[str, dict[str, Any]]:
         dd_status = "red"
     result["max_drawdown"] = {"status": dd_status, "value": dd}
 
-    # Trades per year: green 80–500, yellow 30–800, red outside
+    # Trades per year: green 30–500, yellow 30–800, red outside
     tpy = params["trades_per_year"]
     result["trades_per_year"] = {
-        "status": _classify(tpy, (80, 500), (30, 800)),
+        "status": _classify(tpy, (30, 500), (30, 800)),
         "value": tpy,
     }
 
@@ -136,16 +136,17 @@ def health_check(params: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 
 def analyze_trades(trades_csv_path: str | Path) -> dict[str, Any]:
-    """Analyze trades CSV — exit reasons, hold time stats, top winners/losers.
+    """Analyze trades CSV — exit reasons, hold time, direction breakdown, top trades.
 
     Args:
         trades_csv_path: Path to trades CSV with columns:
             entry_ts, entry_price, exit_ts, exit_price, hold_bars,
-            size, capital_at_entry, pnl_abs, pnl_pct, symbol, reason
+            size, capital_at_entry, pnl_abs, pnl_pct, symbol, reason,
+            direction (optional — graceful degradation if missing)
 
     Returns:
         Dict with keys: total_trades, exit_reasons, catastrophic_pct,
-        hold_bars, top_winners, top_losers.
+        hold_bars, min_hold_pct, top_winners, top_losers, direction_stats.
     """
     trades: list[dict[str, Any]] = []
     with open(trades_csv_path, newline="") as f:
@@ -159,6 +160,7 @@ def analyze_trades(trades_csv_path: str | Path) -> dict[str, Any]:
                 "pnl_pct": float(row["pnl_pct"]),
                 "symbol": row["symbol"],
                 "reason": row["reason"],
+                "direction": row.get("direction", ""),
             })
 
     total = len(trades)
@@ -190,6 +192,10 @@ def analyze_trades(trades_csv_path: str | Path) -> dict[str, Any]:
         "median": median(hold_values) if hold_values else 0,
     }
 
+    # MIN_HOLD blocking: % trades at exactly 2 bars (MIN_HOLD_HOURS=2)
+    min_hold_count = sum(1 for t in trades if t["hold_bars"] == 2)
+    min_hold_pct = min_hold_count / total if total > 0 else 0.0
+
     # Top 3 winners (positive pnl, sorted desc) and all losers (negative pnl, sorted asc)
     winners = sorted(
         [t for t in trades if t["pnl_abs"] > 0],
@@ -201,20 +207,46 @@ def analyze_trades(trades_csv_path: str | Path) -> dict[str, Any]:
         key=lambda t: t["pnl_abs"],
     )
 
+    # Direction breakdown (long/short)
+    direction_stats: dict[str, dict[str, Any]] = {}
+    dir_groups: dict[str, list[dict[str, Any]]] = {}
+    for t in trades:
+        d = t.get("direction", "")
+        if d:
+            dir_groups.setdefault(d, []).append(t)
+
+    for direction, group in dir_groups.items():
+        count = len(group)
+        total_pnl = sum(t["pnl_abs"] for t in group)
+        wins = sum(1 for t in group if t["pnl_abs"] > 0)
+        direction_stats[direction] = {
+            "count": count,
+            "total_pnl": total_pnl,
+            "win_rate": wins / count if count > 0 else 0.0,
+            "avg_pnl": total_pnl / count if count > 0 else 0.0,
+        }
+
     return {
         "total_trades": total,
         "exit_reasons": exit_reasons,
         "catastrophic_pct": catastrophic_pct,
         "hold_bars": hold_stats,
+        "min_hold_pct": min_hold_pct,
         "top_winners": winners,
         "top_losers": losers,
+        "direction_stats": direction_stats,
     }
 
 
 def analyze_thresholds(params: dict[str, Any]) -> dict[str, Any]:
     """Analyze Chio Extreme strategy params — MACD spread, RSI zones.
 
-    Evaluates the 6 strategy parameters for reasonable ranges.
+    Evaluates the 6 strategy parameters with green/yellow/red status
+    aligned with /diagnose skill thresholds.
+
+    Thresholds:
+        MACD spread:    green 8-18, yellow <8 or >18
+        RSI zone width: green 40-55, yellow 30-40 or >55, red <30
 
     Args:
         params: Optimizer result params containing macd_fast, macd_slow,
@@ -230,26 +262,16 @@ def analyze_thresholds(params: dict[str, Any]) -> dict[str, Any]:
     macd_signal = params.get("macd_signal", 9)
     macd_spread = macd_slow - macd_fast
 
-    lo, hi = MACD_SPREAD_HEALTHY
-    if lo <= macd_spread <= hi:
-        macd_spread_status = "healthy"
-    elif macd_spread < lo:
-        macd_spread_status = "narrow"
-    else:
-        macd_spread_status = "wide"
+    # MACD spread: <8 yellow, 8-18 green, >18 yellow (never red)
+    macd_spread_status = _classify(macd_spread, (8, 18), (0, 9999))
 
     rsi_lower = params.get("rsi_lower", 30)
     rsi_upper = params.get("rsi_upper", 70)
     rsi_period = params.get("rsi_period", 14)
     rsi_zone_width = rsi_upper - rsi_lower
 
-    lo_z, hi_z = RSI_ZONE_WIDTH_HEALTHY
-    if lo_z <= rsi_zone_width <= hi_z:
-        rsi_zone_status = "healthy"
-    elif rsi_zone_width < lo_z:
-        rsi_zone_status = "narrow"
-    else:
-        rsi_zone_status = "wide"
+    # RSI zone: <30 red, 30-40 yellow, 40-55 green, >55 yellow
+    rsi_zone_status = _classify(rsi_zone_width, (40, 55), (30, 9999))
 
     return {
         "macd_fast": macd_fast,
@@ -353,26 +375,26 @@ def generate_suggestions(
     low_trades = health.get("trades_per_year", {}).get("status") == "red"
     low_sharpe = health.get("sharpe", {}).get("status") == "red"
     high_catastrophic = trades.get("catastrophic_pct", 0) > 0.4
-    narrow_rsi = thresholds.get("rsi_zone_status") == "narrow"
-    narrow_macd = thresholds.get("macd_spread_status") == "narrow"
+    bad_rsi = thresholds.get("rsi_zone_status") in ("yellow", "red")
+    bad_macd = thresholds.get("macd_spread_status") == "yellow"
     high_overfit = robustness.get("overfit_risk") == "high"
 
-    # Rule 1: Low trades + narrow RSI zones → widen RSI entry zones
-    if low_trades and narrow_rsi:
+    # Rule 1: Low trades + bad RSI zones → widen RSI entry zones
+    if low_trades and bad_rsi:
         suggestions.append({
             "priority": "high",
             "action": "Widen RSI entry zones (lower rsi_lower or raise rsi_upper)",
-            "reason": "Too few trades per year with narrow RSI extreme zones",
+            "reason": "Too few trades per year with restrictive RSI extreme zones",
             "impact": "More signals will qualify, increasing trade frequency",
         })
 
-    # Rule 2: Low trades + narrow MACD → widen MACD spread
-    if low_trades and narrow_macd:
+    # Rule 2: Low trades + bad MACD → adjust MACD spread
+    if low_trades and bad_macd:
         suggestions.append({
             "priority": "medium",
-            "action": "Widen MACD spread (increase macd_slow or decrease macd_fast)",
-            "reason": "Narrow MACD spread produces fewer distinct crossovers",
-            "impact": "More responsive MACD signals",
+            "action": "Adjust MACD spread (target 8-18 range)",
+            "reason": "MACD spread outside optimal range reduces signal quality",
+            "impact": "Better crossover signals",
         })
 
     # Rule 3: High catastrophic_pct → adjust stops or entries
@@ -401,6 +423,18 @@ def generate_suggestions(
             "reason": "Sharpe ratio is critically low",
             "impact": "Better signal quality may improve risk-adjusted returns",
         })
+
+    # Rule 6: One direction losing → review RSI symmetry
+    direction_stats = trades.get("direction_stats", {})
+    for direction, stats in direction_stats.items():
+        if stats.get("total_pnl", 0) < 0:
+            suggestions.append({
+                "priority": "medium",
+                "action": f"Review RSI zone symmetry — {direction} trades are net negative",
+                "reason": f"{direction.capitalize()} side is losing money overall",
+                "impact": "Balanced long/short performance",
+            })
+            break
 
     return suggestions[:5]
 
@@ -576,7 +610,7 @@ def _build_findings(
                 "detail": f"{metric} is {status}",
             })
 
-    # High catastrophic stop rate
+    # Catastrophic stop rate: >40% red, 20-40% yellow
     cat_pct = trades.get("catastrophic_pct", 0)
     if cat_pct > 0.4:
         findings.append({
@@ -585,6 +619,52 @@ def _build_findings(
             "value": f"{cat_pct:.0%}",
             "detail": f"Catastrophic stop rate {cat_pct:.0%} exceeds 40% threshold",
         })
+    elif cat_pct > 0.2:
+        findings.append({
+            "severity": "yellow",
+            "metric": "catastrophic_pct",
+            "value": f"{cat_pct:.0%}",
+            "detail": f"Catastrophic stop rate {cat_pct:.0%} is elevated (20-40%)",
+        })
+
+    # Signal exit rate: < 50% planned exits → yellow
+    exit_reasons = trades.get("exit_reasons", {})
+    signal_pct = exit_reasons.get("signal", {}).get("pct", 0)
+    if trades.get("total_trades", 0) > 0 and signal_pct < 0.5:
+        findings.append({
+            "severity": "yellow",
+            "metric": "signal_exit_pct",
+            "value": f"{signal_pct:.0%}",
+            "detail": f"Only {signal_pct:.0%} of exits are planned signals (< 50%)",
+        })
+
+    # MIN_HOLD blocking: >30% trades at exactly 2 bars
+    min_hold_pct = trades.get("min_hold_pct", 0)
+    if min_hold_pct > 0.3:
+        findings.append({
+            "severity": "yellow",
+            "metric": "min_hold_blocking",
+            "value": f"{min_hold_pct:.0%}",
+            "detail": f"{min_hold_pct:.0%} of trades exit at MIN_HOLD_HOURS=2",
+        })
+
+    # Direction findings
+    direction_stats = trades.get("direction_stats", {})
+    for direction, stats in direction_stats.items():
+        if stats.get("count", 0) > 0 and stats.get("win_rate", 0) < 0.3:
+            findings.append({
+                "severity": "red",
+                "metric": f"{direction}_win_rate",
+                "value": f"{stats['win_rate']:.0%}",
+                "detail": f"{direction.capitalize()} win rate {stats['win_rate']:.0%} below 30%",
+            })
+        if stats.get("total_pnl", 0) < 0:
+            findings.append({
+                "severity": "yellow",
+                "metric": f"{direction}_pnl",
+                "value": f"${stats['total_pnl']:.2f}",
+                "detail": f"{direction.capitalize()} trades net negative P&L",
+            })
 
     # High overfit risk
     if robustness.get("overfit_risk") == "high":

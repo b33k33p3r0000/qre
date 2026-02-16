@@ -31,7 +31,7 @@ def save_trades_csv(path: Path, trades: List[Dict[str, Any]]) -> None:
         writer.writerow([
             "entry_ts", "entry_price", "exit_ts", "exit_price",
             "hold_bars", "size", "capital_at_entry",
-            "pnl_abs", "pnl_pct", "symbol", "reason",
+            "pnl_abs", "pnl_pct", "symbol", "reason", "direction",
         ])
         for trade in trades:
             writer.writerow([
@@ -46,5 +46,6 @@ def save_trades_csv(path: Path, trades: List[Dict[str, Any]]) -> None:
                 trade.get("pnl_pct", 0.0),
                 trade.get("symbol", ""),
                 trade.get("reason", ""),
+                trade.get("direction", ""),
             ])
     logger.debug(f"Saved trades CSV: {path}")

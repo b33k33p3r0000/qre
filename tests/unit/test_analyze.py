@@ -88,7 +88,7 @@ class TestHealthCheck:
         """Values in yellow ranges produce yellow status."""
         good_params["sharpe"] = 0.8          # yellow: 0.5–1.0
         good_params["max_drawdown"] = -7.0   # yellow: -5% to -10%
-        good_params["trades_per_year"] = 50  # yellow: 30–80
+        good_params["trades_per_year"] = 600  # yellow: 500–800
         good_params["win_rate"] = 0.45       # yellow: 40%–50%
         good_params["profit_factor"] = 1.2   # yellow: 1.0–1.5
         good_params["expectancy"] = 50.0     # yellow: $0–$100
@@ -143,32 +143,56 @@ class TestAnalyzeThresholds:
         result = analyze_thresholds(threshold_params)
         assert result["macd_spread"] == 14
 
-    def test_macd_spread_healthy(self, threshold_params):
-        """Spread 14 is within 10-20 → healthy."""
+    def test_macd_spread_green(self, threshold_params):
+        """Spread 14 is within 8-18 → green."""
         result = analyze_thresholds(threshold_params)
-        assert result["macd_spread_status"] == "healthy"
+        assert result["macd_spread_status"] == "green"
 
-    def test_macd_spread_narrow(self, threshold_params):
-        """Spread < 10 → narrow."""
+    def test_macd_spread_yellow_narrow(self, threshold_params):
+        """Spread < 8 → yellow."""
         threshold_params["macd_fast"] = 12
         threshold_params["macd_slow"] = 18
         result = analyze_thresholds(threshold_params)
         assert result["macd_spread"] == 6
-        assert result["macd_spread_status"] == "narrow"
+        assert result["macd_spread_status"] == "yellow"
 
-    def test_rsi_zone_width(self, threshold_params):
-        """RSI zone width = 70 - 30 = 40."""
+    def test_macd_spread_yellow_wide(self, threshold_params):
+        """Spread > 18 → yellow."""
+        threshold_params["macd_fast"] = 5
+        threshold_params["macd_slow"] = 30
+        result = analyze_thresholds(threshold_params)
+        assert result["macd_spread"] == 25
+        assert result["macd_spread_status"] == "yellow"
+
+    def test_rsi_zone_green(self, threshold_params):
+        """RSI zone width = 70 - 30 = 40 → green (40-55)."""
         result = analyze_thresholds(threshold_params)
         assert result["rsi_zone_width"] == 40
-        assert result["rsi_zone_status"] == "healthy"
+        assert result["rsi_zone_status"] == "green"
 
-    def test_rsi_zone_narrow(self, threshold_params):
-        """rsi_upper - rsi_lower < 30 → narrow."""
+    def test_rsi_zone_yellow(self, threshold_params):
+        """Zone width 30-40 → yellow."""
+        threshold_params["rsi_lower"] = 35
+        threshold_params["rsi_upper"] = 70
+        result = analyze_thresholds(threshold_params)
+        assert result["rsi_zone_width"] == 35
+        assert result["rsi_zone_status"] == "yellow"
+
+    def test_rsi_zone_red(self, threshold_params):
+        """Zone width < 30 → red."""
         threshold_params["rsi_lower"] = 35
         threshold_params["rsi_upper"] = 50
         result = analyze_thresholds(threshold_params)
         assert result["rsi_zone_width"] == 15
-        assert result["rsi_zone_status"] == "narrow"
+        assert result["rsi_zone_status"] == "red"
+
+    def test_rsi_zone_yellow_wide(self, threshold_params):
+        """Zone width > 55 → yellow."""
+        threshold_params["rsi_lower"] = 20
+        threshold_params["rsi_upper"] = 80
+        result = analyze_thresholds(threshold_params)
+        assert result["rsi_zone_width"] == 60
+        assert result["rsi_zone_status"] == "yellow"
 
     def test_all_params_returned(self, threshold_params):
         """All 6 strategy params are in output."""
@@ -217,7 +241,7 @@ class TestCheckRobustness:
 
 @pytest.fixture
 def trades_csv(tmp_path):
-    """Create a synthetic trades CSV with 5 trades, mixed exit reasons."""
+    """Create a synthetic trades CSV with 5 trades, mixed exit reasons and directions."""
     path = tmp_path / "trades.csv"
     header = [
         "entry_ts",
@@ -231,9 +255,10 @@ def trades_csv(tmp_path):
         "pnl_pct",
         "symbol",
         "reason",
+        "direction",
     ]
     rows = [
-        # Trade 1: catastrophic_stop, big loss
+        # Trade 1: catastrophic_stop, big loss, long
         [
             "2025-06-01 09:00",
             "67500.00",
@@ -246,8 +271,9 @@ def trades_csv(tmp_path):
             -0.013,
             "BTC/USD",
             "catastrophic_stop",
+            "long",
         ],
-        # Trade 2: signal@open, small win
+        # Trade 2: signal, small win, long
         [
             "2025-06-02 14:00",
             "67800.00",
@@ -259,9 +285,10 @@ def trades_csv(tmp_path):
             30.00,
             0.00304,
             "BTC/USD",
-            "signal@open",
+            "signal",
+            "long",
         ],
-        # Trade 3: catastrophic_stop, medium loss
+        # Trade 3: catastrophic_stop, medium loss, short
         [
             "2025-06-03 10:00",
             "68000.00",
@@ -274,8 +301,9 @@ def trades_csv(tmp_path):
             -0.00606,
             "BTC/USD",
             "catastrophic_stop",
+            "short",
         ],
-        # Trade 4: signal@open, big win
+        # Trade 4: signal, big win, long
         [
             "2025-06-04 08:00",
             "67000.00",
@@ -287,9 +315,10 @@ def trades_csv(tmp_path):
             150.00,
             0.01524,
             "BTC/USD",
-            "signal@open",
+            "signal",
+            "long",
         ],
-        # Trade 5: trailing_stop, small win
+        # Trade 5: force_close, small win, short
         [
             "2025-06-05 12:00",
             "68200.00",
@@ -301,7 +330,8 @@ def trades_csv(tmp_path):
             40.00,
             0.004,
             "BTC/USD",
-            "trailing_stop",
+            "force_close",
+            "short",
         ],
     ]
     with open(path, "w", newline="") as f:
@@ -317,8 +347,8 @@ class TestAnalyzeTrades:
         result = analyze_trades(trades_csv)
         reasons = result["exit_reasons"]
         assert reasons["catastrophic_stop"]["count"] == 2
-        assert reasons["signal@open"]["count"] == 2
-        assert reasons["trailing_stop"]["count"] == 1
+        assert reasons["signal"]["count"] == 2
+        assert reasons["force_close"]["count"] == 1
 
     def test_catastrophic_percentage(self, trades_csv):
         """Catastrophic stop percentage: 2 out of 5 = 0.4."""
@@ -331,6 +361,11 @@ class TestAnalyzeTrades:
         hold = result["hold_bars"]
         assert hold["min"] == 2
         assert hold["max"] == 48
+
+    def test_min_hold_pct(self, trades_csv):
+        """1 trade at exactly 2 bars out of 5 = 20%."""
+        result = analyze_trades(trades_csv)
+        assert result["min_hold_pct"] == pytest.approx(0.2)
 
     def test_top_winners_losers(self, trades_csv):
         """Winners sorted desc by pnl_abs (max 3), losers are only negative."""
@@ -354,6 +389,36 @@ class TestAnalyzeTrades:
         """Total trade count = 5."""
         result = analyze_trades(trades_csv)
         assert result["total_trades"] == 5
+
+    def test_direction_stats(self, trades_csv):
+        """Direction breakdown: 3 long, 2 short with correct stats."""
+        result = analyze_trades(trades_csv)
+        ds = result["direction_stats"]
+        assert "long" in ds
+        assert "short" in ds
+        # Long: 3 trades (-130, +30, +150)
+        assert ds["long"]["count"] == 3
+        assert ds["long"]["total_pnl"] == pytest.approx(50.0)
+        assert ds["long"]["win_rate"] == pytest.approx(2 / 3)
+        # Short: 2 trades (-60, +40)
+        assert ds["short"]["count"] == 2
+        assert ds["short"]["total_pnl"] == pytest.approx(-20.0)
+        assert ds["short"]["win_rate"] == pytest.approx(0.5)
+
+    def test_direction_missing_graceful(self, tmp_path):
+        """CSV without direction column → empty direction_stats."""
+        path = tmp_path / "old.csv"
+        header = ["entry_ts", "entry_price", "exit_ts", "exit_price",
+                  "hold_bars", "size", "capital_at_entry", "pnl_abs",
+                  "pnl_pct", "symbol", "reason"]
+        row = ["2025-06-01 09:00", "67500", "2025-06-01 10:00", "67600",
+               4, 0.1, 10000, 10.0, 0.001, "BTC/USD", "signal"]
+        with open(path, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(header)
+            writer.writerow(row)
+        result = analyze_trades(path)
+        assert result["direction_stats"] == {}
 
 
 # --- compute_verdict tests ---
@@ -413,14 +478,14 @@ class TestComputeVerdict:
 
 
 class TestGenerateSuggestions:
-    def test_low_trades_narrow_rsi_suggests_widen(self):
-        """Low trades + narrow RSI zones → suggest widening RSI."""
+    def test_low_trades_bad_rsi_suggests_widen(self):
+        """Low trades + red RSI zones → suggest widening RSI."""
         health = {
             "trades_per_year": {"status": "red", "value": 5},
             "sharpe": {"status": "green", "value": 2.0},
         }
-        thresholds = {"rsi_zone_status": "narrow", "macd_spread_status": "healthy"}
-        trades = {"catastrophic_pct": 0.1}
+        thresholds = {"rsi_zone_status": "red", "macd_spread_status": "green"}
+        trades = {"catastrophic_pct": 0.1, "direction_stats": {}}
         robustness = {"overfit_risk": "low"}
 
         suggestions = generate_suggestions(health, thresholds, trades, robustness)
@@ -433,8 +498,8 @@ class TestGenerateSuggestions:
             "trades_per_year": {"status": "green", "value": 120},
             "sharpe": {"status": "green", "value": 2.0},
         }
-        thresholds = {"rsi_zone_status": "healthy", "macd_spread_status": "healthy"}
-        trades = {"catastrophic_pct": 0.65}
+        thresholds = {"rsi_zone_status": "green", "macd_spread_status": "green"}
+        trades = {"catastrophic_pct": 0.65, "direction_stats": {}}
         robustness = {"overfit_risk": "low"}
 
         suggestions = generate_suggestions(health, thresholds, trades, robustness)
@@ -449,12 +514,34 @@ class TestGenerateSuggestions:
             "win_rate": {"status": "red", "value": 0.35},
             "profit_factor": {"status": "red", "value": 0.8},
         }
-        thresholds = {"rsi_zone_status": "narrow", "macd_spread_status": "narrow"}
-        trades = {"catastrophic_pct": 0.65}
+        thresholds = {"rsi_zone_status": "red", "macd_spread_status": "yellow"}
+        trades = {"catastrophic_pct": 0.65, "direction_stats": {
+            "short": {"total_pnl": -100, "count": 5, "win_rate": 0.2},
+        }}
         robustness = {"overfit_risk": "high"}
 
         suggestions = generate_suggestions(health, thresholds, trades, robustness)
         assert len(suggestions) <= 5
+
+    def test_direction_losing_suggests_review(self):
+        """One direction losing → suggest RSI symmetry review."""
+        health = {
+            "trades_per_year": {"status": "green", "value": 120},
+            "sharpe": {"status": "green", "value": 2.0},
+        }
+        thresholds = {"rsi_zone_status": "green", "macd_spread_status": "green"}
+        trades = {
+            "catastrophic_pct": 0.1,
+            "direction_stats": {
+                "long": {"total_pnl": 500, "count": 10, "win_rate": 0.6},
+                "short": {"total_pnl": -200, "count": 8, "win_rate": 0.25},
+            },
+        }
+        robustness = {"overfit_risk": "low"}
+
+        suggestions = generate_suggestions(health, thresholds, trades, robustness)
+        actions = [s["action"] for s in suggestions]
+        assert any("short" in a.lower() for a in actions)
 
 
 # --- build_discord_embed tests ---

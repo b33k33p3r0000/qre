@@ -44,6 +44,15 @@ class TestSaveTradesCsv:
             header = f.readline()
         assert "entry_ts" in header
         assert "pnl_abs" in header
+        assert "direction" in header
+
+    def test_direction_in_output(self, tmp_path):
+        path = tmp_path / "trades.csv"
+        trades = [{"entry_ts": "2025-01-01", "pnl_abs": 100.0, "direction": "long"}]
+        save_trades_csv(path, trades)
+        with open(path) as f:
+            lines = f.readlines()
+        assert "long" in lines[1]
 
     def test_correct_row_count(self, tmp_path):
         path = tmp_path / "trades.csv"
