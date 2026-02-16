@@ -3,7 +3,6 @@
 
 import csv
 import json
-import math
 
 import pytest
 
@@ -132,65 +131,54 @@ class TestHealthCheck:
 
 @pytest.fixture
 def threshold_params():
-    params = {
-        "p_buy": 0.25, "k_sell": 2,
-        "kB": 5, "dB": 3,
+    return {
         "macd_fast": 8, "macd_slow": 22, "macd_signal": 6,
-        "macd_mode": "rising",
-        "rsi_mode": "trend_filter",
-        "rsi_lower": 32, "rsi_upper": 60, "rsi_momentum_level": 46,
-        "rsi_gate_6h": 48, "rsi_gate_8h": 50,
-        "rsi_gate_12h": 52, "rsi_gate_24h": 45,
+        "rsi_period": 14, "rsi_lower": 30, "rsi_upper": 70,
     }
-    for tf in ["2h", "4h", "6h", "8h", "12h", "24h"]:
-        params[f"low_{tf}"] = 0.20
-        params[f"high_{tf}"] = 0.80
-    params["low_24h"] = 0.05
-    params["high_24h"] = 0.92
-    return params
 
 
 class TestAnalyzeThresholds:
-    def test_required_votes(self, threshold_params):
-        """ceil(0.25 * 6) = 2 required buy votes."""
-        result = analyze_thresholds(threshold_params)
-        assert result["required_buy_votes"] == math.ceil(0.25 * 6)
-        assert result["required_buy_votes"] == 2
-
-    def test_threshold_width(self, threshold_params):
-        """2h width = high - low = 0.80 - 0.20 = 0.60."""
-        result = analyze_thresholds(threshold_params)
-        tf_2h = result["tf_analysis"]["2h"]
-        assert tf_2h["width"] == pytest.approx(0.60)
-
-    def test_dead_tf_detection(self, threshold_params):
-        """24h width = 0.92 - 0.05 = 0.87 > 0.8 → dead."""
-        result = analyze_thresholds(threshold_params)
-        tf_24h = result["tf_analysis"]["24h"]
-        assert tf_24h["width"] == pytest.approx(0.87)
-        assert tf_24h["dead"] is True
-
-    def test_cap_collision_buy(self, threshold_params):
-        """low_2h = 0.65 > BUY_CAP(0.6) → buy_cap_collision."""
-        threshold_params["low_2h"] = 0.65
-        result = analyze_thresholds(threshold_params)
-        tf_2h = result["tf_analysis"]["2h"]
-        assert tf_2h["buy_cap_collision"] is True
-
     def test_macd_spread(self, threshold_params):
         """MACD spread = slow - fast = 22 - 8 = 14."""
         result = analyze_thresholds(threshold_params)
         assert result["macd_spread"] == 14
 
-    def test_rsi_gates(self, threshold_params):
-        """4 RSI gates with correct values."""
+    def test_macd_spread_healthy(self, threshold_params):
+        """Spread 14 is within 10-20 → healthy."""
         result = analyze_thresholds(threshold_params)
-        gates = result["rsi_gates"]
-        assert len(gates) == 4
-        assert gates["6h"] == 48
-        assert gates["8h"] == 50
-        assert gates["12h"] == 52
-        assert gates["24h"] == 45
+        assert result["macd_spread_status"] == "healthy"
+
+    def test_macd_spread_narrow(self, threshold_params):
+        """Spread < 10 → narrow."""
+        threshold_params["macd_fast"] = 12
+        threshold_params["macd_slow"] = 18
+        result = analyze_thresholds(threshold_params)
+        assert result["macd_spread"] == 6
+        assert result["macd_spread_status"] == "narrow"
+
+    def test_rsi_zone_width(self, threshold_params):
+        """RSI zone width = 70 - 30 = 40."""
+        result = analyze_thresholds(threshold_params)
+        assert result["rsi_zone_width"] == 40
+        assert result["rsi_zone_status"] == "healthy"
+
+    def test_rsi_zone_narrow(self, threshold_params):
+        """rsi_upper - rsi_lower < 30 → narrow."""
+        threshold_params["rsi_lower"] = 35
+        threshold_params["rsi_upper"] = 50
+        result = analyze_thresholds(threshold_params)
+        assert result["rsi_zone_width"] == 15
+        assert result["rsi_zone_status"] == "narrow"
+
+    def test_all_params_returned(self, threshold_params):
+        """All 6 strategy params are in output."""
+        result = analyze_thresholds(threshold_params)
+        assert result["macd_fast"] == 8
+        assert result["macd_slow"] == 22
+        assert result["macd_signal"] == 6
+        assert result["rsi_period"] == 14
+        assert result["rsi_lower"] == 30
+        assert result["rsi_upper"] == 70
 
 
 # --- check_robustness tests ---
@@ -425,19 +413,19 @@ class TestComputeVerdict:
 
 
 class TestGenerateSuggestions:
-    def test_low_trades_suggests_lower_p_buy(self):
-        """Low trades + high required_buy_votes → suggest lowering p_buy."""
+    def test_low_trades_narrow_rsi_suggests_widen(self):
+        """Low trades + narrow RSI zones → suggest widening RSI."""
         health = {
             "trades_per_year": {"status": "red", "value": 5},
             "sharpe": {"status": "green", "value": 2.0},
         }
-        thresholds = {"required_buy_votes": 3, "macd_mode": "rising"}
+        thresholds = {"rsi_zone_status": "narrow", "macd_spread_status": "healthy"}
         trades = {"catastrophic_pct": 0.1}
         robustness = {"overfit_risk": "low"}
 
         suggestions = generate_suggestions(health, thresholds, trades, robustness)
         actions = [s["action"] for s in suggestions]
-        assert any("p_buy" in a.lower() for a in actions)
+        assert any("rsi" in a.lower() for a in actions)
 
     def test_high_catastrophic_suggests_change(self):
         """High catastrophic_pct → high priority suggestion."""
@@ -445,7 +433,7 @@ class TestGenerateSuggestions:
             "trades_per_year": {"status": "green", "value": 120},
             "sharpe": {"status": "green", "value": 2.0},
         }
-        thresholds = {"required_buy_votes": 2, "macd_mode": "rising"}
+        thresholds = {"rsi_zone_status": "healthy", "macd_spread_status": "healthy"}
         trades = {"catastrophic_pct": 0.65}
         robustness = {"overfit_risk": "low"}
 
@@ -461,7 +449,7 @@ class TestGenerateSuggestions:
             "win_rate": {"status": "red", "value": 0.35},
             "profit_factor": {"status": "red", "value": 0.8},
         }
-        thresholds = {"required_buy_votes": 4, "macd_mode": "crossover"}
+        thresholds = {"rsi_zone_status": "narrow", "macd_spread_status": "narrow"}
         trades = {"catastrophic_pct": 0.65}
         robustness = {"overfit_risk": "high"}
 
@@ -546,23 +534,16 @@ class TestSaveAnalysis:
 
 class TestAnalyzeRun:
     def _make_full_params(self, good_params):
-        """Merge good_params with threshold + strategy params for full pipeline."""
+        """Merge good_params with Chio Extreme strategy params for full pipeline."""
         full = dict(good_params)
         full.update({
-            # threshold params
-            "p_buy": 0.25, "k_sell": 2,
+            # Chio Extreme params
             "macd_fast": 8, "macd_slow": 22, "macd_signal": 6,
-            "macd_mode": "rising",
-            "rsi_mode": "trend_filter",
-            "rsi_gate_6h": 48, "rsi_gate_8h": 50,
-            "rsi_gate_12h": 52, "rsi_gate_24h": 45,
+            "rsi_period": 14, "rsi_lower": 30, "rsi_upper": 70,
             # strategy meta
             "symbol": "BTC/USDC", "n_trials": 200, "n_splits": 4,
             "run_timestamp": "2026-02-14_test-run",
         })
-        for tf in ["2h", "4h", "6h", "8h", "12h", "24h"]:
-            full[f"low_{tf}"] = 0.20
-            full[f"high_{tf}"] = 0.80
         return full
 
     def test_orchestrator_produces_complete_output(self, good_params, trades_csv, tmp_path):

@@ -22,18 +22,15 @@ class TestUtcnowMs:
 
 class TestLoadAllData:
     @patch("qre.data.fetch.time.sleep")
-    def test_returns_all_timeframes(self, mock_sleep):
-        """load_all_data should return dict with all configured timeframes."""
+    def test_returns_base_timeframe(self, mock_sleep):
+        """load_all_data should return dict with base TF only (Chio Extreme)."""
         mock_exchange = MagicMock()
-        # First call returns data, subsequent calls return empty (end of data)
         mock_exchange.fetch_ohlcv.side_effect = lambda *a, **kw: [
             [utcnow_ms() - 60_000, 100.0, 101.0, 99.0, 100.5, 1000.0],
-        ] if mock_exchange.fetch_ohlcv.call_count <= 7 else []
+        ] if mock_exchange.fetch_ohlcv.call_count <= 1 else []
         mock_exchange.rateLimit = 100
 
         data = load_all_data(mock_exchange, "BTC/USDC", 100)
 
         assert "1h" in data
-        assert "2h" in data
-        assert "4h" in data
-        assert "1d" in data
+        assert len(data) == 1

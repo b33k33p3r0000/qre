@@ -9,7 +9,6 @@ from __future__ import annotations
 import csv
 import json
 import logging
-import math
 import os
 from datetime import UTC, datetime
 from pathlib import Path
@@ -18,11 +17,9 @@ from typing import Any
 
 log = logging.getLogger(__name__)
 
-# --- Threshold analysis constants ---
-BUY_CAP = 0.6
-SELL_CAP = 0.4
-TF_LIST = ["2h", "4h", "6h", "8h", "12h", "24h"]
-RSI_GATE_TFS = ["6h", "8h", "12h", "24h"]
+# --- Chio Extreme param analysis constants ---
+MACD_SPREAD_HEALTHY = (10, 20)
+RSI_ZONE_WIDTH_HEALTHY = (30, 50)
 
 
 def _classify(value: float, green_range: tuple, yellow_range: tuple) -> str:
@@ -215,64 +212,56 @@ def analyze_trades(trades_csv_path: str | Path) -> dict[str, Any]:
 
 
 def analyze_thresholds(params: dict[str, Any]) -> dict[str, Any]:
-    """Analyze voting-system thresholds — dead TFs, cap collisions, MACD/RSI.
+    """Analyze Chio Extreme strategy params — MACD spread, RSI zones.
 
-    Evaluates each timeframe's low/high thresholds for width, dead zones,
-    aggressive zones, and cap collisions against BUY_CAP/SELL_CAP.
+    Evaluates the 6 strategy parameters for reasonable ranges.
 
     Args:
-        params: Optimizer result params containing p_buy, k_sell,
-            low_<tf>, high_<tf> for each TF, MACD and RSI settings.
+        params: Optimizer result params containing macd_fast, macd_slow,
+            macd_signal, rsi_period, rsi_lower, rsi_upper.
 
     Returns:
-        Dict with p_buy, required_buy_votes, k_sell, tf_analysis,
-        macd_spread, macd_mode, rsi_mode, rsi_gates.
+        Dict with macd_fast, macd_slow, macd_signal, macd_spread,
+        macd_spread_status, rsi_period, rsi_lower, rsi_upper,
+        rsi_zone_width, rsi_zone_status.
     """
-    p_buy = params["p_buy"]
-    required_buy_votes = math.ceil(p_buy * len(TF_LIST))
-
-    tf_analysis: dict[str, dict[str, Any]] = {}
-    for tf in TF_LIST:
-        low = params.get(f"low_{tf}", 0.20)
-        high = params.get(f"high_{tf}", 0.80)
-        width = high - low
-        dead = width > 0.8
-        aggressive = width < 0.3
-        buy_cap_collision = low > BUY_CAP
-        sell_cap_collision = high < SELL_CAP
-        effective_low = min(low, BUY_CAP) if buy_cap_collision else low
-        effective_high = max(high, SELL_CAP) if sell_cap_collision else high
-
-        tf_analysis[tf] = {
-            "low": low,
-            "high": high,
-            "width": width,
-            "dead": dead,
-            "aggressive": aggressive,
-            "buy_cap_collision": buy_cap_collision,
-            "sell_cap_collision": sell_cap_collision,
-            "effective_low": effective_low,
-            "effective_high": effective_high,
-        }
-
     macd_fast = params["macd_fast"]
     macd_slow = params["macd_slow"]
+    macd_signal = params.get("macd_signal", 9)
+    macd_spread = macd_slow - macd_fast
 
-    rsi_gates: dict[str, float] = {}
-    for tf in RSI_GATE_TFS:
-        key = f"rsi_gate_{tf}"
-        if key in params:
-            rsi_gates[tf] = params[key]
+    lo, hi = MACD_SPREAD_HEALTHY
+    if lo <= macd_spread <= hi:
+        macd_spread_status = "healthy"
+    elif macd_spread < lo:
+        macd_spread_status = "narrow"
+    else:
+        macd_spread_status = "wide"
+
+    rsi_lower = params.get("rsi_lower", 30)
+    rsi_upper = params.get("rsi_upper", 70)
+    rsi_period = params.get("rsi_period", 14)
+    rsi_zone_width = rsi_upper - rsi_lower
+
+    lo_z, hi_z = RSI_ZONE_WIDTH_HEALTHY
+    if lo_z <= rsi_zone_width <= hi_z:
+        rsi_zone_status = "healthy"
+    elif rsi_zone_width < lo_z:
+        rsi_zone_status = "narrow"
+    else:
+        rsi_zone_status = "wide"
 
     return {
-        "p_buy": p_buy,
-        "required_buy_votes": required_buy_votes,
-        "k_sell": params["k_sell"],
-        "tf_analysis": tf_analysis,
-        "macd_spread": macd_slow - macd_fast,
-        "macd_mode": params["macd_mode"],
-        "rsi_mode": params["rsi_mode"],
-        "rsi_gates": rsi_gates,
+        "macd_fast": macd_fast,
+        "macd_slow": macd_slow,
+        "macd_signal": macd_signal,
+        "macd_spread": macd_spread,
+        "macd_spread_status": macd_spread_status,
+        "rsi_period": rsi_period,
+        "rsi_lower": rsi_lower,
+        "rsi_upper": rsi_upper,
+        "rsi_zone_width": rsi_zone_width,
+        "rsi_zone_status": rsi_zone_status,
     }
 
 
@@ -363,36 +352,36 @@ def generate_suggestions(
 
     low_trades = health.get("trades_per_year", {}).get("status") == "red"
     low_sharpe = health.get("sharpe", {}).get("status") == "red"
-    high_p_buy = thresholds.get("required_buy_votes", 0) >= 3
     high_catastrophic = trades.get("catastrophic_pct", 0) > 0.4
-    macd_crossover = thresholds.get("macd_mode") == "crossover"
+    narrow_rsi = thresholds.get("rsi_zone_status") == "narrow"
+    narrow_macd = thresholds.get("macd_spread_status") == "narrow"
     high_overfit = robustness.get("overfit_risk") == "high"
 
-    # Rule 1: Low trades + high p_buy → lower p_buy
-    if low_trades and high_p_buy:
+    # Rule 1: Low trades + narrow RSI zones → widen RSI entry zones
+    if low_trades and narrow_rsi:
         suggestions.append({
             "priority": "high",
-            "action": "Lower p_buy to reduce required buy votes",
-            "reason": "Too few trades per year with strict voting threshold",
-            "impact": "More signals will pass the vote, increasing trade frequency",
+            "action": "Widen RSI entry zones (lower rsi_lower or raise rsi_upper)",
+            "reason": "Too few trades per year with narrow RSI extreme zones",
+            "impact": "More signals will qualify, increasing trade frequency",
         })
 
-    # Rule 2: High catastrophic_pct → adjust thresholds/stops
+    # Rule 2: Low trades + narrow MACD → widen MACD spread
+    if low_trades and narrow_macd:
+        suggestions.append({
+            "priority": "medium",
+            "action": "Widen MACD spread (increase macd_slow or decrease macd_fast)",
+            "reason": "Narrow MACD spread produces fewer distinct crossovers",
+            "impact": "More responsive MACD signals",
+        })
+
+    # Rule 3: High catastrophic_pct → adjust stops or entries
     if high_catastrophic:
         suggestions.append({
             "priority": "high",
             "action": "Tighten stop-loss or adjust entry thresholds",
             "reason": f"Catastrophic stop rate is {trades['catastrophic_pct']:.0%}, well above 40% threshold",
             "impact": "Fewer catastrophic exits, better risk management",
-        })
-
-    # Rule 3: Strict MACD mode + low trades → switch to rising
-    if macd_crossover and low_trades:
-        suggestions.append({
-            "priority": "medium",
-            "action": "Switch MACD mode from crossover to rising",
-            "reason": "Crossover mode is restrictive and contributes to low trade count",
-            "impact": "More MACD signals, potentially more trades",
         })
 
     # Rule 4: High overfit risk → broader search ranges
@@ -404,7 +393,7 @@ def generate_suggestions(
             "impact": "Parameters less likely to be curve-fitted to training data",
         })
 
-    # Rule 5: Low sharpe → suggest RSI/MACD changes
+    # Rule 5: Low sharpe → review MACD/RSI params
     if low_sharpe:
         suggestions.append({
             "priority": "medium",

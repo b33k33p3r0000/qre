@@ -18,7 +18,6 @@ from qre.config import (
     MIN_WARMUP_BARS,
     OHLCV_LIMIT_PER_CALL,
     SAFETY_MAX_ROWS,
-    TF_LIST,
     TF_MS,
 )
 
@@ -120,14 +119,7 @@ def load_all_data(exchange, symbol: str, hours_1h: int) -> Dict[str, pd.DataFram
 
     data: Dict[str, pd.DataFrame] = {}
 
-    # Base timeframe
+    # Base timeframe only (Chio Extreme uses single TF)
     data[BASE_TF] = fetch_ohlcv_paginated(exchange, symbol, BASE_TF, since_1h, now_ms)
-
-    # Higher timeframes
-    span_hours = max(MIN_WARMUP_BARS, len(data[BASE_TF]))
-
-    for tf in TF_LIST:
-        since_tf = now_ms - (span_hours + MIN_WARMUP_BARS) * TF_MS["1h"]
-        data[tf] = fetch_ohlcv_paginated(exchange, symbol, tf, since_tf, now_ms)
 
     return data
