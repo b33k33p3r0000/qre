@@ -1,26 +1,259 @@
 # QRE — Quantitative Research Engine
 
-MACD+RSI optimizer pro BTC/USDC a SOL/USDC. Optuna TPE s Anchored Walk-Forward validací.
+Offline optimizer pro MACD+RSI strategii "Chio Extreme". Hledá optimální parametry pro BTC/USDC a SOL/USDC pomocí Optuna (Anchored Walk-Forward), backtestuje s Numba a výsledky posílá na Discord.
 
-## Quick Start
+Cíl: najít robustní parametry pro live trading přes [EE (Execution Engine)](https://github.com/b33k33p3r0000/ee) na BrightFunded účtu.
 
-```bash
-./run.sh 3 --btc --fg                    # Production preset, BTC, foreground
-./run.sh 6 --btc --trials 25000 --tag x  # Custom trials + tag
-./run.sh attach                           # Attach k running runu
+---
+
+## Strategie — Chio Extreme v3.0
+
+Založena na studii Chio (2022) — MACD+RSI dosáhlo 78–86% win rate na US equities.
+
+**Entry logika:**
+- **LONG:** MACD bullish crossover (MACD protne signal line zdola) AND RSI < `rsi_lower` (oversold)
+- **SHORT:** MACD bearish crossover (MACD protne signal line shora) AND RSI > `rsi_upper` (overbought)
+
+**Exit logika:**
+- Opačný signál (symetrický flip) — long se zavře a otevře short na sell signálu a naopak
+- Catastrophic stop: -15% emergency exit
+
+**6 Optuna parametrů:**
+
+| Parametr | Rozsah | Popis |
+|----------|--------|-------|
+| `macd_fast` | 5–15 | Rychlá EMA perioda |
+| `macd_slow` | 17–30 | Pomalá EMA perioda |
+| `macd_signal` | 3–12 | Signal line perioda |
+| `rsi_period` | 3–25 | RSI výpočetní perioda |
+| `rsi_lower` | 20–40 | Práh pro oversold zónu |
+| `rsi_upper` | 60–80 | Práh pro overbought zónu |
+
+Constraint: `macd_fast < macd_slow` (jinak trial pruned).
+
+**Vlastnosti:**
+- Jeden timeframe: 1H
+- Long + Short s position flipping (konfigurovatelné přes `LONG_ONLY`)
+- Min hold: 2 bary před exit signálem
+- Position size: 25% kapitálu na trade
+
+---
+
+## Architektura
+
 ```
+run.sh (presets)
+  └→ python -m qre.optimize --symbol BTC/USDC --trials 10000 ...
+       ├→ data/fetch.py       — stáhne 1H OHLCV z Binance
+       ├→ optimize.py         — Optuna AWF studie (TPE + SHA pruner)
+       │    ├→ strategy.py    — generuje buy/sell signály
+       │    ├→ backtest.py    — Numba trading loop
+       │    ├→ metrics.py     — Sharpe, drawdown, win rate, ...
+       │    └→ penalties.py   — hard constraint + overtrading
+       ├→ report.py           — HTML report (Plotly grafy)
+       ├→ notify.py           — Discord notifikace (start/complete)
+       └→ hooks/              — post-run auto-diagnose
+            └→ analyze.py     — health check + suggestions + Discord embed
+```
+
+---
 
 ## Moduly
 
 | Modul | Popis |
 |-------|-------|
-| `optimize.py` | AWF orchestrátor — Optuna TPE + SHA pruner |
-| `core/strategy.py` | MACD+RSI strategie v2.0 (6-TF voting) |
-| `core/backtest.py` | Event-driven backtest engine |
-| `analyze.py` | Auto-analýza výsledků + Discord notifikace |
-| `report.py` | Self-contained HTML report (Plotly) |
-| `penalties.py` | 5 typů penalt pro objective funkci |
-| `data/fetch.py` | Binance OHLCV fetch + Parquet cache |
+| `optimize.py` | AWF orchestrátor — Optuna TPE + SHA pruner, RSI cache |
+| `core/strategy.py` | Chio Extreme v3.0 — MACD crossover + RSI extreme zones |
+| `core/backtest.py` | Numba JIT trading loop — Long+Short, position flipping |
+| `core/indicators.py` | RSI a MACD výpočty |
+| `core/metrics.py` | Sharpe, Sortino, Calmar, drawdown, win rate, Monte Carlo |
+| `penalties.py` | Hard constraint (min trades/year) + overtrading penalty |
+| `analyze.py` | Post-run diagnostika — health check, suggestions, Discord embed |
+| `data/fetch.py` | Binance OHLCV fetch (1H, fresh data bez cache) |
+| `report.py` | Self-contained HTML report s Plotly grafy |
+| `notify.py` | Discord webhooky — start/complete notifikace |
+| `io.py` | JSON/CSV zápis výsledků |
+| `hooks/` | Hook systém — auto_diagnose po každém runu |
+| `config.py` | Centrální konfigurace |
+
+---
+
+## Optimalizace (AWF)
+
+Anchored Walk-Forward = trénink na rostoucím okně, test na dalším bloku.
+
+```
+Split 1:  [====== train 60% ======][= test =]
+Split 2:  [========= train 70% =========][= test =]
+Split 3:  [============ train 80% ============][= test =]
+```
+
+- 2 splity pro krátká data (<1.5 roku), 3 splity jinak
+- Optuna TPE sampler s SuccessiveHalving prunerem
+- RSI pre-computed cache: 23 period (3–25) místo počítání per-trial
+- Objective = penalizované equity z posledního test splitu
+- Monte Carlo validace (1000 simulací) na finálním výsledku
+
+**Penalties:**
+1. **Hard constraint:** < 30 trades/rok NEBO < 3 test trades → equity = 0
+2. **Overtrading:** > 500 trades/rok → až -15% penalizace
+
+---
+
+## Backtest Engine
+
+Numba `@njit` compiled trading loop:
+
+- **Pozice:** flat → long → short → flat (s flippingem)
+- **Priority:** catastrophic stop > signal exit > new position
+- **Catastrophic stop:** -15% od entry → emergency exit
+- **Force close:** otevřená pozice na konci dat se zavře
+- **Směry:** Long (+1) a Short (-1) s korektním PnL modelem
+- **Short PnL:** `pnl = size * entry * (1-fee) - size * exit * (1+fee)`
+
+---
+
+## Spuštění
+
+```bash
+cd ~/projects/qre
+./run.sh 1 --btc           # Test preset: 2k trials, BTC only
+./run.sh 2 --btc --fg      # Prod: 10k trials, foreground
+./run.sh 3 --both           # Deep: 15k trials, oba páry
+./run.sh 4 --sol            # Über: 25k trials, SOL
+```
+
+| Preset | Trials | Splity | Doba |
+|--------|--------|--------|------|
+| 1 Test | 2,000 | 2 | ~5 min |
+| 2 Prod | 10,000 | 3 | ~60 min |
+| 3 Deep | 15,000 | 3 | ~120 min |
+| 4 Über | 25,000 | 3 | ~300 min |
+
+Výchozí: `--hours 18600` (~2 roky), `--skip-recent 1080` (skip posledních 45 dní).
+
+**Process management:**
+```bash
+./run.sh attach      # Připojit se k běžícímu runu
+./run.sh logs        # Výpis log souborů
+./run.sh kill        # Zastavit optimalizaci
+```
+
+**Přímé spuštění (bez run.sh):**
+```bash
+python -m qre.optimize --symbol BTC/USDC --trials 5000 --hours 8760 --splits 3
+```
+
+CLI parametry: `--symbol`, `--hours`, `--trials`, `--splits`, `--seed`, `--timeout`, `--tag`, `--skip-recent`, `--results-dir`, `--test-size`.
+
+---
+
+## Výstupy
+
+Každý run vytvoří složku `results/<timestamp>_<tag>/<SYMBOL>/`:
+
+```
+results/2026-02-16_08-36-12_test-v/
+  └── BTC/
+      ├── best_params.json     # Optimální parametry + metriky
+      ├── trades_BTC_USDC_1h_FULL.csv   # Všechny obchody
+      ├── report_BTC.html      # Interaktivní HTML report
+      └── analysis.json        # Post-run diagnostika
+```
+
+---
+
+## Konfigurace
+
+Klíčové konstanty v `config.py`:
+
+| Konstanta | Hodnota | Popis |
+|-----------|---------|-------|
+| `SYMBOLS` | BTC/USDC, SOL/USDC | Obchodované páry |
+| `BASE_TF` | 1h | Jediný timeframe |
+| `STARTING_EQUITY` | $50,000 | Per-pair alokace ($100k / 2) |
+| `BACKTEST_POSITION_PCT` | 0.25 | 25% kapitálu na trade |
+| `CATASTROPHIC_STOP_PCT` | 0.15 | -15% emergency exit |
+| `LONG_ONLY` | False | Long + Short povoleno |
+| `MIN_HOLD_HOURS` | 2 | Min bary před exit signálem |
+| `FEE` | 0.075% | Trading fee |
+| `MIN_TRADES_YEAR_HARD` | 30 | Hard constraint |
+
+Trading costs (slippage): BTC 0.08%, SOL 0.18%.
+
+---
+
+## Discord Notifikace
+
+Kanál `#qre-runs` dostává:
+1. **Start** — symbol, trials, history, splity
+2. **Complete** — equity, PnL%, trades, win rate, Sharpe, MC confidence
+3. **Run Analysis** — health check, verdict (PASS/REVIEW/FAIL), suggestions
+
+Webhook URL v `.env` jako `DISCORD_WEBHOOK_RUNS`.
+
+---
+
+## Post-Run Analýza
+
+Auto-diagnose hook po každém runu spustí `analyze_run()`:
+
+**Health Check** (8 metrik):
+- Sharpe, Max Drawdown, Trades/Year, Win Rate, Profit Factor, Expectancy
+- Train/Test Sharpe divergence, Split consistency
+
+**Verdikt:** PASS (vše zelené) / REVIEW (1 red nebo 3+ yellow) / FAIL (2+ red)
+
+**Threshold Analysis:** MACD spread health, RSI zone width health
+
+**Suggestions:** Konkrétní doporučení (widen RSI zones, tighten stops, broaden ranges, ...)
+
+---
+
+## Adresářová struktura
+
+```
+qre/
+├── src/qre/
+│   ├── config.py
+│   ├── optimize.py
+│   ├── penalties.py
+│   ├── analyze.py
+│   ├── notify.py
+│   ├── report.py
+│   ├── io.py
+│   ├── core/
+│   │   ├── strategy.py
+│   │   ├── backtest.py
+│   │   ├── indicators.py
+│   │   └── metrics.py
+│   ├── data/
+│   │   └── fetch.py
+│   └── hooks/
+│       ├── __init__.py
+│       └── auto_diagnose.py
+├── tests/
+│   ├── unit/          # 168 testů
+│   ├── integration/   # Pipeline, golden baseline, reproducibility
+│   └── fixtures/
+├── results/           # Výstupy runů
+├── logs/              # Log soubory (nohup background runs)
+├── run.sh             # Entry point s presety
+└── pyproject.toml
+```
+
+---
+
+## Tech Stack
+
+- **Python 3.11+** (testováno na 3.14)
+- **Optuna 4.7** — TPE sampler, SuccessiveHalving pruner
+- **Numba 0.63** — JIT kompilace trading loopu
+- **NumPy, pandas** — data manipulace
+- **ccxt** — Binance API
+- **Plotly** — HTML reporty (equity curve, drawdown, trade distribuce)
+- **requests** — Discord webhooky
+- **pytest** — 168+ unit a integračních testů
 
 ---
 
@@ -66,79 +299,3 @@ Roční performance:
 **Pattern:** BTC cykluje ~4 roky. Major bear markets (-65% až -82%) přicházejí po ATH cyklech. Mezi nimi korekce -18% až -50%.
 
 *Zdroj: Binance/Yahoo Finance/CoinDesk, generováno 2026-02-15*
-
-### Recent Drawdowns (detail), 2022-2026
-
-```
-                    BTC/USD — Major Drawdowns (4Y)
-
-  $130k ┤                                          ╭──╮
-        │                                         ╱    ╲
-  $110k ┤                                        ╱      ╲
-        │                                       ╱    ③   ╲
-   $90k ┤                                  ╭───╯  -47.6%  ╲
-        │                                 ╱                 ╲
-   $70k ┤                    ╭──╮        ╱                   ╰── $70k
-        │                   ╱  ② ╲╭────╯
-   $50k ┤╲                 ╱ -20.5%
-        │  ╲               ╱
-   $30k ┤   ╲  ①         ╱
-        │    ╲ -65.4%   ╱
-   $16k ┤     ╰───────╯
-        ├────────┼────────┼────────┼────────┤
-       2022    2023     2024     2025     2026
-```
-
-| # | Období | Peak | Trough | Propad | Trvání | Recovery |
-|---|--------|------|--------|--------|--------|----------|
-| 1 | Bear 2022 | $47,620 (Jan 2022) | $16,500 (Nov 2022) | **-65.4%** | 318 dní | 443 dní (Feb 2024) |
-| 2 | Korekce Q2 2024 | $73,000 (Mar 2024) | $58,000 (Aug 2024) | **-20.5%** | 167 dní | 108 dní (Dec 2024) |
-| 3 | Propad Q4 2025 | $126,000 (Oct 2025) | $66,000 (Feb 2026) | **-47.6%** | 123 dní | dosud nerecoverd |
-
-Roční performance: 2022 -65.3% | 2023 +151.5% | 2024 +128.2% | 2025 -8.8%
-
-*Zdroj: Binance/Yahoo Finance, generováno 2026-02-15*
-
-### Rationale: Proč 2yr training window + skip-recent
-
-**Problém:** Optuna optimalizuje na celém datasetu včetně crash období. Výsledek = parametry optimalizované na nerelevantní tržní režimy, vysoký overfit.
-
-**Zjištění z diagnóz (Feb 2026):**
-
-| Run | Trials | Data | Overfit | Train/Test diff | Verdict |
-|-----|--------|------|---------|-----------------|---------|
-| afterdiag-v7 | 25k | FULL | 0.60 | 2.31 | FAIL (5 RED) |
-| 10k-v1 | 10k | FULL | 0.89 | 3.27 | FAIL |
-| skip-recent-v1 | 10k | skip 1080h | **0.44** | **1.71** | **0 RED** |
-
-**Klíčový poznatek:** Problém nebyl v počtu trials, ale v datech. Anomální Q4 2025 crash (-47.6%) otravoval trénink.
-
-**Řešení — dvě vrstvy ochrany:**
-
-1. **Death Cross Guard (EE):** SMA 50/200 crossover automaticky pausne trading při major crash (>25% drawdown). Strategie *nemusí* být trénována na crash období — EE to řeší na execution úrovni.
-
-2. **Training window:** 2 roky (Jan 2024 - Dec 2025) + `--skip-recent 1080` (45 dní)
-   - **Zahrnuje** korekci Q2 2024 (-20.5%) — normální tržní chování, strategie by ho měla zvládnout
-   - **Vynechává** Bear 2022 (-65.4%) — příliš starý, jiný tržní režim
-   - **Vynechává** Q4 2025 crash (-47.6%) — death cross guard to pokryje
-   - **Skipuje** Jan-Feb 2026 — anomální post-crash období zkresluje optimalizaci
-
-**Production run command:**
-
-```bash
-./run.sh 4 --btc --tag 2yr-skip-prod
-```
-
-- `--hours 18600` = ~2 roky dat (775 dní)
-- `--skip-recent 1080` = ořízne posledních 45 dní z konce datasetu
-- Efektivní tréninkové okno: ~Jan 2024 — Dec 2025
-
-### Target metriky
-
-| Metrika | Cíl | Poznámka |
-|---------|-----|----------|
-| Overfit score | < 0.40 | skip-recent-v1 dosáhl 0.44 |
-| Train/Test diff | < 1.5 | skip-recent-v1 dosáhl 1.71 |
-| Sharpe | 1.5 - 3.0 | Nižší = méně overfit |
-| Trades/year | > 80 | Statisticky relevantní |
-| Splits positive | všechny | Konzistentní OOS výkon |
