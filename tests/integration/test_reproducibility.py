@@ -65,13 +65,8 @@ def _load_data_and_run(symbol: str, params: dict):
     data = load_all_data(exchange, symbol, hours)
 
     strategy = MACDRSIStrategy()
-    buy_s, sell_s, gates = strategy.precompute_signals(data, params)
-    result = simulate_trades_fast(
-        symbol, data, params,
-        precomputed_buy_signals=buy_s,
-        precomputed_sell_signals=sell_s,
-        precomputed_rsi_gates=gates,
-    )
+    buy, sell = strategy.precompute_signals(data, params)
+    result = simulate_trades_fast(symbol, data, buy, sell)
     return result
 
 
