@@ -95,6 +95,82 @@ def _render_mc_section(params: Dict[str, Any]) -> str:
     """
 
 
+def _compute_direction_stats(trades: List[Dict]) -> Dict[str, Any]:
+    """Compute per-direction (long/short) statistics from trades."""
+    longs = [t for t in trades if t.get("direction") == "long"]
+    shorts = [t for t in trades if t.get("direction") == "short"]
+
+    def _stats(subset: List[Dict]) -> Dict[str, Any]:
+        if not subset:
+            return {"count": 0, "pnl": 0.0, "win_rate": 0.0,
+                    "avg_win": 0.0, "avg_loss": 0.0, "winners": 0, "losers": 0}
+        winners = [t for t in subset if t.get("pnl_abs", 0) > 0]
+        losers = [t for t in subset if t.get("pnl_abs", 0) <= 0]
+        total_pnl = sum(t.get("pnl_abs", 0) for t in subset)
+        avg_w = sum(t.get("pnl_abs", 0) for t in winners) / len(winners) if winners else 0.0
+        avg_l = sum(t.get("pnl_abs", 0) for t in losers) / len(losers) if losers else 0.0
+        return {
+            "count": len(subset),
+            "pnl": total_pnl,
+            "win_rate": len(winners) / len(subset) * 100,
+            "avg_win": avg_w,
+            "avg_loss": avg_l,
+            "winners": len(winners),
+            "losers": len(losers),
+        }
+
+    return {"long": _stats(longs), "short": _stats(shorts)}
+
+
+def _fmt_usd(value: float) -> str:
+    """Format dollar value with sign before $: -$50.00 instead of $-50.00."""
+    if value < 0:
+        return f"-${abs(value):,.2f}"
+    return f"${value:,.2f}"
+
+
+def _render_long_short_metrics(trades: List[Dict]) -> str:
+    """Render long/short breakdown section."""
+    ds = _compute_direction_stats(trades)
+    lo, sh = ds["long"], ds["short"]
+    total = len(trades) or 1
+
+    def _card(label: str, s: Dict[str, Any], css: str) -> str:
+        return f"""
+        <div class="ls-card {css}">
+            <div class="ls-header">{label}</div>
+            <div class="ls-count">{s['count']} <span class="ls-pct">({s['count']/total*100:.0f}%)</span></div>
+            <div class="ls-row">
+                <span class="ls-label">P&amp;L</span>
+                <span class="ls-val {'positive' if s['pnl'] >= 0 else 'negative'}">{_fmt_usd(s['pnl'])}</span>
+            </div>
+            <div class="ls-row">
+                <span class="ls-label">Win Rate</span>
+                <span class="ls-val">{s['win_rate']:.1f}%</span>
+            </div>
+            <div class="ls-row">
+                <span class="ls-label">Winners / Losers</span>
+                <span class="ls-val">{s['winners']} / {s['losers']}</span>
+            </div>
+            <div class="ls-row">
+                <span class="ls-label">Avg Win</span>
+                <span class="ls-val positive">{_fmt_usd(s['avg_win'])}</span>
+            </div>
+            <div class="ls-row">
+                <span class="ls-label">Avg Loss</span>
+                <span class="ls-val negative">{_fmt_usd(s['avg_loss'])}</span>
+            </div>
+        </div>"""
+
+    return f"""
+    <h2>Long / Short Breakdown</h2>
+    <div class="ls-grid">
+        {_card("LONG", lo, "ls-long")}
+        {_card("SHORT", sh, "ls-short")}
+    </div>
+    """
+
+
 def _build_performance_data(trades: List[Dict]) -> Dict[str, Any]:
     """Extract data needed for performance charts from trades."""
     winners_pnl = [t.get("pnl_pct", 0) * 100 for t in trades if t.get("pnl_pct", 0) > 0]
@@ -116,6 +192,9 @@ def _build_performance_data(trades: List[Dict]) -> Dict[str, Any]:
     lose_hold = [t.get("hold_bars", 0) for t in trades if t.get("pnl_pct", 0) <= 0]
     lose_pnl = [t.get("pnl_pct", 0) * 100 for t in trades if t.get("pnl_pct", 0) <= 0]
 
+    # Long vs Short comparison data
+    ds = _compute_direction_stats(trades)
+
     return {
         "winners_pnl": winners_pnl,
         "losers_pnl": losers_pnl,
@@ -125,6 +204,7 @@ def _build_performance_data(trades: List[Dict]) -> Dict[str, Any]:
         "win_pnl": win_pnl,
         "lose_hold": lose_hold,
         "lose_pnl": lose_pnl,
+        "direction_stats": ds,
     }
 
 
@@ -145,6 +225,9 @@ def _render_performance_charts(trades: List[Dict]) -> tuple[str, str]:
     </div>
     <div class="chart-container">
         <div id="duration-pnl-chart"></div>
+    </div>
+    <div class="chart-container">
+        <div id="long-short-chart"></div>
     </div>
     """
 
@@ -221,6 +304,40 @@ def _render_performance_charts(trades: List[Dict]) -> tuple[str, str]:
             title: {{ text: 'Trade Duration vs P&L', font: {{ size: 12, color: '#636da6' }} }},
             xaxis: {{ gridcolor: '#3b4261', title: 'Hold Duration (bars)' }},
             yaxis: {{ gridcolor: '#3b4261', title: 'P&L (%)' }},
+            legend: {{ font: {{ size: 10 }} }}
+        }});
+
+        // Long vs Short Comparison
+        var lsCategories = ['Trades', 'Winners', 'Losers', 'Win Rate (%)'];
+        var lsLong = [{perf['direction_stats']['long']['count']}, {perf['direction_stats']['long']['winners']}, {perf['direction_stats']['long']['losers']}, {perf['direction_stats']['long']['win_rate']:.1f}];
+        var lsShort = [{perf['direction_stats']['short']['count']}, {perf['direction_stats']['short']['winners']}, {perf['direction_stats']['short']['losers']}, {perf['direction_stats']['short']['win_rate']:.1f}];
+        Plotly.newPlot('long-short-chart', [{{
+            x: lsCategories,
+            y: lsLong,
+            type: 'bar',
+            name: 'Long',
+            marker: {{ color: 'rgba(77, 214, 190, 0.8)' }},
+            text: lsLong.map(function(v, i) {{ return i === 3 ? v.toFixed(1) + '%' : v; }}),
+            textposition: 'outside',
+            textfont: {{ size: 10, color: '#c8d3f5' }}
+        }}, {{
+            x: lsCategories,
+            y: lsShort,
+            type: 'bar',
+            name: 'Short',
+            marker: {{ color: 'rgba(192, 153, 255, 0.8)' }},
+            text: lsShort.map(function(v, i) {{ return i === 3 ? v.toFixed(1) + '%' : v; }}),
+            textposition: 'outside',
+            textfont: {{ size: 10, color: '#c8d3f5' }}
+        }}], {{
+            paper_bgcolor: '#2f334d',
+            plot_bgcolor: '#2f334d',
+            font: {{ color: '#c8d3f5', size: 10 }},
+            margin: {{ t: 30, b: 40, l: 50, r: 20 }},
+            title: {{ text: 'Long vs Short', font: {{ size: 12, color: '#636da6' }} }},
+            xaxis: {{ gridcolor: '#3b4261' }},
+            yaxis: {{ gridcolor: '#3b4261' }},
+            barmode: 'group',
             legend: {{ font: {{ size: 10 }} }}
         }});
     """
@@ -527,10 +644,20 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
     equity_curve = build_equity_curve(trades, start_equity)
     drawdown_curve = build_drawdown_curve(equity_curve)
 
+    # Build date labels for equity/drawdown X-axis
+    equity_dates: List[str] = []
+    if trades and trades[0].get("entry_ts"):
+        equity_dates.append(trades[0]["entry_ts"][:10])  # start = first entry date
+        for t in trades:
+            equity_dates.append(t.get("exit_ts", "")[:10] if t.get("exit_ts") else "")
+    else:
+        equity_dates = [str(i) for i in range(len(equity_curve))]
+
     split_html = _render_split_results(params)
     mc_html = _render_mc_section(params)
     flow_html = _render_strategy_flow(params)
     strategy_html = _render_strategy_params(params)
+    ls_html = _render_long_short_metrics(trades)
     perf_html, perf_js = _render_performance_charts(trades)
     optuna_html, optuna_js = _render_optuna_history(optuna_history or [])
 
@@ -815,6 +942,48 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
             background: var(--accent-cyan);
             border-radius: 1px;
         }}
+        .ls-grid {{
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 16px;
+        }}
+        .ls-card {{
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 16px;
+            border: 1px solid var(--text-muted);
+        }}
+        .ls-long {{ border-top: 3px solid var(--accent-teal); }}
+        .ls-short {{ border-top: 3px solid var(--accent-purple); }}
+        .ls-header {{
+            font-size: 13px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            margin-bottom: 4px;
+        }}
+        .ls-long .ls-header {{ color: var(--accent-teal); }}
+        .ls-short .ls-header {{ color: var(--accent-purple); }}
+        .ls-count {{
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }}
+        .ls-pct {{
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-weight: normal;
+        }}
+        .ls-row {{
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            border-bottom: 1px solid var(--text-muted);
+            font-size: 11px;
+        }}
+        .ls-row:last-child {{ border-bottom: none; }}
+        .ls-label {{ color: var(--text-secondary); }}
+        .ls-val {{ font-weight: bold; }}
     </style>
 </head>
 <body>
@@ -895,6 +1064,8 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
         <div id="drawdown-chart"></div>
     </div>
 
+    {ls_html}
+
     {split_html}
     {mc_html}
     {optuna_html}
@@ -908,6 +1079,7 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
 
     <script>
         Plotly.newPlot('equity-chart', [{{
+            x: {json.dumps(equity_dates)},
             y: {json.dumps(equity_curve)},
             type: 'scatter',
             mode: 'lines',
@@ -918,12 +1090,13 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
             paper_bgcolor: '#2f334d',
             plot_bgcolor: '#2f334d',
             font: {{ color: '#c8d3f5', size: 10 }},
-            margin: {{ t: 20, b: 40, l: 60, r: 20 }},
-            xaxis: {{ gridcolor: '#3b4261', title: 'Trade #' }},
+            margin: {{ t: 20, b: 60, l: 60, r: 20 }},
+            xaxis: {{ gridcolor: '#3b4261', title: 'Date', type: 'category', tickangle: -45 }},
             yaxis: {{ gridcolor: '#3b4261', title: 'Equity ($)' }}
         }});
 
         Plotly.newPlot('drawdown-chart', [{{
+            x: {json.dumps(equity_dates)},
             y: {json.dumps(drawdown_curve)},
             type: 'scatter',
             mode: 'lines',
@@ -934,8 +1107,8 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
             paper_bgcolor: '#2f334d',
             plot_bgcolor: '#2f334d',
             font: {{ color: '#c8d3f5', size: 10 }},
-            margin: {{ t: 20, b: 40, l: 60, r: 20 }},
-            xaxis: {{ gridcolor: '#3b4261', title: 'Trade #' }},
+            margin: {{ t: 20, b: 60, l: 60, r: 20 }},
+            xaxis: {{ gridcolor: '#3b4261', title: 'Date', type: 'category', tickangle: -45 }},
             yaxis: {{ gridcolor: '#3b4261', title: 'Drawdown (%)' }}
         }});
         {perf_js}

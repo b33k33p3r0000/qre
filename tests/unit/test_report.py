@@ -6,7 +6,31 @@ from pathlib import Path
 
 import pytest
 
-from qre.report import generate_report, build_equity_curve, build_drawdown_curve
+from qre.report import (
+    generate_report, build_equity_curve, build_drawdown_curve,
+    _compute_direction_stats, _render_long_short_metrics,
+)
+
+
+# --- Helpers ---
+
+def _make_trade(pnl_abs=100.0, direction="long", entry_ts="2025-01-01T00:00:00",
+                exit_ts="2025-01-02T00:00:00", pnl_pct=0.002, hold_bars=24):
+    return {
+        "pnl_abs": pnl_abs, "direction": direction,
+        "entry_ts": entry_ts, "exit_ts": exit_ts,
+        "pnl_pct": pnl_pct, "hold_bars": hold_bars,
+    }
+
+
+SAMPLE_PARAMS = {
+    "symbol": "BTC/USDC", "equity": 51000, "start_equity": 50000,
+    "sharpe": 2.5, "trades": 100, "max_drawdown": -3.0,
+    "win_rate": 0.48, "total_pnl_pct": 2.0, "sortino": 1.5,
+    "calmar": 2.0, "recovery_factor": 1.8, "profit_factor": 1.3,
+    "trades_per_year": 200, "expectancy": 10.0,
+    "profitable_months_ratio": 0.75,
+}
 
 
 class TestBuildEquityCurve:
@@ -45,80 +69,127 @@ class TestBuildDrawdownCurve:
         assert dd[2] == 0.0
 
 
+class TestComputeDirectionStats:
+    def test_splits_long_short(self):
+        trades = [
+            _make_trade(100, "long"), _make_trade(-50, "long"),
+            _make_trade(200, "short"), _make_trade(-30, "short"),
+        ]
+        ds = _compute_direction_stats(trades)
+        assert ds["long"]["count"] == 2
+        assert ds["short"]["count"] == 2
+
+    def test_pnl_calculated(self):
+        trades = [_make_trade(100, "long"), _make_trade(-50, "short")]
+        ds = _compute_direction_stats(trades)
+        assert ds["long"]["pnl"] == 100.0
+        assert ds["short"]["pnl"] == -50.0
+
+    def test_win_rate(self):
+        trades = [
+            _make_trade(100, "long"), _make_trade(50, "long"), _make_trade(-20, "long"),
+        ]
+        ds = _compute_direction_stats(trades)
+        assert abs(ds["long"]["win_rate"] - 66.7) < 0.1
+
+    def test_empty_direction(self):
+        trades = [_make_trade(100, "long")]
+        ds = _compute_direction_stats(trades)
+        assert ds["short"]["count"] == 0
+        assert ds["short"]["pnl"] == 0.0
+
+    def test_no_direction_field(self):
+        trades = [{"pnl_abs": 100.0}]
+        ds = _compute_direction_stats(trades)
+        assert ds["long"]["count"] == 0
+        assert ds["short"]["count"] == 0
+
+
+class TestRenderLongShortMetrics:
+    def test_contains_long_short_labels(self):
+        trades = [_make_trade(100, "long"), _make_trade(-50, "short")]
+        html = _render_long_short_metrics(trades)
+        assert "LONG" in html
+        assert "SHORT" in html
+
+    def test_contains_pnl_values(self):
+        trades = [_make_trade(100, "long"), _make_trade(-50, "short")]
+        html = _render_long_short_metrics(trades)
+        assert "$100.00" in html
+        assert "-$50.00" in html
+
+
 class TestGenerateReport:
     def test_returns_html_string(self):
-        params = {"symbol": "BTC/USDC", "equity": 51000, "start_equity": 50000,
-                  "sharpe": 2.5, "trades": 100, "max_drawdown": -3.0,
-                  "win_rate": 0.48, "total_pnl_pct": 2.0, "sortino": 1.5,
-                  "calmar": 2.0, "recovery_factor": 1.8, "profit_factor": 1.3,
-                  "trades_per_year": 200, "expectancy": 10.0,
-                  "profitable_months_ratio": 0.75}
-        trades = [{"pnl_abs": 100.0}, {"pnl_abs": -50.0}]
-        html = generate_report(params, trades)
+        trades = [_make_trade(100), _make_trade(-50, "short")]
+        html = generate_report(SAMPLE_PARAMS, trades)
         assert "<!DOCTYPE html>" in html
         assert "BTC/USDC" in html
 
     def test_contains_plotly_cdn(self):
-        params = {"symbol": "BTC/USDC", "equity": 51000, "start_equity": 50000,
-                  "sharpe": 2.5, "trades": 100, "max_drawdown": -3.0,
-                  "win_rate": 0.48, "total_pnl_pct": 2.0, "sortino": 1.5,
-                  "calmar": 2.0, "recovery_factor": 1.8, "profit_factor": 1.3,
-                  "trades_per_year": 200, "expectancy": 10.0,
-                  "profitable_months_ratio": 0.75}
-        trades = [{"pnl_abs": 100.0}]
-        html = generate_report(params, trades)
+        trades = [_make_trade(100)]
+        html = generate_report(SAMPLE_PARAMS, trades)
         assert "plotly" in html.lower()
 
     def test_uses_start_equity_not_hardcoded(self):
-        params = {"symbol": "BTC/USDC", "equity": 51000, "start_equity": 50000,
-                  "sharpe": 2.5, "trades": 100, "max_drawdown": -3.0,
-                  "win_rate": 0.48, "total_pnl_pct": 2.0, "sortino": 1.5,
-                  "calmar": 2.0, "recovery_factor": 1.8, "profit_factor": 1.3,
-                  "trades_per_year": 200, "expectancy": 10.0,
-                  "profitable_months_ratio": 0.75}
-        trades = [{"pnl_abs": 1000.0}]
-        html = generate_report(params, trades)
-        # Equity curve should start at 50000, not 10000 (old hardcoded value)
+        trades = [_make_trade(1000)]
+        html = generate_report(SAMPLE_PARAMS, trades)
         assert "50000" in html
 
     def test_saves_to_file(self, tmp_path):
-        params = {"symbol": "BTC/USDC", "equity": 51000, "start_equity": 50000,
-                  "sharpe": 2.5, "trades": 100, "max_drawdown": -3.0,
-                  "win_rate": 0.48, "total_pnl_pct": 2.0, "sortino": 1.5,
-                  "calmar": 2.0, "recovery_factor": 1.8, "profit_factor": 1.3,
-                  "trades_per_year": 200, "expectancy": 10.0,
-                  "profitable_months_ratio": 0.75}
-        trades = [{"pnl_abs": 100.0}]
+        trades = [_make_trade(100)]
         path = tmp_path / "report.html"
-        html = generate_report(params, trades)
+        html = generate_report(SAMPLE_PARAMS, trades)
         path.write_text(html)
         assert path.exists()
         assert path.stat().st_size > 1000
 
     def test_split_results_shown_when_present(self):
-        params = {"symbol": "BTC/USDC", "equity": 51000, "start_equity": 50000,
-                  "sharpe": 2.5, "trades": 100, "max_drawdown": -3.0,
-                  "win_rate": 0.48, "total_pnl_pct": 2.0, "sortino": 1.5,
-                  "calmar": 2.0, "recovery_factor": 1.8, "profit_factor": 1.3,
-                  "trades_per_year": 200, "expectancy": 10.0,
-                  "profitable_months_ratio": 0.75,
-                  "split_results": [
-                      {"split": 1, "test_equity": 50500, "test_trades": 20, "test_sharpe": 2.5},
-                      {"split": 2, "test_equity": 49800, "test_trades": 15, "test_sharpe": -0.5},
-                  ]}
-        trades = [{"pnl_abs": 100.0}]
+        params = {**SAMPLE_PARAMS, "split_results": [
+            {"split": 1, "test_equity": 50500, "test_trades": 20, "test_sharpe": 2.5},
+            {"split": 2, "test_equity": 49800, "test_trades": 15, "test_sharpe": -0.5},
+        ]}
+        trades = [_make_trade(100)]
         html = generate_report(params, trades)
         assert "Split" in html or "split" in html
 
     def test_mc_section_shown_when_present(self):
-        params = {"symbol": "BTC/USDC", "equity": 51000, "start_equity": 50000,
-                  "sharpe": 2.5, "trades": 100, "max_drawdown": -3.0,
-                  "win_rate": 0.48, "total_pnl_pct": 2.0, "sortino": 1.5,
-                  "calmar": 2.0, "recovery_factor": 1.8, "profit_factor": 1.3,
-                  "trades_per_year": 200, "expectancy": 10.0,
-                  "profitable_months_ratio": 0.75,
+        params = {**SAMPLE_PARAMS,
                   "mc_confidence": "HIGH", "mc_sharpe_mean": 1.3,
                   "mc_sharpe_ci_low": 1.1, "mc_sharpe_ci_high": 1.5}
-        trades = [{"pnl_abs": 100.0}]
+        trades = [_make_trade(100)]
         html = generate_report(params, trades)
         assert "Monte Carlo" in html or "MC" in html
+
+    def test_long_short_section_present(self):
+        trades = [_make_trade(100, "long"), _make_trade(-50, "short")]
+        html = generate_report(SAMPLE_PARAMS, trades)
+        assert "Long / Short Breakdown" in html
+        assert "LONG" in html
+        assert "SHORT" in html
+
+    def test_equity_chart_has_dates(self):
+        trades = [
+            _make_trade(100, "long", "2025-01-01T00:00:00", "2025-01-05T00:00:00"),
+            _make_trade(-50, "short", "2025-01-06T00:00:00", "2025-01-10T00:00:00"),
+        ]
+        html = generate_report(SAMPLE_PARAMS, trades)
+        assert "2025-01-05" in html
+        assert "2025-01-10" in html
+        # Should NOT have old "Trade #" label
+        assert "Trade #" not in html
+
+    def test_long_short_chart_present(self):
+        trades = [_make_trade(100, "long"), _make_trade(-50, "short")]
+        html = generate_report(SAMPLE_PARAMS, trades)
+        assert "long-short-chart" in html
+        assert "Long vs Short" in html
+
+    def test_no_trades_still_works(self):
+        html = generate_report(SAMPLE_PARAMS, [])
+        assert "<!DOCTYPE html>" in html
+
+    def test_trades_without_timestamps_fallback(self):
+        trades = [{"pnl_abs": 100.0}, {"pnl_abs": -50.0}]
+        html = generate_report(SAMPLE_PARAMS, trades)
+        assert "<!DOCTYPE html>" in html
