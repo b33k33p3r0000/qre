@@ -63,7 +63,7 @@ class TestMACDRSIStrategy:
         assert strategy.name == "macd_rsi"
 
     def test_version(self, strategy):
-        assert strategy.version == "3.0.0"
+        assert strategy.version == "4.0.0"
 
     def test_required_indicators(self, strategy):
         indicators = strategy.get_required_indicators()
@@ -72,13 +72,14 @@ class TestMACDRSIStrategy:
         assert "stochrsi" not in indicators
 
     def test_optuna_params_count(self, strategy):
-        """Exactly 6 Optuna params."""
+        """9 Optuna params (6 original + rsi_lookback + trend_tf + trend_strict)."""
         import optuna
         study = optuna.create_study()
         trial = study.ask()
         params = strategy.get_optuna_params(trial)
         optuna_keys = {"macd_fast", "macd_slow", "macd_signal",
-                       "rsi_period", "rsi_lower", "rsi_upper"}
+                       "rsi_period", "rsi_lower", "rsi_upper",
+                       "rsi_lookback", "trend_tf", "trend_strict"}
         assert optuna_keys.issubset(set(params.keys()))
 
     def test_macd_fast_lt_slow(self, strategy):

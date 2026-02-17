@@ -1,15 +1,15 @@
 """
-Chio Extreme Strategy v3.0
+Chio Extreme Strategy v4.0
 ==========================
 
-MACD signal-line crossover + RSI extreme zones.
+MACD signal-line crossover + RSI extreme zones + multi-TF trend filter.
 
 Evidence:
 - Chio (2022): MACD + RSI achieved win rates of 84%, 86%, 78% on US equities
-- Entry: MACD crossover AND RSI in extreme zone (oversold/overbought)
+- Entry: MACD crossover AND RSI in extreme zone (with lookback) AND higher-TF trend
 - Exit: Opposite signal (symmetric flip)
 
-6 Optuna parameters only. Single timeframe (1H).
+9 Optuna parameters. Base TF 1H + trend filter from 4H/8H/1D.
 """
 
 from abc import ABC, abstractmethod
@@ -64,11 +64,11 @@ class MACDRSIStrategy(BaseStrategy):
     """
 
     name = "macd_rsi"
-    version = "3.0.0"
+    version = "4.0.0"
     description = "Chio Extreme: MACD crossover + RSI extreme zones"
 
     def get_optuna_params(self, trial: optuna.trial.Trial, symbol: str | None = None) -> dict[str, Any]:
-        """6 Optuna parameters with expanded ranges (post-diagnose 2026-02-17)."""
+        """9 Optuna parameters: 6 original + rsi_lookback + trend_tf + trend_strict."""
         params = {}
 
         params["macd_fast"] = trial.suggest_int("macd_fast", 3, 20)
