@@ -253,6 +253,17 @@ class TestHoldDurationChart:
         assert "Hold Duration" in html
 
 
+class TestPnlHeatmap:
+    def test_pnl_heatmap_present(self):
+        trades = [
+            _make_trade(100, entry_ts="2025-01-06T09:00:00"),
+            _make_trade(-50, entry_ts="2025-01-07T14:00:00"),
+        ]
+        html = generate_report(SAMPLE_PARAMS, trades)
+        assert "pnl-heatmap-chart" in html
+        assert "Heatmap" in html or "heatmap" in html
+
+
 class TestStrategyParamsV4:
     def test_v4_params_shown(self):
         """v4.0 params (rsi_lookback, trend_tf, trend_strict) should appear in report."""
