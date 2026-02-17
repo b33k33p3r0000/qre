@@ -245,6 +245,14 @@ class TestStreakTimeline:
         assert "streak-timeline-chart" in html
 
 
+class TestHoldDurationChart:
+    def test_hold_duration_chart_present(self):
+        trades = [_make_trade(100, hold_bars=6), _make_trade(-50, hold_bars=24)]
+        html = generate_report(SAMPLE_PARAMS, trades)
+        assert "hold-duration-chart" in html
+        assert "Hold Duration" in html
+
+
 class TestStrategyParamsV4:
     def test_v4_params_shown(self):
         """v4.0 params (rsi_lookback, trend_tf, trend_strict) should appear in report."""

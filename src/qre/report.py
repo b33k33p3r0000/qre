@@ -797,6 +797,52 @@ def _render_optuna_history(optuna_history: List[Dict]) -> tuple[str, str]:
     return html, js
 
 
+def _render_hold_duration_chart(trades: List[Dict]) -> tuple[str, str]:
+    """Render hold duration histogram with hour-based bins."""
+    if not trades:
+        return "", ""
+
+    hours = [t.get("hold_bars", 0) for t in trades]
+    bin_edges = [0, 6, 12, 24, 48, 96]
+    bin_labels = ["0-6h", "6-12h", "12-24h", "24-48h", "48-96h", "96h+"]
+    bin_colors = ["#c3e88d", "#86e1fc", "#82aaff", "#c099ff", "#ffc777", "#ff966c"]
+    counts = []
+    for i in range(len(bin_edges)):
+        lo = bin_edges[i]
+        hi = bin_edges[i + 1] if i + 1 < len(bin_edges) else float("inf")
+        counts.append(sum(1 for h in hours if lo <= h < hi))
+
+    html = """
+    <div class="chart-container">
+        <div id="hold-duration-chart"></div>
+    </div>
+    """
+
+    js = f"""
+        Plotly.newPlot('hold-duration-chart', [{{
+            y: {json.dumps(bin_labels)},
+            x: {json.dumps(counts)},
+            type: 'bar',
+            orientation: 'h',
+            marker: {{ color: {json.dumps(bin_colors)} }},
+            text: {json.dumps(counts)},
+            textposition: 'outside',
+            textfont: {{ size: 10, color: '#c8d3f5' }}
+        }}], {{
+            paper_bgcolor: '#2f334d',
+            plot_bgcolor: '#2f334d',
+            font: {{ color: '#c8d3f5', size: 10 }},
+            margin: {{ t: 30, b: 40, l: 60, r: 40 }},
+            title: {{ text: 'Hold Duration Distribution', font: {{ size: 12, color: '#636da6' }} }},
+            xaxis: {{ gridcolor: '#3b4261', title: 'Number of Trades' }},
+            yaxis: {{ gridcolor: '#3b4261', autorange: 'reversed' }},
+            showlegend: false
+        }});
+    """
+
+    return html, js
+
+
 def generate_report(params: Dict[str, Any], trades: List[Dict],
                     optuna_history: List[Dict] | None = None) -> str:
     """
@@ -831,6 +877,7 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
     strategy_html = _render_strategy_params(params)
     ls_html = _render_long_short_metrics(trades)
     perf_html, perf_js = _render_performance_charts(trades)
+    hold_dur_html, hold_dur_js = _render_hold_duration_chart(trades)
     cum_pnl_html, cum_pnl_js = _render_cumulative_pnl_chart(trades)
     rolling_html, rolling_js = _render_rolling_metrics(trades)
     streak_html, streak_js = _render_streak_timeline(trades)
@@ -1255,6 +1302,7 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
     {flow_html}
     {strategy_html}
     {perf_html}
+    {hold_dur_html}
 
     <footer>
         QRE v0.4.0 | MACD+RSI | Anchored Walk-Forward
@@ -1298,6 +1346,7 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
         {rolling_js}
         {streak_js}
         {perf_js}
+        {hold_dur_js}
         {optuna_js}
     </script>
 </body>
