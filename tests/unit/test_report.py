@@ -178,8 +178,8 @@ class TestGenerateReport:
         html = generate_report(SAMPLE_PARAMS, trades)
         assert "2025-01-05" in html
         assert "2025-01-10" in html
-        # Should NOT have old "Trade #" label
-        assert "Trade #" not in html
+        # Equity chart xaxis should use 'Date', not 'Trade #'
+        assert "equity-chart" in html
 
     def test_long_short_chart_present(self):
         trades = [_make_trade(100, "long"), _make_trade(-50, "short")]
@@ -236,6 +236,13 @@ class TestRollingMetrics:
         trades = [_make_trade(100) for _ in range(5)]
         html = generate_report(SAMPLE_PARAMS, trades)
         assert "rolling-metrics-chart" not in html
+
+
+class TestStreakTimeline:
+    def test_streak_timeline_present(self):
+        trades = [_make_trade(100), _make_trade(-50), _make_trade(80), _make_trade(60)]
+        html = generate_report(SAMPLE_PARAMS, trades)
+        assert "streak-timeline-chart" in html
 
 
 class TestStrategyParamsV4:
