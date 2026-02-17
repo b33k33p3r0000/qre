@@ -17,6 +17,7 @@ from typing import Any
 
 import numpy as np
 import optuna
+import pandas as pd
 
 from qre.config import BASE_TF
 from qre.core.indicators import macd, rsi
@@ -80,6 +81,7 @@ class MACDRSIStrategy(BaseStrategy):
         params["rsi_period"] = trial.suggest_int("rsi_period", 3, 30)
         params["rsi_lower"] = trial.suggest_int("rsi_lower", 15, 50)
         params["rsi_upper"] = trial.suggest_int("rsi_upper", 50, 85)
+        params["rsi_lookback"] = trial.suggest_int("rsi_lookback", 0, 12)
 
         return params
 
@@ -136,6 +138,24 @@ class MACDRSIStrategy(BaseStrategy):
         rsi_oversold = rsi_vals < rsi_lower
         rsi_overbought = rsi_vals > rsi_upper
 
+        # Layer 2: RSI lookback window (v4.0)
+        rsi_lookback = int(params.get("rsi_lookback", 0))
+        if rsi_lookback > 0:
+            rsi_oversold = (
+                pd.Series(rsi_oversold)
+                .rolling(rsi_lookback + 1, min_periods=1)
+                .max()
+                .astype(bool)
+                .values
+            )
+            rsi_overbought = (
+                pd.Series(rsi_overbought)
+                .rolling(rsi_lookback + 1, min_periods=1)
+                .max()
+                .astype(bool)
+                .values
+            )
+
         # Handle NaN — no signal where any indicator is NaN
         has_nan = np.isnan(macd_vals) | np.isnan(signal_vals) | np.isnan(rsi_vals)
 
@@ -154,4 +174,5 @@ class MACDRSIStrategy(BaseStrategy):
             "rsi_period": 16,
             "rsi_lower": 32,
             "rsi_upper": 68,
+            "rsi_lookback": 0,
         }

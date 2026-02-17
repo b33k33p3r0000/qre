@@ -116,3 +116,46 @@ class TestMACDRSIStrategy:
             sample_data, params, precomputed_cache=cache
         )
         assert buy_signal.shape == (len(sample_data["1h"]),)
+
+
+class TestRSILookback:
+    def test_lookback_zero_is_legacy(self, strategy, sample_data):
+        """rsi_lookback=0 produces identical signals to v3.0."""
+        params = strategy.get_default_params()
+        buy_v3, sell_v3 = strategy.precompute_signals(sample_data, params)
+
+        params["rsi_lookback"] = 0
+        buy_v4, sell_v4 = strategy.precompute_signals(sample_data, params)
+
+        np.testing.assert_array_equal(buy_v3, buy_v4)
+        np.testing.assert_array_equal(sell_v3, sell_v4)
+
+    def test_lookback_increases_signals(self, strategy, sample_data):
+        """rsi_lookback > 0 should produce >= signals than lookback=0."""
+        params = strategy.get_default_params()
+        params["rsi_lookback"] = 0
+        buy_0, sell_0 = strategy.precompute_signals(sample_data, params)
+
+        params["rsi_lookback"] = 6
+        buy_6, sell_6 = strategy.precompute_signals(sample_data, params)
+
+        # With lookback, every v3.0 signal should still be present
+        assert (buy_0 & buy_6).sum() == buy_0.sum(), "Lookback lost original buy signals"
+        assert (sell_0 & sell_6).sum() == sell_0.sum(), "Lookback lost original sell signals"
+        # And there should be at least as many
+        assert buy_6.sum() >= buy_0.sum()
+        assert sell_6.sum() >= sell_0.sum()
+
+    def test_lookback_in_optuna_params(self, strategy):
+        """rsi_lookback is in Optuna search space."""
+        import optuna
+        study = optuna.create_study()
+        trial = study.ask()
+        params = strategy.get_optuna_params(trial)
+        assert "rsi_lookback" in params
+        assert 0 <= params["rsi_lookback"] <= 12
+
+    def test_lookback_in_default_params(self, strategy):
+        """Default rsi_lookback is 0 (backward compatible)."""
+        params = strategy.get_default_params()
+        assert params.get("rsi_lookback", 0) == 0
