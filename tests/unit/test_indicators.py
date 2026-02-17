@@ -44,7 +44,7 @@ class TestRSI:
 
 class TestNoRemovedIndicators:
     def test_no_stochrsi(self):
-        """stochrsi removed — not needed for Chio Extreme."""
+        """stochrsi removed — not needed for Quant Whale Strategy."""
         import qre.core.indicators as mod
         assert not hasattr(mod, "stochrsi")
 

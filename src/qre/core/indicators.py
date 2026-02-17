@@ -1,7 +1,7 @@
 """
 Technical Indicators
 ====================
-RSI, MACD — core indicators for Chio Extreme (MACD crossover + RSI extreme zones).
+RSI, MACD — core indicators for Quant Whale Strategy (MACD crossover + RSI extreme zones).
 """
 
 from typing import Tuple

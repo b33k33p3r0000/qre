@@ -11,7 +11,7 @@ Single entry point: run_optimization(symbol, hours, n_trials, ...)
   5. Monte Carlo validation
   6. Save results (JSON + CSV)
 
-Only AWF mode. Only Chio Extreme (MACD+RSI) strategy.
+Only AWF mode. Only Quant Whale Strategy (MACD+RSI) strategy.
 """
 
 import logging
@@ -437,7 +437,7 @@ def main():
     """CLI entry point."""
     import argparse
 
-    parser = argparse.ArgumentParser(description="QRE Optimizer — Chio Extreme AWF")
+    parser = argparse.ArgumentParser(description="QRE Optimizer — Quant Whale Strategy AWF")
     parser.add_argument("--symbol", type=str, default="BTC/USDC", choices=["BTC/USDC", "SOL/USDC"])
     parser.add_argument("--hours", type=int, default=8760)
     parser.add_argument("--trials", type=int, default=DEFAULT_TRIALS)

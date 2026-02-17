@@ -46,7 +46,7 @@ def test_min_hold_constant():
 
 
 def test_catastrophic_stop_10pct():
-    """Catastrophic stop is 10% (0.10) per Chio Extreme spec."""
+    """Catastrophic stop is 10% (0.10) per Quant Whale Strategy spec."""
     from qre.config import CATASTROPHIC_STOP_PCT
     assert CATASTROPHIC_STOP_PCT == 0.10
 

@@ -149,7 +149,7 @@ BACKTEST_POSITION_PCT = 0.25  # Statických 25% pro všechny backtesty i EE
 # CATASTROPHIC STOP
 # =============================================================================
 
-CATASTROPHIC_STOP_PCT = 0.10  # -10% emergency exit (Chio Extreme spec)
+CATASTROPHIC_STOP_PCT = 0.10  # -10% emergency exit (Quant Whale Strategy spec)
 
 # =============================================================================
 # STRATEGY

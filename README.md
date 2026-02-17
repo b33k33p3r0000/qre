@@ -1,12 +1,12 @@
 # QRE — Quantitative Research Engine
 
-Offline optimizer pro MACD+RSI strategii "Chio Extreme". Hledá optimální parametry pro BTC/USDC a SOL/USDC pomocí Optuna (Anchored Walk-Forward), backtestuje s Numba a výsledky posílá na Discord.
+Offline optimizer pro MACD+RSI strategii "Quant Whale Strategy". Hledá optimální parametry pro BTC/USDC a SOL/USDC pomocí Optuna (Anchored Walk-Forward), backtestuje s Numba a výsledky posílá na Discord.
 
 Cíl: najít robustní parametry pro live trading přes [EE (Execution Engine)](https://github.com/b33k33p3r0000/ee) na BrightFunded účtu.
 
 ---
 
-## Strategie — Chio Extreme v3.0
+## Strategie — Quant Whale Strategy v3.0
 
 Založena na studii Chio (2022) — MACD+RSI dosáhlo 78–86% win rate na US equities.
 
@@ -63,7 +63,7 @@ run.sh (presets)
 | Modul | Popis |
 |-------|-------|
 | `optimize.py` | AWF orchestrátor — Optuna TPE + SHA pruner, RSI cache |
-| `core/strategy.py` | Chio Extreme v3.0 — MACD crossover + RSI extreme zones |
+| `core/strategy.py` | Quant Whale Strategy v3.0 — MACD crossover + RSI extreme zones |
 | `core/backtest.py` | Numba JIT trading loop — Long+Short, position flipping |
 | `core/indicators.py` | RSI a MACD výpočty |
 | `core/metrics.py` | Sharpe, Sortino, Calmar, drawdown, win rate, Monte Carlo |
@@ -173,7 +173,7 @@ Klíčové konstanty v `config.py`:
 | `BASE_TF` | 1h | Jediný timeframe |
 | `STARTING_EQUITY` | $50,000 | Per-pair alokace ($100k / 2) |
 | `BACKTEST_POSITION_PCT` | 0.25 | 25% kapitálu na trade |
-| `CATASTROPHIC_STOP_PCT` | 0.10 | -10% emergency exit (Chio Extreme spec) |
+| `CATASTROPHIC_STOP_PCT` | 0.10 | -10% emergency exit (Quant Whale Strategy spec) |
 | `LONG_ONLY` | False | Long + Short povoleno |
 | `MIN_HOLD_HOURS` | 2 | Min bary před exit signálem |
 | `FEE` | 0.075% | Trading fee |

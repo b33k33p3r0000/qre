@@ -592,10 +592,10 @@ class TestSaveAnalysis:
 
 class TestAnalyzeRun:
     def _make_full_params(self, good_params):
-        """Merge good_params with Chio Extreme strategy params for full pipeline."""
+        """Merge good_params with Quant Whale Strategy strategy params for full pipeline."""
         full = dict(good_params)
         full.update({
-            # Chio Extreme params
+            # Quant Whale Strategy params
             "macd_fast": 8, "macd_slow": 22, "macd_signal": 6,
             "rsi_period": 14, "rsi_lower": 30, "rsi_upper": 70,
             # strategy meta

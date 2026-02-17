@@ -355,7 +355,7 @@ def _render_performance_charts(trades: List[Dict]) -> tuple[str, str]:
 
 
 def _render_strategy_flow(params: Dict[str, Any], trades: List[Dict] | None = None) -> str:
-    """Render Chio Extreme v3.0 strategy flow with actual parameter values."""
+    """Render Quant Whale Strategy v3.0 strategy flow with actual parameter values."""
     macd_fast = params.get("macd_fast", "?")
     macd_slow = params.get("macd_slow", "?")
     macd_signal = params.get("macd_signal", "?")

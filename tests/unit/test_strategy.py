@@ -1,4 +1,4 @@
-"""Unit tests for Chio Extreme strategy."""
+"""Unit tests for Quant Whale Strategy strategy."""
 
 import numpy as np
 import pandas as pd

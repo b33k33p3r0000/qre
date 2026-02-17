@@ -1,5 +1,5 @@
 """
-Chio Extreme Strategy v4.0
+Quant Whale Strategy Strategy v4.0
 ==========================
 
 MACD signal-line crossover + RSI extreme zones + multi-TF trend filter.
@@ -57,7 +57,7 @@ class BaseStrategy(ABC):
 
 class MACDRSIStrategy(BaseStrategy):
     """
-    Chio Extreme: MACD crossover + RSI extreme zones.
+    Quant Whale Strategy: MACD crossover + RSI extreme zones.
 
     Buy:  MACD bullish crossover AND RSI < rsi_lower (oversold)
     Sell: MACD bearish crossover AND RSI > rsi_upper (overbought)
@@ -65,7 +65,7 @@ class MACDRSIStrategy(BaseStrategy):
 
     name = "macd_rsi"
     version = "4.0.0"
-    description = "Chio Extreme: MACD crossover + RSI extreme zones"
+    description = "Quant Whale Strategy: MACD crossover + RSI extreme zones"
 
     def get_optuna_params(self, trial: optuna.trial.Trial, symbol: str | None = None) -> dict[str, Any]:
         """9 Optuna parameters: 6 original + rsi_lookback + trend_tf + trend_strict."""

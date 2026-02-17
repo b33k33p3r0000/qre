@@ -1,9 +1,9 @@
 """
-Backtest Engine (Chio Extreme)
+Backtest Engine (Quant Whale Strategy)
 ==============================
 Numba-accelerated backtesting with Long+Short support.
 
-v3.0: Simplified for Chio Extreme strategy.
+v3.0: Simplified for Quant Whale Strategy strategy.
 - 1D buy/sell signal arrays (no 2D vote matrices)
 - Long + Short positions with flipping
 - Catastrophic stop for both directions

@@ -17,7 +17,7 @@ from typing import Any
 
 log = logging.getLogger(__name__)
 
-# --- Thresholds aligned with /diagnose skill (Chio Extreme v3.0) ---
+# --- Thresholds aligned with /diagnose skill (Quant Whale Strategy v3.0) ---
 # MACD spread: <8 yellow, 8-18 green, >18 yellow
 # RSI zone width: <30 red, 30-40 yellow, 40-55 green, >55 yellow
 
@@ -239,7 +239,7 @@ def analyze_trades(trades_csv_path: str | Path) -> dict[str, Any]:
 
 
 def analyze_thresholds(params: dict[str, Any]) -> dict[str, Any]:
-    """Analyze Chio Extreme strategy params — MACD spread, RSI zones.
+    """Analyze Quant Whale Strategy strategy params — MACD spread, RSI zones.
 
     Evaluates the 6 strategy parameters with green/yellow/red status
     aligned with /diagnose skill thresholds.
