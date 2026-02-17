@@ -182,7 +182,7 @@ class TestRSILookback:
         trial = study.ask()
         params = strategy.get_optuna_params(trial)
         assert "rsi_lookback" in params
-        assert 0 <= params["rsi_lookback"] <= 12
+        assert 0 <= params["rsi_lookback"] <= 24
 
     def test_lookback_in_default_params(self, strategy):
         """Default rsi_lookback is 0 (backward compatible)."""
@@ -234,12 +234,18 @@ class TestTrendFilter:
         """trend_tf and trend_strict are in Optuna search space."""
         import optuna
         study = optuna.create_study()
-        trial = study.ask()
-        params = strategy.get_optuna_params(trial)
-        assert "trend_tf" in params
-        assert params["trend_tf"] in ("4h", "8h", "1d")
-        assert "trend_strict" in params
-        assert params["trend_strict"] in (0, 1)
+        for _ in range(20):
+            trial = study.ask()
+            try:
+                params = strategy.get_optuna_params(trial)
+            except optuna.TrialPruned:
+                continue
+            assert "trend_tf" in params
+            assert params["trend_tf"] in ("4h", "8h", "1d")
+            assert "trend_strict" in params
+            assert params["trend_strict"] in (0, 1)
+            return
+        pytest.fail("All 20 trials pruned")
 
     def test_trend_default_params(self, strategy):
         """Default trend params disable trend filter."""

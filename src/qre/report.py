@@ -1014,7 +1014,6 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
     perf_html, perf_js = _render_performance_charts(trades)
     hold_dur_html, hold_dur_js = _render_hold_duration_chart(trades)
     heatmap_html, heatmap_js = _render_pnl_heatmap(trades)
-    cum_pnl_html, cum_pnl_js = _render_cumulative_pnl_chart(trades)
     rolling_html, rolling_js = _render_rolling_metrics(trades)
     streak_html, streak_js = _render_streak_timeline(trades)
     optuna_html, optuna_js = _render_optuna_history(optuna_history or [])

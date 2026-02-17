@@ -66,12 +66,13 @@ def format_complete_message(params: Dict[str, Any]) -> str:
     pnl_pct = params.get("total_pnl_pct", 0)
     trades = params.get("trades", 0)
     win_rate = params.get("win_rate", 0)
-    sharpe = params.get("sharpe", 0)
+    sharpe_time = params.get("sharpe_time", params.get("sharpe", 0))
+    sharpe_equity = params.get("sharpe_equity", 0)
     max_dd = params.get("max_drawdown", 0)
     mc_conf = params.get("mc_confidence", "N/A")
 
-    train_sharpe = params.get("train_sharpe")
-    test_sharpe = params.get("test_sharpe")
+    train_sharpe = params.get("train_sharpe_time", params.get("train_sharpe"))
+    test_sharpe = params.get("test_sharpe_time", params.get("test_sharpe"))
 
     # Overfit warning
     validation_line = ""
@@ -91,7 +92,7 @@ def format_complete_message(params: Dict[str, Any]) -> str:
         f"Win Rate: {win_rate * 100:.1f}%\n"
         f"Max DD:   {max_dd:.1f}%\n"
         f"{'─' * 30}\n"
-        f"Sharpe:   {sharpe:.2f}\n"
+        f"Sharpe:   {sharpe_time:.2f} (time) / {sharpe_equity:.2f} (equity)\n"
         f"MC:       {mc_conf}\n"
         f"{validation_line}"
         f"```"

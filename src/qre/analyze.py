@@ -55,7 +55,8 @@ def health_check(params: dict[str, Any]) -> dict[str, dict[str, Any]]:
     result: dict[str, dict[str, Any]] = {}
 
     # Sharpe: green 1.0–3.5, yellow 0.5–5.0, red outside
-    sharpe = params["sharpe"]
+    # Use equity-based Sharpe if available, fallback to time-based, then legacy
+    sharpe = params.get("sharpe_equity", params.get("sharpe_time", params.get("sharpe", 0)))
     result["sharpe"] = {
         "status": _classify(sharpe, (1.0, 3.5), (0.5, 5.0)),
         "value": sharpe,
@@ -110,8 +111,8 @@ def health_check(params: dict[str, Any]) -> dict[str, dict[str, Any]]:
     result["expectancy"] = {"status": exp_status, "value": exp}
 
     # Train/test sharpe divergence: green diff < 1.0, yellow 1.0–2.0, red > 2.0
-    train_s = params.get("train_sharpe", 0)
-    test_s = params.get("test_sharpe", 0)
+    train_s = params.get("train_sharpe_equity", params.get("train_sharpe", 0))
+    test_s = params.get("test_sharpe_equity", params.get("test_sharpe", 0))
     diff = abs(train_s - test_s)
     if diff < 1.0:
         tt_status = "green"

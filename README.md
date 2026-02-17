@@ -6,19 +6,22 @@ Cíl: najít robustní parametry pro live trading přes [EE (Execution Engine)](
 
 ---
 
-## Strategie — Quant Whale Strategy v3.0
+## Strategie — Quant Whale Strategy v4.0
 
 Založena na studii Chio (2022) — MACD+RSI dosáhlo 78–86% win rate na US equities.
 
-**Entry logika:**
-- **LONG:** MACD bullish crossover (MACD protne signal line zdola) AND RSI < `rsi_lower` (oversold)
-- **SHORT:** MACD bearish crossover (MACD protne signal line shora) AND RSI > `rsi_upper` (overbought)
+**Entry logika (3 vrstvy):**
+- **Layer 1 — MACD crossover (trigger):** MACD protne signal line na 1H baru
+- **Layer 2 — RSI lookback:** RSI bylo v extrémní zóně během posledních `rsi_lookback` barů (0–12h)
+- **Layer 3 — Trend filtr:** MACD trend na vyšším TF (4h/8h/1d) souhlasí se směrem
+- **LONG:** MACD bull cross AND RSI oversold (lookback) AND higher-TF bullish
+- **SHORT:** MACD bear cross AND RSI overbought (lookback) AND higher-TF bearish
 
 **Exit logika:**
 - Opačný signál (symetrický flip) — long se zavře a otevře short na sell signálu a naopak
-- Catastrophic stop: -15% emergency exit
+- Catastrophic stop: -10% emergency exit
 
-**6 Optuna parametrů:**
+**9 Optuna parametrů:**
 
 | Parametr | Rozsah | Popis |
 |----------|--------|-------|
@@ -28,11 +31,15 @@ Založena na studii Chio (2022) — MACD+RSI dosáhlo 78–86% win rate na US eq
 | `rsi_period` | 3–30 | RSI výpočetní perioda |
 | `rsi_lower` | 15–50 | Práh pro oversold zónu |
 | `rsi_upper` | 50–85 | Práh pro overbought zónu |
+| `rsi_lookback` | 0–12 | RSI lookback window (bary). 0 = v3.0 chování |
+| `trend_tf` | 4h/8h/1d | Vyšší TF pro trend filtr |
+| `trend_strict` | 0–1 | Trend filtr on/off. 0 = v3.0 chování |
 
-Constraint: `macd_slow - macd_fast >= 5` (minimální MACD spread, jinak trial pruned).
+Constraints: `macd_slow - macd_fast >= 5` (minimální MACD spread, jinak trial pruned).
 
 **Vlastnosti:**
-- Jeden timeframe: 1H
+- Base TF: 1H + trend filtr z vyššího TF (4H/8H/1D)
+- Zpětně kompatibilní: `rsi_lookback=0` + `trend_strict=0` = identické chování jako v3.0
 - Long + Short s position flipping (konfigurovatelné přes `LONG_ONLY`)
 - Min hold: 2 bary před exit signálem
 - Position size: 25% kapitálu na trade
@@ -44,7 +51,7 @@ Constraint: `macd_slow - macd_fast >= 5` (minimální MACD spread, jinak trial p
 ```
 run.sh (presets)
   └→ python -m qre.optimize --symbol BTC/USDC --trials 10000 ...
-       ├→ data/fetch.py       — stáhne 1H OHLCV z Binance
+       ├→ data/fetch.py       — stáhne OHLCV z Binance (1H + 4H/8H/1D)
        ├→ optimize.py         — Optuna AWF studie (TPE + SHA pruner)
        │    ├→ strategy.py    — generuje buy/sell signály
        │    ├→ backtest.py    — Numba trading loop
@@ -63,13 +70,13 @@ run.sh (presets)
 | Modul | Popis |
 |-------|-------|
 | `optimize.py` | AWF orchestrátor — Optuna TPE + SHA pruner, RSI cache |
-| `core/strategy.py` | Quant Whale Strategy v3.0 — MACD crossover + RSI extreme zones |
+| `core/strategy.py` | Quant Whale Strategy v4.0 — MACD crossover + RSI lookback + trend filter |
 | `core/backtest.py` | Numba JIT trading loop — Long+Short, position flipping |
 | `core/indicators.py` | RSI a MACD výpočty |
 | `core/metrics.py` | Sharpe, Sortino, Calmar, drawdown, win rate, Monte Carlo |
 | `penalties.py` | Hard constraint (min trades/year) + overtrading penalty |
 | `analyze.py` | Post-run diagnostika — health check, suggestions, Discord embed |
-| `data/fetch.py` | Binance OHLCV fetch (1H, fresh data bez cache) |
+| `data/fetch.py` | Binance OHLCV fetch (1H + 4H/8H/1D, fresh data bez cache) |
 | `report.py` | Self-contained HTML report s Plotly grafy |
 | `notify.py` | Discord webhooky — start/complete notifikace |
 | `io.py` | JSON/CSV zápis výsledků |
@@ -90,7 +97,7 @@ Split 3:  [============ train 80% ============][= test =]
 
 - 2 splity pro krátká data (<1.5 roku), 3 splity jinak
 - Optuna TPE sampler s SuccessiveHalving prunerem
-- RSI pre-computed cache: 23 period (3–25) místo počítání per-trial
+- RSI pre-computed cache: 28 period (3–30) místo počítání per-trial
 - Objective = penalizované equity z posledního test splitu
 - Monte Carlo validace (1000 simulací) na finálním výsledku
 
@@ -106,7 +113,7 @@ Numba `@njit` compiled trading loop:
 
 - **Pozice:** flat → long → short → flat (s flippingem)
 - **Priority:** catastrophic stop > signal exit > new position
-- **Catastrophic stop:** -15% od entry → emergency exit
+- **Catastrophic stop:** -10% od entry → emergency exit
 - **Force close:** otevřená pozice na konci dat se zavře
 - **Směry:** Long (+1) a Short (-1) s korektním PnL modelem
 - **Short PnL:** `pnl = size * entry * (1-fee) - size * exit * (1+fee)`
@@ -170,7 +177,7 @@ Klíčové konstanty v `config.py`:
 | Konstanta | Hodnota | Popis |
 |-----------|---------|-------|
 | `SYMBOLS` | BTC/USDC, SOL/USDC | Obchodované páry |
-| `BASE_TF` | 1h | Jediný timeframe |
+| `BASE_TF` | 1h | Base timeframe (+ trend filtr z 4h/8h/1d) |
 | `STARTING_EQUITY` | $50,000 | Per-pair alokace ($100k / 2) |
 | `BACKTEST_POSITION_PCT` | 0.25 | 25% kapitálu na trade |
 | `CATASTROPHIC_STOP_PCT` | 0.10 | -10% emergency exit (Quant Whale Strategy spec) |
@@ -237,7 +244,7 @@ qre/
 │       ├── __init__.py
 │       └── auto_diagnose.py
 ├── tests/
-│   ├── unit/          # 168 testů
+│   ├── unit/          # 190+ testů
 │   ├── integration/   # Pipeline, golden baseline, reproducibility
 │   └── fixtures/
 ├── results/           # Výstupy runů
@@ -257,7 +264,7 @@ qre/
 - **ccxt** — Binance API
 - **Plotly** — HTML reporty (equity curve, drawdown, trade distribuce)
 - **requests** — Discord webhooky
-- **pytest** — 168+ unit a integračních testů
+- **pytest** — 216+ unit a integračních testů
 
 ---
 

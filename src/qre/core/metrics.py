@@ -85,6 +85,7 @@ class MetricsResult:
     avg_drawdown: float
     sharpe_ratio: float  # Trade-based (legacy, pro zpětnou kompatibilitu)
     sharpe_ratio_time_based: float  # v12.0 NEW: Time-based Sharpe (realistický)
+    sharpe_ratio_equity_based: float  # v13.0 NEW: Equity-based Sharpe (daily returns)
     sortino_ratio: float  # v4.0 NEW
     calmar_ratio: float  # v4.0 NEW
     recovery_factor: float  # v4.0 NEW
@@ -244,6 +245,10 @@ def calculate_time_based_sharpe(
                 continue
 
             # Spočítej hourly returns pro tento trade
+            # v13.0 FIX: Flip sign pro short trades (price drop = profit)
+            direction = trade.get("direction", "long")
+            direction_mult = -1.0 if direction == "short" else 1.0
+
             prev_price = entry_price
             for i in range(rel_start, rel_end + 1):
                 abs_idx = start_idx + i
@@ -252,8 +257,7 @@ def calculate_time_based_sharpe(
 
                 current_price = float(price_data["close"].iloc[abs_idx])
                 if prev_price > 0:
-                    hourly_return = (current_price - prev_price) / prev_price
-                    # Přičti k hourly_returns (může být více tradů v jednom čase, ale ne v této strategii)
+                    hourly_return = direction_mult * (current_price - prev_price) / prev_price
                     hourly_returns[i] = hourly_return
 
                 prev_price = current_price
@@ -275,6 +279,63 @@ def calculate_time_based_sharpe(
     sharpe = (mean_return / std_return) * math.sqrt(8760)
 
     return float(sharpe)
+
+
+def calculate_equity_based_sharpe(
+    trades: List[Dict],
+    start_equity: float,
+    backtest_days: int,
+) -> float:
+    """
+    v13.0 NEW: Equity-based Sharpe Ratio — z denních equity returnů.
+
+    Na rozdíl od time-based Sharpe:
+    - Pracuje s denními equity změnami (ne hodinovými price returns)
+    - Správně reflektuje direction (PnL je již direction-aware)
+    - Annualizuje sqrt(365) — standard pro krypto
+    - Dává intuitivnější hodnoty srovnatelné s industry benchmarky
+
+    Returns:
+        Equity-based Sharpe ratio (annualizovaný)
+    """
+    if not trades or backtest_days < 30:
+        return 0.0
+
+    df = pd.DataFrame(trades)
+    if df.empty or "exit_ts" not in df.columns or "pnl_abs" not in df.columns:
+        return 0.0
+
+    df["exit_ts"] = pd.to_datetime(df["exit_ts"])
+    df["date"] = df["exit_ts"].dt.date
+
+    # Daily PnL
+    daily_pnl = df.groupby("date")["pnl_abs"].sum()
+
+    if daily_pnl.empty:
+        return 0.0
+
+    # Build full daily equity curve (including days with no trades = 0 PnL)
+    all_dates = pd.date_range(
+        start=min(daily_pnl.index),
+        end=max(daily_pnl.index),
+        freq="D",
+    )
+    daily_pnl_full = pd.Series(0.0, index=all_dates)
+    for date in all_dates:
+        d = date.date()
+        if d in daily_pnl.index:
+            daily_pnl_full[date] = daily_pnl[d]
+
+    # Equity curve
+    equity_curve = start_equity + daily_pnl_full.cumsum()
+
+    # Daily percentage returns
+    daily_returns = equity_curve.pct_change().dropna()
+
+    if daily_returns.empty or daily_returns.std() < 1e-12:
+        return 0.0
+
+    return float((daily_returns.mean() / daily_returns.std()) * math.sqrt(365))
 
 
 def calculate_sortino_ratio(returns: pd.Series) -> float:
@@ -354,6 +415,7 @@ def calculate_metrics(
             avg_drawdown=0.0,
             sharpe_ratio=0.0,
             sharpe_ratio_time_based=0.0,  # v12.0 NEW
+            sharpe_ratio_equity_based=0.0,  # v13.0 NEW
             sortino_ratio=0.0,
             calmar_ratio=0.0,
             recovery_factor=0.0,
@@ -399,6 +461,9 @@ def calculate_metrics(
     sharpe_time_based = 0.0
     if price_data is not None and not price_data.empty:
         sharpe_time_based = calculate_time_based_sharpe(trades, price_data, start_equity, start_idx, end_idx)
+
+    # v13.0 NEW: Equity-based Sharpe Ratio (daily returns)
+    sharpe_equity_based = calculate_equity_based_sharpe(trades, start_equity, backtest_days)
 
     # Sortino Ratio (v4.0 NEW)
     sortino = calculate_sortino_ratio(returns)
@@ -460,6 +525,7 @@ def calculate_metrics(
         avg_drawdown=float(avg_drawdown),
         sharpe_ratio=float(sharpe),
         sharpe_ratio_time_based=float(sharpe_time_based),  # v12.0 NEW
+        sharpe_ratio_equity_based=float(sharpe_equity_based),  # v13.0 NEW
         sortino_ratio=float(sortino),
         calmar_ratio=float(calmar),
         recovery_factor=float(recovery),

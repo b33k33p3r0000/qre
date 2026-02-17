@@ -80,9 +80,9 @@ class MACDRSIStrategy(BaseStrategy):
 
         params["macd_signal"] = trial.suggest_int("macd_signal", 2, 15)
         params["rsi_period"] = trial.suggest_int("rsi_period", 3, 30)
-        params["rsi_lower"] = trial.suggest_int("rsi_lower", 15, 50)
-        params["rsi_upper"] = trial.suggest_int("rsi_upper", 50, 85)
-        params["rsi_lookback"] = trial.suggest_int("rsi_lookback", 0, 12)
+        params["rsi_lower"] = trial.suggest_int("rsi_lower", 20, 55)
+        params["rsi_upper"] = trial.suggest_int("rsi_upper", 45, 80)
+        params["rsi_lookback"] = trial.suggest_int("rsi_lookback", 0, 24)
         params["trend_tf"] = trial.suggest_categorical("trend_tf", ["4h", "8h", "1d"])
         params["trend_strict"] = trial.suggest_int("trend_strict", 0, 1)
 
@@ -197,14 +197,14 @@ class MACDRSIStrategy(BaseStrategy):
         return buy_signal.astype(np.bool_), sell_signal.astype(np.bool_)
 
     def get_default_params(self) -> dict[str, Any]:
-        """Default params (midpoint of expanded Optuna ranges)."""
+        """Default params (midpoint of Optuna ranges)."""
         return {
             "macd_fast": 12,
             "macd_slow": 30,
             "macd_signal": 8,
             "rsi_period": 16,
-            "rsi_lower": 32,
-            "rsi_upper": 68,
+            "rsi_lower": 37,
+            "rsi_upper": 62,
             "rsi_lookback": 0,
             "trend_tf": "4h",
             "trend_strict": 0,
