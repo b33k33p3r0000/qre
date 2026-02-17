@@ -20,6 +20,7 @@ import optuna
 import pandas as pd
 
 from qre.config import BASE_TF
+from qre.core.backtest import precompute_timeframe_indices
 from qre.core.indicators import macd, rsi
 
 
@@ -82,6 +83,8 @@ class MACDRSIStrategy(BaseStrategy):
         params["rsi_lower"] = trial.suggest_int("rsi_lower", 15, 50)
         params["rsi_upper"] = trial.suggest_int("rsi_upper", 50, 85)
         params["rsi_lookback"] = trial.suggest_int("rsi_lookback", 0, 12)
+        params["trend_tf"] = trial.suggest_categorical("trend_tf", ["4h", "8h", "1d"])
+        params["trend_strict"] = trial.suggest_int("trend_strict", 0, 1)
 
         return params
 
@@ -159,9 +162,37 @@ class MACDRSIStrategy(BaseStrategy):
         # Handle NaN — no signal where any indicator is NaN
         has_nan = np.isnan(macd_vals) | np.isnan(signal_vals) | np.isnan(rsi_vals)
 
+        # Layer 3: Multi-TF trend filter (v4.0)
+        trend_strict = int(params.get("trend_strict", 0))
+        trend_tf = params.get("trend_tf", "4h")
+
+        if trend_strict and trend_tf in data:
+            htf = data[trend_tf]
+            htf_macd, htf_signal, _ = macd(
+                htf["close"], macd_fast, macd_slow, macd_signal_period,
+            )
+            htf_bullish = (htf_macd > htf_signal).values
+
+            # Align higher TF to 1H bars
+            base_ts = base.index.astype(np.int64) // 10**6
+            htf_ts = htf.index.astype(np.int64) // 10**6
+            tf_indices = precompute_timeframe_indices(base_ts, htf_ts)
+
+            # Handle NaN in higher TF MACD
+            htf_has_nan = np.isnan(htf_macd.values) | np.isnan(htf_signal.values)
+            htf_valid = ~htf_has_nan
+            htf_bullish_raw = htf_bullish
+            htf_bearish_raw = ~htf_bullish_raw
+
+            htf_bullish_aligned = (htf_bullish_raw & htf_valid)[tf_indices]
+            htf_bearish_aligned = (htf_bearish_raw & htf_valid)[tf_indices]
+        else:
+            htf_bullish_aligned = np.ones(n_bars, dtype=bool)
+            htf_bearish_aligned = np.ones(n_bars, dtype=bool)
+
         # Combined signals
-        buy_signal = macd_bullish_cross & rsi_oversold & ~has_nan
-        sell_signal = macd_bearish_cross & rsi_overbought & ~has_nan
+        buy_signal = macd_bullish_cross & rsi_oversold & htf_bullish_aligned & ~has_nan
+        sell_signal = macd_bearish_cross & rsi_overbought & htf_bearish_aligned & ~has_nan
 
         return buy_signal.astype(np.bool_), sell_signal.astype(np.bool_)
 
@@ -175,4 +206,6 @@ class MACDRSIStrategy(BaseStrategy):
             "rsi_lower": 32,
             "rsi_upper": 68,
             "rsi_lookback": 0,
+            "trend_tf": "4h",
+            "trend_strict": 0,
         }
