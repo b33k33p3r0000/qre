@@ -22,15 +22,42 @@ class TestUtcnowMs:
 
 class TestLoadAllData:
     @patch("qre.data.fetch.time.sleep")
-    def test_returns_base_timeframe(self, mock_sleep):
-        """load_all_data should return dict with base TF only (Chio Extreme)."""
+    def test_returns_base_and_trend_timeframes(self, mock_sleep):
+        """load_all_data returns dict with 1h + trend TFs (4h, 8h, 1d)."""
         mock_exchange = MagicMock()
-        mock_exchange.fetch_ohlcv.side_effect = lambda *a, **kw: [
-            [utcnow_ms() - 60_000, 100.0, 101.0, 99.0, 100.5, 1000.0],
-        ] if mock_exchange.fetch_ohlcv.call_count <= 1 else []
+        call_count = {"n": 0}
+
+        def mock_fetch(*args, **kwargs):
+            call_count["n"] += 1
+            if call_count["n"] % 2 == 1:
+                return [[utcnow_ms() - 60_000, 100.0, 101.0, 99.0, 100.5, 1000.0]]
+            return []
+
+        mock_exchange.fetch_ohlcv.side_effect = mock_fetch
         mock_exchange.rateLimit = 100
 
         data = load_all_data(mock_exchange, "BTC/USDC", 100)
 
         assert "1h" in data
-        assert len(data) == 1
+        assert "4h" in data
+        assert "8h" in data
+        assert "1d" in data
+        assert len(data) == 4
+
+    @patch("qre.data.fetch.time.sleep")
+    def test_returns_base_timeframe(self, mock_sleep):
+        """Backward compat: 1h is always present."""
+        mock_exchange = MagicMock()
+        call_count = {"n": 0}
+
+        def mock_fetch(*args, **kwargs):
+            call_count["n"] += 1
+            if call_count["n"] % 2 == 1:
+                return [[utcnow_ms() - 60_000, 100.0, 101.0, 99.0, 100.5, 1000.0]]
+            return []
+
+        mock_exchange.fetch_ohlcv.side_effect = mock_fetch
+        mock_exchange.rateLimit = 100
+
+        data = load_all_data(mock_exchange, "BTC/USDC", 100)
+        assert "1h" in data

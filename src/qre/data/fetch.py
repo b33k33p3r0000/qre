@@ -19,6 +19,7 @@ from qre.config import (
     OHLCV_LIMIT_PER_CALL,
     SAFETY_MAX_ROWS,
     TF_MS,
+    TREND_TFS,
 )
 
 logger = logging.getLogger("qre.data")
@@ -104,7 +105,7 @@ def fetch_ohlcv_paginated(
 
 def load_all_data(exchange, symbol: str, hours_1h: int) -> Dict[str, pd.DataFrame]:
     """
-    Načte fresh data z Binance pro všechny timeframy.
+    Načte fresh data z Binance pro base TF + trend TFs.
 
     Args:
         exchange: ccxt exchange
@@ -112,14 +113,18 @@ def load_all_data(exchange, symbol: str, hours_1h: int) -> Dict[str, pd.DataFram
         hours_1h: Kolik hodin zpětně
 
     Returns:
-        Dict {timeframe: DataFrame}
+        Dict {timeframe: DataFrame} — keys: "1h", "4h", "8h", "1d"
     """
     now_ms = utcnow_ms()
     since_1h = now_ms - hours_1h * TF_MS["1h"]
 
     data: Dict[str, pd.DataFrame] = {}
 
-    # Base timeframe only (Chio Extreme uses single TF)
+    # Base timeframe
     data[BASE_TF] = fetch_ohlcv_paginated(exchange, symbol, BASE_TF, since_1h, now_ms)
+
+    # Higher timeframes for trend filter
+    for tf in TREND_TFS:
+        data[tf] = fetch_ohlcv_paginated(exchange, symbol, tf, since_1h, now_ms)
 
     return data
