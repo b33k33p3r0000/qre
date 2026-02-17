@@ -264,6 +264,22 @@ class TestPnlHeatmap:
         assert "Heatmap" in html or "heatmap" in html
 
 
+class TestBulletChart:
+    def test_bullet_chart_replaces_table(self):
+        params = {
+            **SAMPLE_PARAMS,
+            "macd_fast": 12, "macd_slow": 26, "macd_signal": 9,
+            "rsi_period": 14, "rsi_lower": 30, "rsi_upper": 70,
+            "rsi_lookback": 3, "trend_tf": "4h", "trend_strict": 1,
+        }
+        trades = [_make_trade(100)]
+        html = generate_report(params, trades)
+        assert "param-bullet" in html
+        assert "MACD fast" in html
+        assert "RSI lookback" in html
+        assert "Trend TF" in html
+
+
 class TestStrategyParamsV4:
     def test_v4_params_shown(self):
         """v4.0 params (rsi_lookback, trend_tf, trend_strict) should appear in report."""

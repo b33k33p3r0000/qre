@@ -684,29 +684,63 @@ def _render_strategy_flow(params: Dict[str, Any], trades: List[Dict] | None = No
 
 
 def _render_strategy_params(params: Dict[str, Any]) -> str:
-    """Render strategy parameters table."""
-    strategy_keys = [
-        ("macd_fast", "MACD fast"), ("macd_slow", "MACD slow"), ("macd_signal", "MACD signal"),
-        ("rsi_period", "RSI period"), ("rsi_lower", "RSI lower"), ("rsi_upper", "RSI upper"),
-        ("rsi_lookback", "RSI lookback"), ("trend_tf", "Trend TF"), ("trend_strict", "Trend strict"),
-        ("min_hold", "Min hold (bars)"),
+    """Render strategy parameters as bullet chart visualization."""
+    numeric_params = [
+        ("macd_fast", "MACD fast", 3, 20),
+        ("macd_slow", "MACD slow", 15, 45),
+        ("macd_signal", "MACD signal", 2, 15),
+        ("rsi_period", "RSI period", 3, 30),
+        ("rsi_lower", "RSI lower", 15, 50),
+        ("rsi_upper", "RSI upper", 50, 85),
+        ("rsi_lookback", "RSI lookback", 0, 12),
+        ("trend_strict", "Trend strict", 0, 1),
+    ]
+    categorical_params = [
+        ("trend_tf", "Trend TF", ["4h", "8h", "1d"]),
     ]
 
-    rows = ""
-    for key, label in strategy_keys:
-        if key in params:
-            val = params[key]
-            if isinstance(val, float):
-                val = f"{val:.4f}"
-            rows += f'<tr><td>{label}</td><td>{val}</td></tr>\n'
+    rows_html = ""
+    for key, label, lo, hi in numeric_params:
+        if key not in params:
+            continue
+        val = params[key]
+        if hi == lo:
+            pct = 50
+        else:
+            pct = max(0, min(100, (val - lo) / (hi - lo) * 100))
+        rows_html += f"""
+        <div class="param-bullet">
+            <span class="param-label">{label}</span>
+            <span class="param-range-lo">{lo}</span>
+            <div class="param-bar-track">
+                <div class="param-bar-fill" style="width:{pct:.0f}%"></div>
+                <div class="param-bar-marker" style="left:{pct:.0f}%"></div>
+            </div>
+            <span class="param-range-hi">{hi}</span>
+            <span class="param-val">{val}</span>
+        </div>"""
+
+    for key, label, options in categorical_params:
+        if key not in params:
+            continue
+        val = params[key]
+        opts_html = ""
+        for opt in options:
+            active = "param-cat-active" if str(opt) == str(val) else ""
+            opts_html += f'<span class="param-cat-opt {active}">{opt}</span>'
+        rows_html += f"""
+        <div class="param-bullet">
+            <span class="param-label">{label}</span>
+            <span class="param-range-lo"></span>
+            <div class="param-cat-row">{opts_html}</div>
+            <span class="param-range-hi"></span>
+            <span class="param-val">{val}</span>
+        </div>"""
 
     return f"""
     <h2>Strategy Parameters</h2>
     <div class="chart-container">
-        <table class="params-table">
-            <tr><th>Parameter</th><th>Value</th></tr>
-            {rows}
-        </table>
+        {rows_html}
     </div>
     """
 
@@ -1275,6 +1309,74 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
         .ls-row:last-child {{ border-bottom: none; }}
         .ls-label {{ color: var(--text-secondary); }}
         .ls-val {{ font-weight: bold; }}
+        .param-bullet {{
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 0;
+            border-bottom: 1px solid var(--text-muted);
+            font-size: 11px;
+        }}
+        .param-bullet:last-child {{ border-bottom: none; }}
+        .param-label {{
+            width: 100px;
+            color: var(--text-secondary);
+            flex-shrink: 0;
+        }}
+        .param-range-lo, .param-range-hi {{
+            width: 28px;
+            color: var(--text-muted);
+            font-size: 10px;
+            text-align: center;
+            flex-shrink: 0;
+        }}
+        .param-bar-track {{
+            flex: 1;
+            height: 8px;
+            background: var(--text-muted);
+            border-radius: 4px;
+            position: relative;
+            min-width: 120px;
+        }}
+        .param-bar-fill {{
+            position: absolute;
+            top: 0; left: 0; height: 100%;
+            background: var(--accent-blue);
+            border-radius: 4px;
+            opacity: 0.6;
+        }}
+        .param-bar-marker {{
+            position: absolute;
+            top: -3px;
+            width: 6px; height: 14px;
+            background: #fff;
+            border-radius: 2px;
+            transform: translateX(-3px);
+        }}
+        .param-val {{
+            width: 36px;
+            text-align: right;
+            font-weight: bold;
+            flex-shrink: 0;
+        }}
+        .param-cat-row {{
+            flex: 1;
+            display: flex;
+            gap: 4px;
+            min-width: 120px;
+        }}
+        .param-cat-opt {{
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: var(--text-muted);
+            color: var(--text-secondary);
+            font-size: 10px;
+        }}
+        .param-cat-active {{
+            background: var(--accent-blue);
+            color: var(--bg-primary);
+            font-weight: bold;
+        }}
     </style>
 </head>
 <body>
