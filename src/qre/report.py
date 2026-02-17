@@ -354,6 +354,70 @@ def _render_performance_charts(trades: List[Dict]) -> tuple[str, str]:
     return html, js
 
 
+def _render_cumulative_pnl_chart(trades: List[Dict]) -> tuple[str, str]:
+    """Render cumulative P&L chart with trade markers."""
+    if not trades:
+        return "", ""
+
+    cum_pnl = []
+    running = 0.0
+    dates = []
+    colors = []
+    hover_texts = []
+    for t in trades:
+        pnl = t.get("pnl_abs", 0)
+        running += pnl
+        cum_pnl.append(round(running, 2))
+        exit_ts = t.get("exit_ts", "")
+        dates.append(exit_ts[:10] if exit_ts else "")
+        colors.append("#c3e88d" if pnl > 0 else "#ff757f")
+        hover_texts.append(f"Trade: ${pnl:+,.0f}<br>Cumulative: ${running:,.0f}")
+
+    html = """
+    <h2>Cumulative P&amp;L</h2>
+    <div class="chart-container">
+        <div id="cumulative-pnl-chart"></div>
+    </div>
+    """
+
+    js = f"""
+        Plotly.newPlot('cumulative-pnl-chart', [{{
+            x: {json.dumps(dates)},
+            y: {json.dumps(cum_pnl)},
+            type: 'scatter',
+            mode: 'lines',
+            name: 'Cumulative P&L',
+            line: {{ color: '#86e1fc', width: 2 }},
+            fill: 'tozeroy',
+            fillcolor: 'rgba(134, 225, 252, 0.08)',
+            hoverinfo: 'skip'
+        }}, {{
+            x: {json.dumps(dates)},
+            y: {json.dumps(cum_pnl)},
+            type: 'scatter',
+            mode: 'markers',
+            name: 'Trades',
+            marker: {{
+                color: {json.dumps(colors)},
+                size: 7,
+                line: {{ color: '#1e2030', width: 1 }}
+            }},
+            text: {json.dumps(hover_texts)},
+            hoverinfo: 'text'
+        }}], {{
+            paper_bgcolor: '#2f334d',
+            plot_bgcolor: '#2f334d',
+            font: {{ color: '#c8d3f5', size: 10 }},
+            margin: {{ t: 20, b: 60, l: 60, r: 20 }},
+            xaxis: {{ gridcolor: '#3b4261', title: 'Date', type: 'category', tickangle: -45 }},
+            yaxis: {{ gridcolor: '#3b4261', title: 'Cumulative P&L ($)' }},
+            showlegend: false
+        }});
+    """
+
+    return html, js
+
+
 def _render_strategy_flow(params: Dict[str, Any], trades: List[Dict] | None = None) -> str:
     """Render Quant Whale Strategy v3.0 strategy flow with actual parameter values."""
     macd_fast = params.get("macd_fast", "?")
@@ -615,6 +679,7 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
     strategy_html = _render_strategy_params(params)
     ls_html = _render_long_short_metrics(trades)
     perf_html, perf_js = _render_performance_charts(trades)
+    cum_pnl_html, cum_pnl_js = _render_cumulative_pnl_chart(trades)
     optuna_html, optuna_js = _render_optuna_history(optuna_history or [])
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -1024,6 +1089,8 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
         <div id="drawdown-chart"></div>
     </div>
 
+    {cum_pnl_html}
+
     {ls_html}
 
     {split_html}
@@ -1071,6 +1138,7 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
             xaxis: {{ gridcolor: '#3b4261', title: 'Date', type: 'category', tickangle: -45 }},
             yaxis: {{ gridcolor: '#3b4261', title: 'Drawdown (%)' }}
         }});
+        {cum_pnl_js}
         {perf_js}
         {optuna_js}
     </script>

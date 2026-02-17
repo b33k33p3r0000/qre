@@ -218,6 +218,14 @@ class TestColorConsistency:
         assert "rgba(195, 232, 141" in html
 
 
+class TestCumulativePnlChart:
+    def test_cumulative_pnl_chart_present(self):
+        trades = [_make_trade(100), _make_trade(-50), _make_trade(200)]
+        html = generate_report(SAMPLE_PARAMS, trades)
+        assert "cumulative-pnl-chart" in html
+        assert "Cumulative P&amp;L" in html or "Cumulative P&L" in html
+
+
 class TestStrategyParamsV4:
     def test_v4_params_shown(self):
         """v4.0 params (rsi_lookback, trend_tf, trend_strict) should appear in report."""
