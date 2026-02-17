@@ -51,6 +51,16 @@ def test_catastrophic_stop_10pct():
     assert CATASTROPHIC_STOP_PCT == 0.10
 
 
+def test_trend_tfs_constant():
+    """TREND_TFS list for multi-TF trend filter."""
+    from qre.config import TREND_TFS
+    assert isinstance(TREND_TFS, list)
+    assert "4h" in TREND_TFS
+    assert "8h" in TREND_TFS
+    assert "1d" in TREND_TFS
+    assert "1h" not in TREND_TFS
+
+
 def test_kept_constants():
     """Critical constants still present."""
     from qre import config
