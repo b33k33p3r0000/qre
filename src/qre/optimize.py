@@ -46,7 +46,6 @@ from qre.core.backtest import simulate_trades_fast
 from qre.core.metrics import aggregate_mc_results, calculate_metrics, monte_carlo_validation
 from qre.core.strategy import MACDRSIStrategy
 from qre.data.fetch import load_all_data
-from qre.hooks import run_post_hooks, run_pre_hooks
 from qre.io import save_json, save_trades_csv
 from qre.notify import notify_complete, notify_start
 from qre.penalties import apply_all_penalties
@@ -197,9 +196,6 @@ def run_optimization(
     tag_suffix = f"_{run_tag}" if run_tag else ""
     run_timestamp = f"{run_timestamp}{tag_suffix}"
 
-    # auto_diagnose disabled — using /diagnose skill manually instead
-    # register_auto_diagnose()
-    run_pre_hooks({"symbol": symbol, "hours": hours, "n_trials": n_trials})
     notify_start(symbol=symbol, n_trials=n_trials, hours=hours, n_splits=n_splits or 5, run_tag=run_tag)
 
     exchange = ccxt.binance({"enableRateLimit": True})
@@ -425,7 +421,6 @@ def run_optimization(
     notify_complete(best_params)
 
     best_params["run_dir"] = str(outdir.parent)
-    run_post_hooks(best_params)
 
     return best_params
 
