@@ -1,9 +1,10 @@
 """
 QRE Penalties (Simplified)
 ==========================
-Two penalty types only:
+Two penalty types + per-symbol soft penalty:
   1. Trade count hard constraint (min trades/year, min test trades)
   2. Overtrading penalty (>500 trades/yr -> up to 15% penalty)
+  3. SOL low-trade penalty (<60 trades/yr -> -15%)
 """
 
 import logging
@@ -14,6 +15,8 @@ from qre.config import (
     MIN_TRADES_TEST_HARD,
     MIN_TRADES_YEAR_HARD,
     OVERTRADING_PENALTY,
+    SOL_LOW_TRADE_PENALTY,
+    SOL_MIN_TRADES_YEAR,
 )
 
 logger = logging.getLogger("qre.penalties")
@@ -40,10 +43,20 @@ def apply_overtrading_penalty(equity: float, trades_per_year: float) -> float:
     return equity * (1.0 - penalty_pct)
 
 
+def apply_sol_low_trade_penalty(
+    equity: float, trades_per_year: float, symbol: Optional[str] = None,
+) -> float:
+    """Soft penalty: SOL with <60 trades/year gets -15%."""
+    if symbol and "SOL" in symbol.upper() and trades_per_year < SOL_MIN_TRADES_YEAR:
+        return equity * (1.0 - SOL_LOW_TRADE_PENALTY)
+    return equity
+
+
 def apply_all_penalties(
     equity: float,
     trades_per_year: float,
     test_trades: Optional[int] = None,
+    symbol: Optional[str] = None,
     return_reasons: bool = False,
 ) -> Union[float, Tuple[float, List[str]]]:
     """Apply all penalties. Returns penalized equity."""
@@ -58,6 +71,12 @@ def apply_all_penalties(
         return 0.0
 
     result = equity
+
+    # SOL low-trade penalty
+    before = result
+    result = apply_sol_low_trade_penalty(result, trades_per_year, symbol)
+    if result < before:
+        reasons.append(f"PENALTY:sol_low_trades:{trades_per_year:.0f}_trades/year:-{SOL_LOW_TRADE_PENALTY*100:.0f}%")
 
     # Overtrading
     before = result

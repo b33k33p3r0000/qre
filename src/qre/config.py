@@ -62,6 +62,10 @@ MIN_TRADES_TEST_HARD = 3
 MAX_TRADES_YEAR = 500
 OVERTRADING_PENALTY = 0.15
 
+# Per-symbol soft penalty: SOL needs more trades for statistical significance
+SOL_MIN_TRADES_YEAR = 50
+SOL_LOW_TRADE_PENALTY = 0.15
+
 # =============================================================================
 # OPTIMIZATION
 # =============================================================================

@@ -5,6 +5,7 @@ import pytest
 from qre.penalties import (
     apply_all_penalties,
     apply_overtrading_penalty,
+    apply_sol_low_trade_penalty,
     check_trade_count_hard_constraint,
 )
 
@@ -41,6 +42,32 @@ class TestOvertradingPenalty:
         assert result >= 50000.0 * 0.85
 
 
+class TestSolLowTradePenalty:
+    def test_sol_below_threshold_penalized(self):
+        result = apply_sol_low_trade_penalty(50000.0, 40, symbol="SOLUSDC")
+        assert result == 50000.0 * 0.85
+
+    def test_sol_above_threshold_no_penalty(self):
+        result = apply_sol_low_trade_penalty(50000.0, 80, symbol="SOLUSDC")
+        assert result == 50000.0
+
+    def test_sol_at_threshold_no_penalty(self):
+        result = apply_sol_low_trade_penalty(50000.0, 50, symbol="SOLUSDC")
+        assert result == 50000.0
+
+    def test_btc_below_threshold_no_penalty(self):
+        result = apply_sol_low_trade_penalty(50000.0, 40, symbol="BTCUSDC")
+        assert result == 50000.0
+
+    def test_no_symbol_no_penalty(self):
+        result = apply_sol_low_trade_penalty(50000.0, 40, symbol=None)
+        assert result == 50000.0
+
+    def test_case_insensitive(self):
+        result = apply_sol_low_trade_penalty(50000.0, 40, symbol="sol/usdc")
+        assert result == 50000.0 * 0.85
+
+
 class TestNoRemovedPenalties:
     def test_no_removed_functions(self):
         """short_hold, drawdown, divergence penalties removed."""
@@ -52,7 +79,6 @@ class TestNoRemovedPenalties:
 
 class TestApplyAllPenalties:
     def test_simplified_signature(self):
-        """apply_all_penalties takes only equity, trades_per_year, test_trades."""
         result = apply_all_penalties(
             equity=51000.0,
             trades_per_year=150,
@@ -87,3 +113,23 @@ class TestApplyAllPenalties:
         )
         assert result == 51000.0
         assert any("OK" in r for r in reasons)
+
+    def test_sol_penalty_in_apply_all(self):
+        result, reasons = apply_all_penalties(
+            equity=50000.0,
+            trades_per_year=45,
+            test_trades=10,
+            symbol="SOLUSDC",
+            return_reasons=True,
+        )
+        assert result == 50000.0 * 0.85
+        assert any("sol_low_trades" in r for r in reasons)
+
+    def test_btc_no_sol_penalty(self):
+        result = apply_all_penalties(
+            equity=50000.0,
+            trades_per_year=45,
+            test_trades=10,
+            symbol="BTCUSDC",
+        )
+        assert result == 50000.0

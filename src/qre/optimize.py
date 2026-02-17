@@ -158,6 +158,7 @@ def build_objective(
                 train_metrics.equity,
                 train_metrics.trades_per_year,
                 test_trades=len(test_result.trades),
+                symbol=symbol,
             )
             split_scores.append(penalized)
 

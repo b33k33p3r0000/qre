@@ -316,7 +316,7 @@ def _render_performance_charts(trades: List[Dict]) -> tuple[str, str]:
             y: lsLong,
             type: 'bar',
             name: 'Long',
-            marker: {{ color: 'rgba(77, 214, 190, 0.8)' }},
+            marker: {{ color: 'rgba(255, 199, 119, 0.8)' }},
             text: lsLong.map(function(v, i) {{ return i === 3 ? v.toFixed(1) + '%' : v; }}),
             textposition: 'outside',
             textfont: {{ size: 10, color: '#c8d3f5' }}
@@ -325,7 +325,7 @@ def _render_performance_charts(trades: List[Dict]) -> tuple[str, str]:
             y: lsShort,
             type: 'bar',
             name: 'Short',
-            marker: {{ color: 'rgba(192, 153, 255, 0.8)' }},
+            marker: {{ color: 'rgba(255, 117, 127, 0.8)' }},
             text: lsShort.map(function(v, i) {{ return i === 3 ? v.toFixed(1) + '%' : v; }}),
             textposition: 'outside',
             textfont: {{ size: 10, color: '#c8d3f5' }}
@@ -345,78 +345,27 @@ def _render_performance_charts(trades: List[Dict]) -> tuple[str, str]:
     return html, js
 
 
-def _render_strategy_flow(params: Dict[str, Any]) -> str:
-    """Render MACD+RSI strategy flow with actual parameter values."""
+def _render_strategy_flow(params: Dict[str, Any], trades: List[Dict] | None = None) -> str:
+    """Render Chio Extreme v3.0 strategy flow with actual parameter values."""
     macd_fast = params.get("macd_fast", "?")
     macd_slow = params.get("macd_slow", "?")
     macd_signal = params.get("macd_signal", "?")
-    macd_mode = params.get("macd_mode", "?")
-    rsi_mode = params.get("rsi_mode", "?")
+    rsi_period = params.get("rsi_period", "?")
     rsi_upper = params.get("rsi_upper", "?")
     rsi_lower = params.get("rsi_lower", "?")
-    rsi_momentum = params.get("rsi_momentum_level", "?")
-    kB = params.get("kB", "?")
-    dB = params.get("dB", "?")
-    k_sell = params.get("k_sell", "?")
     min_hold = params.get("min_hold", "?")
-    p_buy = params.get("p_buy", 0)
-    n_votes = params.get("n_votes", 6)
+    long_only = params.get("long_only", False)
+    position_pct = params.get("position_pct", 0.25)
+    catastrophic_stop_pct = params.get("catastrophic_stop_pct", 0.15)
 
-    # Required votes calculation
-    import math
-    required_votes = math.ceil(p_buy * n_votes) if isinstance(p_buy, (int, float)) else "?"
+    # Catastrophic stop stats from trades
+    cat_stop_count = 0
+    total_trades = 0
+    if trades:
+        total_trades = len(trades)
+        cat_stop_count = sum(1 for t in trades if t.get("exit_reason") == "catastrophic_stop")
 
-    # RSI mode description
-    rsi_desc = {
-        "extreme": f"RSI &lt; {rsi_lower} (oversold zone)",
-        "trend_filter": f"RSI &gt; {rsi_momentum} (momentum filter)",
-        "momentum": f"RSI &gt; {rsi_momentum} (momentum)",
-    }.get(rsi_mode, str(rsi_mode))
-
-    # MACD mode description
-    macd_desc = {
-        "rising": "MACD histogram rising (h[i] &gt; h[i-1])",
-        "any": "MACD histogram positive (h &gt; 0)",
-        "crossover": "MACD line crosses above signal",
-    }.get(macd_mode, str(macd_mode))
-
-    # Threshold bars per TF
-    tfs = ["2h", "4h", "6h", "8h", "12h", "24h"]
-    tf_labels = ["2h", "4h", "6h", "8h", "12h", "1d"]
-    threshold_rows = ""
-    for tf, label in zip(tfs, tf_labels):
-        low = params.get(f"low_{tf}", 0)
-        high = params.get(f"high_{tf}", 1)
-        low_pct = low * 100
-        high_pct = high * 100
-        gap_pct = (high - low) * 100
-        threshold_rows += f"""
-            <div class="flow-threshold-row">
-                <span class="flow-tf-label">{label}</span>
-                <span class="flow-val flow-val-low">{low:.3f}</span>
-                <div class="flow-bar-track">
-                    <div class="flow-bar-fill" style="left:{low_pct:.1f}%;width:{gap_pct:.1f}%"></div>
-                </div>
-                <span class="flow-val flow-val-high">{high:.3f}</span>
-            </div>"""
-
-    # RSI gate rows (only for TFs that have gates)
-    gate_tfs = [("6h", "rsi_gate_6h"), ("8h", "rsi_gate_8h"),
-                ("12h", "rsi_gate_12h"), ("1d", "rsi_gate_24h")]
-    gate_rows = ""
-    for label, key in gate_tfs:
-        val = params.get(key)
-        if val is not None:
-            gate_pct = val
-            gate_rows += f"""
-            <div class="flow-threshold-row">
-                <span class="flow-tf-label">{label}</span>
-                <span class="flow-val flow-val-low">{val:.1f}</span>
-                <div class="flow-bar-track">
-                    <div class="flow-bar-gate" style="left:{gate_pct:.1f}%;width:2px"></div>
-                </div>
-                <span class="flow-val flow-val-high">100</span>
-            </div>"""
+    mode_label = "Long only" if long_only else "Long + Short"
 
     return f"""
     <h2>Strategy Flow</h2>
@@ -434,12 +383,12 @@ def _render_strategy_flow(params: Dict[str, Any]) -> str:
                 <div>OHLCV 1h bars ({params.get('symbol', '?')}) via Binance API + Parquet cache</div>
             </div>
             <div class="flow-io">
-                <div class="flow-io-label">Process</div>
-                <div>Resample 1h &rarr; 2h, 4h, 6h, 8h, 12h, 1d ({n_votes} timeframes)</div>
+                <div class="flow-io-label">Compute</div>
+                <div>MACD({macd_fast}, {macd_slow}, {macd_signal}) &middot; RSI({rsi_period})</div>
             </div>
             <div class="flow-io">
                 <div class="flow-io-label">Output</div>
-                <div>Multi-TF OHLCV dict &middot; RSI(21) &middot; StochRSI(14, K={kB}, D={dB}) &middot; MACD({macd_fast},{macd_slow},{macd_signal})</div>
+                <div>1H OHLCV + MACD line/signal + RSI values</div>
             </div>
         </div>
     </div>
@@ -448,24 +397,16 @@ def _render_strategy_flow(params: Dict[str, Any]) -> str:
         <div class="flow-phase-header">
             <span class="flow-phase-num">2</span>
             <span class="flow-phase-title">BUY SIGNAL</span>
-            <span class="flow-phase-meta">3 conditions &times; {n_votes} TFs</span>
+            <span class="flow-phase-meta">2 conditions (AND)</span>
         </div>
         <div class="flow-phase-body">
             <div class="flow-condition">
-                <div class="flow-cond-label">MACD ({macd_mode})</div>
-                <div class="flow-cond-desc">{macd_desc}</div>
+                <div class="flow-cond-label">MACD Bullish Crossover</div>
+                <div class="flow-cond-desc">MACD line crosses above signal line</div>
             </div>
             <div class="flow-condition">
-                <div class="flow-cond-label">RSI ({rsi_mode})</div>
-                <div class="flow-cond-desc">{rsi_desc}</div>
-            </div>
-            <div class="flow-condition">
-                <div class="flow-cond-label">StochRSI Crossover</div>
-                <div class="flow-cond-desc">K({kB}) crosses above D({dB}) within threshold range</div>
-            </div>
-            <div class="flow-io" style="margin-top:10px">
-                <div class="flow-io-label">Voting</div>
-                <div>p_buy = {p_buy:.4f} &rarr; required votes = {required_votes}/{n_votes} TFs must agree</div>
+                <div class="flow-cond-label">RSI Oversold</div>
+                <div class="flow-cond-desc">RSI({rsi_period}) &lt; {rsi_lower}</div>
             </div>
         </div>
     </div>
@@ -473,15 +414,17 @@ def _render_strategy_flow(params: Dict[str, Any]) -> str:
     <div class="flow-phase">
         <div class="flow-phase-header">
             <span class="flow-phase-num">3</span>
-            <span class="flow-phase-title">THRESHOLDS</span>
-            <span class="flow-phase-meta">12 params</span>
+            <span class="flow-phase-title">SELL SIGNAL</span>
+            <span class="flow-phase-meta">2 conditions (AND)</span>
         </div>
         <div class="flow-phase-body">
-            <div class="flow-desc">LOW = oversold (buy) &middot; HIGH = overbought (sell)</div>
-            <div class="flow-thresholds">{threshold_rows}
+            <div class="flow-condition">
+                <div class="flow-cond-label">MACD Bearish Crossover</div>
+                <div class="flow-cond-desc">MACD line crosses below signal line</div>
             </div>
-            <div class="flow-desc" style="margin-top:12px">RSI Gates (min RSI for buy signal)</div>
-            <div class="flow-thresholds">{gate_rows}
+            <div class="flow-condition">
+                <div class="flow-cond-label">RSI Overbought</div>
+                <div class="flow-cond-desc">RSI({rsi_period}) &gt; {rsi_upper}</div>
             </div>
         </div>
     </div>
@@ -493,16 +436,16 @@ def _render_strategy_flow(params: Dict[str, Any]) -> str:
         </div>
         <div class="flow-phase-body">
             <div class="flow-condition">
-                <div class="flow-cond-label">Sell Signal</div>
-                <div class="flow-cond-desc">StochRSI K({k_sell}) crosses below D &middot; min hold = {min_hold} bars</div>
+                <div class="flow-cond-label">Mode</div>
+                <div class="flow-cond-desc">{mode_label} &middot; min hold = {min_hold} bars</div>
             </div>
             <div class="flow-condition">
                 <div class="flow-cond-label">Position Sizing</div>
-                <div class="flow-cond-desc">25% of equity per trade</div>
+                <div class="flow-cond-desc">{position_pct*100:.0f}% of equity per trade</div>
             </div>
             <div class="flow-condition">
                 <div class="flow-cond-label">Catastrophic Stop</div>
-                <div class="flow-cond-desc">-15% emergency exit</div>
+                <div class="flow-cond-desc">-{catastrophic_stop_pct*100:.0f}% emergency exit{f' &middot; <span class="negative">triggered {cat_stop_count}&times;</span>' if cat_stop_count > 0 else ' &middot; <span class="positive">0 triggers</span>'}</div>
             </div>
             <div class="flow-io" style="margin-top:10px">
                 <div class="flow-io-label">Output</div>
@@ -641,6 +584,11 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
     symbol = params.get("symbol", "?")
     start_equity = params.get("start_equity", 50000.0)
 
+    # Catastrophic stop stats
+    cat_stops = [t for t in trades if t.get("exit_reason") == "catastrophic_stop"]
+    cat_stop_count = len(cat_stops)
+    cat_stop_active = cat_stop_count > 0
+
     equity_curve = build_equity_curve(trades, start_equity)
     drawdown_curve = build_drawdown_curve(equity_curve)
 
@@ -655,7 +603,7 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
 
     split_html = _render_split_results(params)
     mc_html = _render_mc_section(params)
-    flow_html = _render_strategy_flow(params)
+    flow_html = _render_strategy_flow(params, trades)
     strategy_html = _render_strategy_params(params)
     ls_html = _render_long_short_metrics(trades)
     perf_html, perf_js = _render_performance_charts(trades)
@@ -954,16 +902,16 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
             padding: 16px;
             border: 1px solid var(--text-muted);
         }}
-        .ls-long {{ border-top: 3px solid var(--accent-teal); }}
-        .ls-short {{ border-top: 3px solid var(--accent-purple); }}
+        .ls-long {{ border-top: 3px solid var(--accent-yellow); }}
+        .ls-short {{ border-top: 3px solid var(--accent-red); }}
         .ls-header {{
             font-size: 13px;
             font-weight: bold;
             letter-spacing: 1px;
             margin-bottom: 4px;
         }}
-        .ls-long .ls-header {{ color: var(--accent-teal); }}
-        .ls-short .ls-header {{ color: var(--accent-purple); }}
+        .ls-long .ls-header {{ color: var(--accent-yellow); }}
+        .ls-short .ls-header {{ color: var(--accent-red); }}
         .ls-count {{
             font-size: 24px;
             font-weight: bold;
@@ -1051,6 +999,10 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
         <div class="detail-row">
             <span class="detail-label">Expectancy</span>
             <span class="detail-value">${params.get('expectancy', 0):.2f}</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Catastrophic Stops</span>
+            <span class="detail-value {'negative' if cat_stop_count > 0 else 'positive'}">{cat_stop_count} / {len(trades)}{f' ({cat_stop_count/len(trades)*100:.0f}%)' if trades else ''}</span>
         </div>
     </div>
 
