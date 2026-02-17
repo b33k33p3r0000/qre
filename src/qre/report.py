@@ -418,6 +418,78 @@ def _render_cumulative_pnl_chart(trades: List[Dict]) -> tuple[str, str]:
     return html, js
 
 
+def _render_rolling_metrics(trades: List[Dict], window: int = 30) -> tuple[str, str]:
+    """Render rolling win rate, avg P&L, and Sharpe over trade sequence."""
+    if len(trades) < window:
+        return "", ""
+
+    trade_nums = list(range(window, len(trades) + 1))
+    win_rates = []
+    avg_pnls = []
+    rolling_sharpes = []
+
+    for i in range(window, len(trades) + 1):
+        w = trades[i - window:i]
+        wins = sum(1 for t in w if t.get("pnl_pct", 0) > 0)
+        pnls = [t.get("pnl_pct", 0) * 100 for t in w]
+        win_rates.append(round(wins / window * 100, 1))
+        avg_pnls.append(round(sum(pnls) / window, 3))
+        mean_pnl = sum(pnls) / window
+        if window > 1:
+            var = sum((p - mean_pnl) ** 2 for p in pnls) / (window - 1)
+            std = var ** 0.5
+            rolling_sharpes.append(round(mean_pnl / std, 3) if std > 0 else 0.0)
+        else:
+            rolling_sharpes.append(0.0)
+
+    html = f"""
+    <h2>Rolling Metrics ({window}-trade window)</h2>
+    <div class="chart-container">
+        <div id="rolling-metrics-chart"></div>
+    </div>
+    """
+
+    js = f"""
+        Plotly.newPlot('rolling-metrics-chart', [{{
+            x: {json.dumps(trade_nums)},
+            y: {json.dumps(win_rates)},
+            type: 'scatter',
+            mode: 'lines',
+            name: 'Win Rate (%)',
+            line: {{ color: '#c3e88d', width: 2 }},
+            yaxis: 'y'
+        }}, {{
+            x: {json.dumps(trade_nums)},
+            y: {json.dumps(avg_pnls)},
+            type: 'scatter',
+            mode: 'lines',
+            name: 'Avg P&L (%)',
+            line: {{ color: '#86e1fc', width: 2 }},
+            yaxis: 'y2'
+        }}, {{
+            x: {json.dumps(trade_nums)},
+            y: {json.dumps(rolling_sharpes)},
+            type: 'scatter',
+            mode: 'lines',
+            name: 'Sharpe',
+            line: {{ color: '#c099ff', width: 2, dash: 'dot' }},
+            yaxis: 'y2'
+        }}], {{
+            paper_bgcolor: '#2f334d',
+            plot_bgcolor: '#2f334d',
+            font: {{ color: '#c8d3f5', size: 10 }},
+            margin: {{ t: 30, b: 40, l: 50, r: 50 }},
+            title: {{ text: 'Rolling {window}-Trade Metrics', font: {{ size: 12, color: '#636da6' }} }},
+            xaxis: {{ gridcolor: '#3b4261', title: 'Trade #' }},
+            yaxis: {{ gridcolor: '#3b4261', title: 'Win Rate (%)', side: 'left', range: [0, 100] }},
+            yaxis2: {{ overlaying: 'y', side: 'right', title: 'Avg P&L (%) / Sharpe', gridcolor: 'rgba(59,66,97,0.3)' }},
+            legend: {{ font: {{ size: 10 }}, orientation: 'h', y: -0.2 }}
+        }});
+    """
+
+    return html, js
+
+
 def _render_strategy_flow(params: Dict[str, Any], trades: List[Dict] | None = None) -> str:
     """Render Quant Whale Strategy v3.0 strategy flow with actual parameter values."""
     macd_fast = params.get("macd_fast", "?")
@@ -680,6 +752,7 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
     ls_html = _render_long_short_metrics(trades)
     perf_html, perf_js = _render_performance_charts(trades)
     cum_pnl_html, cum_pnl_js = _render_cumulative_pnl_chart(trades)
+    rolling_html, rolling_js = _render_rolling_metrics(trades)
     optuna_html, optuna_js = _render_optuna_history(optuna_history or [])
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -1090,6 +1163,7 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
     </div>
 
     {cum_pnl_html}
+    {rolling_html}
 
     {ls_html}
 
@@ -1139,6 +1213,7 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
             yaxis: {{ gridcolor: '#3b4261', title: 'Drawdown (%)' }}
         }});
         {cum_pnl_js}
+        {rolling_js}
         {perf_js}
         {optuna_js}
     </script>

@@ -226,6 +226,18 @@ class TestCumulativePnlChart:
         assert "Cumulative P&amp;L" in html or "Cumulative P&L" in html
 
 
+class TestRollingMetrics:
+    def test_rolling_metrics_present(self):
+        trades = [_make_trade(100 if i % 3 else -50) for i in range(35)]
+        html = generate_report(SAMPLE_PARAMS, trades)
+        assert "rolling-metrics-chart" in html
+
+    def test_rolling_metrics_skipped_when_few_trades(self):
+        trades = [_make_trade(100) for _ in range(5)]
+        html = generate_report(SAMPLE_PARAMS, trades)
+        assert "rolling-metrics-chart" not in html
+
+
 class TestStrategyParamsV4:
     def test_v4_params_shown(self):
         """v4.0 params (rsi_lookback, trend_tf, trend_strict) should appear in report."""
