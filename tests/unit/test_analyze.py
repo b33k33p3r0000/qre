@@ -12,7 +12,6 @@ from qre.analyze import (
     analyze_run,
     analyze_thresholds,
     analyze_trades,
-    build_discord_embed,
     check_robustness,
     compute_verdict,
     generate_suggestions,
@@ -544,12 +543,12 @@ class TestGenerateSuggestions:
         assert any("short" in a.lower() for a in actions)
 
 
-# --- build_discord_embed tests ---
+# --- save_analysis tests ---
 
 
 @pytest.fixture
 def full_analysis():
-    """A complete analysis dict for testing embed and save."""
+    """A complete analysis dict for testing save."""
     return {
         "run_name": "btc_run_042",
         "symbol": "BTC/USD",
@@ -566,36 +565,8 @@ def full_analysis():
             "train_test_sharpe": {"status": "yellow", "value": 1.5},
             "split_consistency": {"status": "green", "value": 0},
         },
-        "suggestions": [
-            {
-                "priority": "high",
-                "action": "Lower p_buy to reduce required buy votes",
-                "reason": "Too few trades",
-                "impact": "More trades",
-            },
-            {
-                "priority": "high",
-                "action": "Tighten stop-loss",
-                "reason": "High catastrophic rate",
-                "impact": "Better risk management",
-            },
-        ],
+        "suggestions": [],
     }
-
-
-class TestBuildDiscordEmbed:
-    def test_embed_under_6000_chars(self, full_analysis):
-        """Full analysis → embed length <= 6000 chars (Discord limit)."""
-        embed = build_discord_embed(full_analysis)
-        assert len(embed) <= 6000
-
-    def test_embed_contains_verdict(self, full_analysis):
-        """Verdict string appears in embed."""
-        embed = build_discord_embed(full_analysis)
-        assert "FAIL" in embed
-
-
-# --- save_analysis tests ---
 
 
 class TestSaveAnalysis:

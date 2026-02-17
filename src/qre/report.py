@@ -72,12 +72,21 @@ def _render_mc_section(params: Dict[str, Any]) -> str:
     if not mc_conf:
         return ""
 
+    mc_source = params.get("mc_source", "full_data")
+    mc_splits = params.get("mc_splits_evaluated", "?")
+    if mc_source == "oos_per_split":
+        mc_title = f"OOS Monte Carlo ({mc_splits} splits)"
+    else:
+        mc_title = "Monte Carlo Validation (full data)"
+
+    conf_class = "positive" if mc_conf == "HIGH" else "negative"
+
     return f"""
-    <h2>Monte Carlo Validation</h2>
+    <h2>{mc_title}</h2>
     <div class="metrics-grid">
         <div class="metric-card">
             <div class="metric-label">MC Confidence</div>
-            <div class="metric-value {'positive' if mc_conf == 'HIGH' else 'negative'}">{mc_conf}</div>
+            <div class="metric-value {conf_class}">{mc_conf}</div>
         </div>
         <div class="metric-card">
             <div class="metric-label">MC Sharpe Mean</div>

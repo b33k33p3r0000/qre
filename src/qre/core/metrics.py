@@ -655,3 +655,44 @@ def monte_carlo_validation(
         n_simulations=n_simulations,
         robustness_score=round(robustness_score, 4),
     )
+
+
+def aggregate_mc_results(results: List[MonteCarloResult]) -> MonteCarloResult:
+    """Aggregate per-split OOS Monte Carlo results (conservative estimate).
+
+    Uses worst-case across splits: min sharpe CI low, min robustness,
+    weakest confidence level. This ensures MC doesn't overstate robustness
+    when some splits perform poorly.
+    """
+    if not results:
+        return MonteCarloResult(
+            sharpe_mean=0.0, sharpe_std=0.0,
+            sharpe_ci_low=0.0, sharpe_ci_high=0.0,
+            max_dd_mean=0.0, max_dd_std=0.0,
+            max_dd_ci_low=0.0, max_dd_ci_high=0.0,
+            win_rate_mean=0.0, win_rate_ci_low=0.0, win_rate_ci_high=0.0,
+            confidence_level="INSUFFICIENT_DATA", n_simulations=0,
+            robustness_score=0.0,
+        )
+
+    confidence_order = {"LOW": 0, "MEDIUM": 1, "HIGH": 2}
+
+    return MonteCarloResult(
+        sharpe_mean=round(float(np.mean([r.sharpe_mean for r in results])), 4),
+        sharpe_std=round(float(np.mean([r.sharpe_std for r in results])), 4),
+        sharpe_ci_low=round(min(r.sharpe_ci_low for r in results), 4),
+        sharpe_ci_high=round(max(r.sharpe_ci_high for r in results), 4),
+        max_dd_mean=round(float(np.mean([r.max_dd_mean for r in results])), 2),
+        max_dd_std=round(float(np.mean([r.max_dd_std for r in results])), 2),
+        max_dd_ci_low=round(min(r.max_dd_ci_low for r in results), 2),
+        max_dd_ci_high=round(min(r.max_dd_ci_high for r in results), 2),
+        win_rate_mean=round(float(np.mean([r.win_rate_mean for r in results])), 2),
+        win_rate_ci_low=round(min(r.win_rate_ci_low for r in results), 2),
+        win_rate_ci_high=round(max(r.win_rate_ci_high for r in results), 2),
+        confidence_level=min(
+            (r.confidence_level for r in results),
+            key=lambda c: confidence_order.get(c, -1),
+        ),
+        n_simulations=results[0].n_simulations,
+        robustness_score=round(min(r.robustness_score for r in results), 4),
+    )

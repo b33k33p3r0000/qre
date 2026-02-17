@@ -3,7 +3,13 @@
 import numpy as np
 import pytest
 
-from qre.core.metrics import calculate_metrics, MetricsResult, monte_carlo_validation
+from qre.core.metrics import (
+    MonteCarloResult,
+    aggregate_mc_results,
+    calculate_metrics,
+    MetricsResult,
+    monte_carlo_validation,
+)
 
 
 def make_trades(n=20, win_rate=0.6, avg_pnl=10.0):
@@ -86,3 +92,46 @@ class TestMonteCarloValidation:
         trades = make_trades(n=50, win_rate=0.6)
         result = monte_carlo_validation(trades, n_simulations=100)
         assert result.sharpe_ci_low <= result.sharpe_mean <= result.sharpe_ci_high
+
+
+class TestAggregateMCResults:
+    def _make_mc(self, sharpe_ci_low, confidence, robustness):
+        return MonteCarloResult(
+            sharpe_mean=1.0, sharpe_std=0.5,
+            sharpe_ci_low=sharpe_ci_low, sharpe_ci_high=2.0,
+            max_dd_mean=-5.0, max_dd_std=1.0,
+            max_dd_ci_low=-8.0, max_dd_ci_high=-3.0,
+            win_rate_mean=55.0, win_rate_ci_low=45.0, win_rate_ci_high=65.0,
+            confidence_level=confidence, n_simulations=1000,
+            robustness_score=robustness,
+        )
+
+    def test_empty_returns_insufficient_data(self):
+        result = aggregate_mc_results([])
+        assert result.confidence_level == "INSUFFICIENT_DATA"
+        assert result.n_simulations == 0
+
+    def test_single_result_passthrough(self):
+        mc = self._make_mc(0.5, "HIGH", 0.8)
+        result = aggregate_mc_results([mc])
+        assert result.sharpe_ci_low == 0.5
+        assert result.confidence_level == "HIGH"
+        assert result.robustness_score == 0.8
+
+    def test_takes_worst_confidence(self):
+        mc1 = self._make_mc(0.5, "HIGH", 0.8)
+        mc2 = self._make_mc(-0.2, "LOW", 0.3)
+        result = aggregate_mc_results([mc1, mc2])
+        assert result.confidence_level == "LOW"
+
+    def test_takes_min_sharpe_ci_low(self):
+        mc1 = self._make_mc(0.5, "HIGH", 0.8)
+        mc2 = self._make_mc(0.1, "MEDIUM", 0.6)
+        result = aggregate_mc_results([mc1, mc2])
+        assert result.sharpe_ci_low == 0.1
+
+    def test_takes_min_robustness(self):
+        mc1 = self._make_mc(0.5, "HIGH", 0.8)
+        mc2 = self._make_mc(0.3, "MEDIUM", 0.4)
+        result = aggregate_mc_results([mc1, mc2])
+        assert result.robustness_score == 0.4

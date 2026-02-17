@@ -43,7 +43,7 @@ from qre.config import (
     TPE_N_EI_CANDIDATES,
 )
 from qre.core.backtest import simulate_trades_fast
-from qre.core.metrics import calculate_metrics, monte_carlo_validation
+from qre.core.metrics import aggregate_mc_results, calculate_metrics, monte_carlo_validation
 from qre.core.strategy import MACDRSIStrategy
 from qre.data.fetch import load_all_data
 from qre.hooks import run_post_hooks, run_pre_hooks
@@ -296,8 +296,9 @@ def run_optimization(
         price_data=base_df,
     )
 
-    # Per-split metrics
+    # Per-split metrics + OOS Monte Carlo
     split_metrics = []
+    split_mc_results = []
     last_train_metrics = None
     last_test_metrics = None
     for i, split in enumerate(splits):
@@ -324,12 +325,25 @@ def run_optimization(
                 te_r.trades, te_r.backtest_days, start_equity=STARTING_EQUITY,
                 price_data=base_df, start_idx=train_end, end_idx=test_end,
             )
-            split_metrics.append({
+            split_entry = {
                 "split": i + 1,
                 "test_equity": round(tm.equity, 2),
                 "test_trades": tm.trades,
                 "test_sharpe": round(tm.sharpe_ratio_time_based, 4),
-            })
+            }
+
+            # OOS Monte Carlo per split (test trades only)
+            test_trades_dicts = [t._asdict() if hasattr(t, '_asdict') else t for t in te_r.trades]
+            if len(test_trades_dicts) >= MONTE_CARLO_MIN_TRADES:
+                mc_split = monte_carlo_validation(
+                    test_trades_dicts, n_simulations=MONTE_CARLO_SIMULATIONS,
+                    seed=seed + i, backtest_days=te_r.backtest_days,
+                )
+                split_mc_results.append(mc_split)
+                split_entry["mc_sharpe_ci_low"] = mc_split.sharpe_ci_low
+                split_entry["mc_confidence"] = mc_split.confidence_level
+
+            split_metrics.append(split_entry)
             if i == len(splits) - 1:
                 last_test_metrics = tm
 
@@ -372,23 +386,24 @@ def run_optimization(
             if last_train_metrics.equity > 0 else 0
         )
 
-    # 5. Monte Carlo
-    if len(full_result.trades) >= MONTE_CARLO_MIN_TRADES:
-        logger.info(f"Running Monte Carlo ({MONTE_CARLO_SIMULATIONS} simulations)...")
-        mc = monte_carlo_validation(
-            full_result.trades, n_simulations=MONTE_CARLO_SIMULATIONS, seed=seed,
-            backtest_days=full_result.backtest_days,
-        )
-        best_params.update({
-            "mc_sharpe_mean": mc.sharpe_mean,
-            "mc_sharpe_ci_low": mc.sharpe_ci_low,
-            "mc_sharpe_ci_high": mc.sharpe_ci_high,
-            "mc_max_dd_mean": mc.max_dd_mean,
-            "mc_max_dd_ci_low": mc.max_dd_ci_low,
-            "mc_max_dd_ci_high": mc.max_dd_ci_high,
-            "mc_confidence": mc.confidence_level,
-            "mc_robustness": mc.robustness_score,
-        })
+    # 5. Monte Carlo (OOS — aggregated from per-split test trades)
+    mc = aggregate_mc_results(split_mc_results)
+    logger.info(
+        f"OOS Monte Carlo: {len(split_mc_results)}/{len(splits)} splits evaluated, "
+        f"confidence={mc.confidence_level}"
+    )
+    best_params.update({
+        "mc_sharpe_mean": mc.sharpe_mean,
+        "mc_sharpe_ci_low": mc.sharpe_ci_low,
+        "mc_sharpe_ci_high": mc.sharpe_ci_high,
+        "mc_max_dd_mean": mc.max_dd_mean,
+        "mc_max_dd_ci_low": mc.max_dd_ci_low,
+        "mc_max_dd_ci_high": mc.max_dd_ci_high,
+        "mc_confidence": mc.confidence_level,
+        "mc_robustness": mc.robustness_score,
+        "mc_source": "oos_per_split",
+        "mc_splits_evaluated": len(split_mc_results),
+    })
 
     # 6. Save results
     outdir.mkdir(parents=True, exist_ok=True)

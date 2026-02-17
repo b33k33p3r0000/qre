@@ -14,7 +14,7 @@ import pytest
 
 from qre.config import MIN_WARMUP_BARS, STARTING_EQUITY
 from qre.core.backtest import simulate_trades_fast
-from qre.core.metrics import calculate_metrics, monte_carlo_validation
+from qre.core.metrics import aggregate_mc_results, calculate_metrics, monte_carlo_validation
 from qre.core.strategy import MACDRSIStrategy
 from qre.io import save_json, save_trades_csv
 from qre.notify import format_complete_message, format_start_message
@@ -201,3 +201,18 @@ class TestMonteCarlo:
             assert mc.sharpe_ci_low <= mc.sharpe_ci_high
         else:
             pytest.skip("Not enough trades for MC validation")
+
+    def test_aggregate_mc_from_splits(self):
+        """Aggregate MC takes worst-case across splits."""
+        data = make_synthetic_data(5000)
+        _, _, _, _, result = _run_pipeline(data)
+
+        if len(result.trades) < 30:
+            pytest.skip("Not enough trades")
+
+        trades_dicts = [t._asdict() if hasattr(t, '_asdict') else t for t in result.trades]
+        mc1 = monte_carlo_validation(trades_dicts, n_simulations=100, seed=42)
+        mc2 = monte_carlo_validation(trades_dicts, n_simulations=100, seed=99)
+        agg = aggregate_mc_results([mc1, mc2])
+        assert agg.sharpe_ci_low <= mc1.sharpe_ci_low or agg.sharpe_ci_low <= mc2.sharpe_ci_low
+        assert agg.confidence_level in ("HIGH", "MEDIUM", "LOW")
