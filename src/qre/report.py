@@ -44,14 +44,17 @@ def _render_split_results(params: Dict[str, Any]) -> str:
 
     rows = ""
     for s in splits:
-        sharpe = s.get("test_sharpe", 0)
-        css_class = "positive" if sharpe > 0 else "negative"
+        sharpe_time = s.get("test_sharpe_time", s.get("test_sharpe", 0))
+        sharpe_equity = s.get("test_sharpe_equity", 0)
+        css_time = "positive" if sharpe_time > 0 else "negative"
+        css_equity = "positive" if sharpe_equity > 0 else "negative"
         rows += (
             f'<tr>'
             f'<td>Split {s.get("split", "?")}</td>'
             f'<td>${s.get("test_equity", 0):,.2f}</td>'
             f'<td>{s.get("test_trades", 0)}</td>'
-            f'<td class="{css_class}">{sharpe:.4f}</td>'
+            f'<td class="{css_time}">{sharpe_time:.4f}</td>'
+            f'<td class="{css_equity}">{sharpe_equity:.4f}</td>'
             f'</tr>\n'
         )
 
@@ -59,7 +62,7 @@ def _render_split_results(params: Dict[str, Any]) -> str:
     <h2>Walk-Forward Splits</h2>
     <div class="chart-container">
         <table class="params-table">
-            <tr><th>Split</th><th>Test Equity</th><th>Test Trades</th><th>Test Sharpe</th></tr>
+            <tr><th>Split</th><th>Test Equity</th><th>Test Trades</th><th>Sharpe (time)</th><th>Sharpe (equity)</th></tr>
             {rows}
         </table>
     </div>
@@ -571,7 +574,7 @@ def _render_streak_timeline(trades: List[Dict]) -> tuple[str, str]:
 
 
 def _render_strategy_flow(params: Dict[str, Any], trades: List[Dict] | None = None) -> str:
-    """Render Quant Whale Strategy v3.0 strategy flow with actual parameter values."""
+    """Render Quant Whale Strategy v4.0 strategy flow with actual parameter values."""
     macd_fast = params.get("macd_fast", "?")
     macd_slow = params.get("macd_slow", "?")
     macd_signal = params.get("macd_signal", "?")
@@ -582,6 +585,9 @@ def _render_strategy_flow(params: Dict[str, Any], trades: List[Dict] | None = No
     long_only = params.get("long_only", False)
     position_pct = params.get("position_pct", 0.25)
     catastrophic_stop_pct = params.get("catastrophic_stop_pct", 0.15)
+    rsi_lookback = params.get("rsi_lookback", 0)
+    trend_tf = params.get("trend_tf", "?")
+    trend_strict = params.get("trend_strict", 0)
 
     # Catastrophic stop stats from trades
     cat_stop_count = 0
@@ -591,6 +597,24 @@ def _render_strategy_flow(params: Dict[str, Any], trades: List[Dict] | None = No
         cat_stop_count = sum(1 for t in trades if t.get("reason") == "catastrophic_stop")
 
     mode_label = "Long only" if long_only else "Long + Short"
+
+    # Build TF scale HTML
+    tf_options = ["1h", "4h", "8h", "1d"]
+    tf_scale_html = ''.join(
+        f'<span class="tf-opt{" tf-active" if tf == str(trend_tf) else ""}">{tf}</span>'
+        for tf in tf_options
+    )
+    trend_strict_html = f' &middot; strict={trend_strict}' if trend_strict != '?' else ''
+
+    # Condition counts for BUY/SELL phases
+    buy_sell_cond_count = '3 conditions (AND)' if rsi_lookback > 0 else '2 conditions (AND)'
+
+    # RSI Lookback condition HTML (shared by BUY and SELL phases)
+    lookback_condition = f"""
+            <div class="flow-condition">
+                <div class="flow-cond-label">RSI Lookback Window</div>
+                <div class="flow-cond-desc">Check RSI condition over last {rsi_lookback} bars (0 = current bar only)</div>
+            </div>""" if rsi_lookback > 0 else ""
 
     return f"""
     <h2>Strategy Flow</h2>
@@ -615,6 +639,15 @@ def _render_strategy_flow(params: Dict[str, Any], trades: List[Dict] | None = No
                 <div class="flow-io-label">Output</div>
                 <div>1H OHLCV + MACD line/signal + RSI values</div>
             </div>
+            <div class="flow-io">
+                <div class="flow-io-label">Trend</div>
+                <div>
+                    <span class="tf-scale">
+                        {tf_scale_html}
+                    </span>
+                    {trend_strict_html}
+                </div>
+            </div>
         </div>
     </div>
 
@@ -622,7 +655,7 @@ def _render_strategy_flow(params: Dict[str, Any], trades: List[Dict] | None = No
         <div class="flow-phase-header">
             <span class="flow-phase-num">2</span>
             <span class="flow-phase-title">BUY SIGNAL</span>
-            <span class="flow-phase-meta">2 conditions (AND)</span>
+            <span class="flow-phase-meta">{buy_sell_cond_count}</span>
         </div>
         <div class="flow-phase-body">
             <div class="flow-condition">
@@ -632,7 +665,7 @@ def _render_strategy_flow(params: Dict[str, Any], trades: List[Dict] | None = No
             <div class="flow-condition">
                 <div class="flow-cond-label">RSI Oversold</div>
                 <div class="flow-cond-desc">RSI({rsi_period}) &lt; {rsi_lower}</div>
-            </div>
+            </div>{lookback_condition}
         </div>
     </div>
 
@@ -640,7 +673,7 @@ def _render_strategy_flow(params: Dict[str, Any], trades: List[Dict] | None = No
         <div class="flow-phase-header">
             <span class="flow-phase-num">3</span>
             <span class="flow-phase-title">SELL SIGNAL</span>
-            <span class="flow-phase-meta">2 conditions (AND)</span>
+            <span class="flow-phase-meta">{buy_sell_cond_count}</span>
         </div>
         <div class="flow-phase-body">
             <div class="flow-condition">
@@ -650,7 +683,7 @@ def _render_strategy_flow(params: Dict[str, Any], trades: List[Dict] | None = No
             <div class="flow-condition">
                 <div class="flow-cond-label">RSI Overbought</div>
                 <div class="flow-cond-desc">RSI({rsi_period}) &gt; {rsi_upper}</div>
-            </div>
+            </div>{lookback_condition}
         </div>
     </div>
 
@@ -1039,7 +1072,7 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
         }}
         .hero-grid {{
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(4, 1fr);
             gap: 12px;
             margin-bottom: 16px;
         }}
@@ -1377,6 +1410,22 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
             color: var(--bg-primary);
             font-weight: bold;
         }}
+        .tf-scale {{
+            display: inline-flex;
+            gap: 2px;
+        }}
+        .tf-opt {{
+            padding: 1px 6px;
+            border-radius: 3px;
+            background: var(--text-muted);
+            color: var(--text-secondary);
+            font-size: 10px;
+        }}
+        .tf-active {{
+            background: var(--accent-cyan);
+            color: var(--bg-primary);
+            font-weight: bold;
+        }}
     </style>
 </head>
 <body>
@@ -1401,9 +1450,15 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
             </div>
         </div>
         <div class="hero-card">
-            <div class="hero-label">Sharpe Ratio</div>
-            <div class="hero-value {'positive' if params.get('sharpe', 0) > 1 else 'negative'}">
-                {params.get('sharpe', 0):.2f}
+            <div class="hero-label">Sharpe (time)</div>
+            <div class="hero-value {'positive' if params.get('sharpe_time', params.get('sharpe', 0)) > 1 else 'negative'}">
+                {params.get('sharpe_time', params.get('sharpe', 0)):.2f}
+            </div>
+        </div>
+        <div class="hero-card">
+            <div class="hero-label">Sharpe (equity)</div>
+            <div class="hero-value {'positive' if params.get('sharpe_equity', 0) > 1 else 'negative'}">
+                {params.get('sharpe_equity', 0):.2f}
             </div>
         </div>
     </div>

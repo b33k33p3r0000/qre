@@ -280,6 +280,31 @@ class TestBulletChart:
         assert "Trend TF" in html
 
 
+class TestTrendTfScale:
+    def test_trend_tf_scale_in_strategy_flow(self):
+        params = {
+            **SAMPLE_PARAMS,
+            "macd_fast": 12, "macd_slow": 26, "macd_signal": 9,
+            "rsi_period": 14, "rsi_lower": 30, "rsi_upper": 70,
+            "rsi_lookback": 3, "trend_tf": "4h", "trend_strict": 1,
+        }
+        trades = [_make_trade(100)]
+        html = generate_report(params, trades)
+        assert "tf-scale" in html
+        assert "tf-active" in html
+
+    def test_lookback_shown_in_flow(self):
+        params = {
+            **SAMPLE_PARAMS,
+            "macd_fast": 12, "macd_slow": 26, "macd_signal": 9,
+            "rsi_period": 14, "rsi_lower": 30, "rsi_upper": 70,
+            "rsi_lookback": 5, "trend_tf": "8h", "trend_strict": 0,
+        }
+        trades = [_make_trade(100)]
+        html = generate_report(params, trades)
+        assert "lookback" in html.lower() or "Lookback" in html
+
+
 class TestStrategyParamsV4:
     def test_v4_params_shown(self):
         """v4.0 params (rsi_lookback, trend_tf, trend_strict) should appear in report."""
