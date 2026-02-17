@@ -20,6 +20,7 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 SYMBOLS = ["BTC/USDC", "SOL/USDC"]
 
 TF_LIST = ["2h", "4h", "6h", "8h", "12h", "1d"]
+TREND_TFS = ["4h", "8h", "1d"]
 BASE_TF = "1h"
 
 TF_MS: Dict[str, int] = {

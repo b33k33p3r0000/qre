@@ -30,12 +30,40 @@ def sample_data():
     }
 
 
+@pytest.fixture
+def sample_data_multi_tf():
+    """Create 1H + 4H + 8H + 1D OHLCV data for testing."""
+    np.random.seed(42)
+    n_bars = 500
+    dates_1h = pd.date_range("2025-01-01", periods=n_bars, freq="1h")
+    close_1h = 100 + np.cumsum(np.random.randn(n_bars) * 0.5)
+    high_1h = close_1h + np.abs(np.random.randn(n_bars))
+    low_1h = close_1h - np.abs(np.random.randn(n_bars))
+    open_1h = close_1h + np.random.randn(n_bars) * 0.2
+
+    data = {
+        "1h": pd.DataFrame(
+            {"open": open_1h, "high": high_1h, "low": low_1h, "close": close_1h},
+            index=dates_1h,
+        ),
+    }
+
+    # Resample to higher TFs
+    for tf, rule in [("4h", "4h"), ("8h", "8h"), ("1d", "1D")]:
+        resampled = data["1h"].resample(rule).agg(
+            {"open": "first", "high": "max", "low": "min", "close": "last"}
+        ).dropna()
+        data[tf] = resampled
+
+    return data
+
+
 class TestMACDRSIStrategy:
     def test_name(self, strategy):
         assert strategy.name == "macd_rsi"
 
     def test_version(self, strategy):
-        assert strategy.version == "3.0.0"
+        assert strategy.version == "4.0.0"
 
     def test_required_indicators(self, strategy):
         indicators = strategy.get_required_indicators()
@@ -44,13 +72,14 @@ class TestMACDRSIStrategy:
         assert "stochrsi" not in indicators
 
     def test_optuna_params_count(self, strategy):
-        """Exactly 6 Optuna params."""
+        """9 Optuna params (6 original + rsi_lookback + trend_tf + trend_strict)."""
         import optuna
         study = optuna.create_study()
         trial = study.ask()
         params = strategy.get_optuna_params(trial)
         optuna_keys = {"macd_fast", "macd_slow", "macd_signal",
-                       "rsi_period", "rsi_lower", "rsi_upper"}
+                       "rsi_period", "rsi_lower", "rsi_upper",
+                       "rsi_lookback", "trend_tf", "trend_strict"}
         assert optuna_keys.issubset(set(params.keys()))
 
     def test_macd_fast_lt_slow(self, strategy):
@@ -116,3 +145,103 @@ class TestMACDRSIStrategy:
             sample_data, params, precomputed_cache=cache
         )
         assert buy_signal.shape == (len(sample_data["1h"]),)
+
+
+class TestRSILookback:
+    def test_lookback_zero_is_legacy(self, strategy, sample_data):
+        """rsi_lookback=0 produces identical signals to v3.0."""
+        params = strategy.get_default_params()
+        buy_v3, sell_v3 = strategy.precompute_signals(sample_data, params)
+
+        params["rsi_lookback"] = 0
+        buy_v4, sell_v4 = strategy.precompute_signals(sample_data, params)
+
+        np.testing.assert_array_equal(buy_v3, buy_v4)
+        np.testing.assert_array_equal(sell_v3, sell_v4)
+
+    def test_lookback_increases_signals(self, strategy, sample_data):
+        """rsi_lookback > 0 should produce >= signals than lookback=0."""
+        params = strategy.get_default_params()
+        params["rsi_lookback"] = 0
+        buy_0, sell_0 = strategy.precompute_signals(sample_data, params)
+
+        params["rsi_lookback"] = 6
+        buy_6, sell_6 = strategy.precompute_signals(sample_data, params)
+
+        # With lookback, every v3.0 signal should still be present
+        assert (buy_0 & buy_6).sum() == buy_0.sum(), "Lookback lost original buy signals"
+        assert (sell_0 & sell_6).sum() == sell_0.sum(), "Lookback lost original sell signals"
+        # And there should be at least as many
+        assert buy_6.sum() >= buy_0.sum()
+        assert sell_6.sum() >= sell_0.sum()
+
+    def test_lookback_in_optuna_params(self, strategy):
+        """rsi_lookback is in Optuna search space."""
+        import optuna
+        study = optuna.create_study()
+        trial = study.ask()
+        params = strategy.get_optuna_params(trial)
+        assert "rsi_lookback" in params
+        assert 0 <= params["rsi_lookback"] <= 12
+
+    def test_lookback_in_default_params(self, strategy):
+        """Default rsi_lookback is 0 (backward compatible)."""
+        params = strategy.get_default_params()
+        assert params.get("rsi_lookback", 0) == 0
+
+
+class TestTrendFilter:
+    def test_trend_strict_zero_is_passthrough(self, strategy, sample_data_multi_tf):
+        """trend_strict=0 produces identical signals to no trend filter."""
+        params = strategy.get_default_params()
+        buy_no_tf, sell_no_tf = strategy.precompute_signals(sample_data_multi_tf, params)
+
+        params["trend_strict"] = 0
+        params["trend_tf"] = "4h"
+        buy_off, sell_off = strategy.precompute_signals(sample_data_multi_tf, params)
+
+        np.testing.assert_array_equal(buy_no_tf, buy_off)
+        np.testing.assert_array_equal(sell_no_tf, sell_off)
+
+    def test_trend_strict_filters_signals(self, strategy, sample_data_multi_tf):
+        """trend_strict=1 should produce <= signals than trend_strict=0."""
+        params = strategy.get_default_params()
+        params["trend_strict"] = 0
+        buy_off, sell_off = strategy.precompute_signals(sample_data_multi_tf, params)
+
+        params["trend_strict"] = 1
+        params["trend_tf"] = "4h"
+        buy_on, sell_on = strategy.precompute_signals(sample_data_multi_tf, params)
+
+        assert buy_on.sum() <= buy_off.sum()
+        assert sell_on.sum() <= sell_off.sum()
+
+    def test_trend_filter_missing_tf_passthrough(self, strategy, sample_data):
+        """If trend_tf data is missing, trend filter passes through."""
+        params_base = strategy.get_default_params()
+        buy_expected, sell_expected = strategy.precompute_signals(sample_data, params_base)
+
+        params = strategy.get_default_params()
+        params["trend_strict"] = 1
+        params["trend_tf"] = "4h"  # Not in sample_data (only has 1h)
+
+        buy_base, sell_base = strategy.precompute_signals(sample_data, params)
+        # Should not crash, should produce signals identical to no trend filter
+        np.testing.assert_array_equal(buy_base, buy_expected)
+        np.testing.assert_array_equal(sell_base, sell_expected)
+
+    def test_trend_params_in_optuna(self, strategy):
+        """trend_tf and trend_strict are in Optuna search space."""
+        import optuna
+        study = optuna.create_study()
+        trial = study.ask()
+        params = strategy.get_optuna_params(trial)
+        assert "trend_tf" in params
+        assert params["trend_tf"] in ("4h", "8h", "1d")
+        assert "trend_strict" in params
+        assert params["trend_strict"] in (0, 1)
+
+    def test_trend_default_params(self, strategy):
+        """Default trend params disable trend filter."""
+        params = strategy.get_default_params()
+        assert params.get("trend_strict", 0) == 0
