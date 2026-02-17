@@ -1525,11 +1525,11 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
     {split_html}
     {mc_html}
     {optuna_html}
-    {flow_html}
-    {strategy_html}
     {perf_html}
     {hold_dur_html}
     {heatmap_html}
+    {flow_html}
+    {strategy_html}
 
     <footer>
         QRE v0.4.0 | MACD+RSI | Anchored Walk-Forward

@@ -320,3 +320,33 @@ class TestStrategyParamsV4:
         assert "RSI lookback" in html or "rsi_lookback" in html
         assert "Trend TF" in html or "trend_tf" in html
         assert "Trend strict" in html or "trend_strict" in html
+
+
+class TestReportLayoutOrder:
+    def test_sections_in_correct_order(self):
+        params = {
+            **SAMPLE_PARAMS,
+            "split_results": [{"split": 1, "test_equity": 50500, "test_trades": 20, "test_sharpe": 2.5}],
+            "mc_confidence": "HIGH", "mc_sharpe_mean": 1.3,
+            "mc_sharpe_ci_low": 1.1, "mc_sharpe_ci_high": 1.5,
+            "macd_fast": 12, "macd_slow": 26, "macd_signal": 9,
+            "rsi_period": 14, "rsi_lower": 30, "rsi_upper": 70,
+            "rsi_lookback": 3, "trend_tf": "4h", "trend_strict": 1,
+        }
+        trades = [_make_trade(100 if i % 3 else -50, hold_bars=6+i,
+                              entry_ts=f"2025-01-{i+1:02d}T09:00:00",
+                              exit_ts=f"2025-01-{i+2:02d}T15:00:00")
+                  for i in range(35)]
+        html = generate_report(params, trades, optuna_history=[{"number": 0, "value": 50000}])
+        eq_pos = html.index("equity-chart")
+        dd_pos = html.index("drawdown-chart")
+        cum_pos = html.index("cumulative-pnl-chart")
+        streak_pos = html.index("streak-timeline-chart")
+        ls_pos = html.index("Long / Short Breakdown")
+        perf_pos = html.index("Performance Analysis")
+        heatmap_pos = html.index("pnl-heatmap-chart")
+        flow_pos = html.index("Strategy Flow")
+        params_pos = html.index("Strategy Parameters")
+
+        assert eq_pos < dd_pos < cum_pos < streak_pos < ls_pos
+        assert ls_pos < perf_pos < heatmap_pos < flow_pos < params_pos
