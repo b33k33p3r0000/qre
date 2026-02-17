@@ -15,11 +15,13 @@ from qre.report import (
 # --- Helpers ---
 
 def _make_trade(pnl_abs=100.0, direction="long", entry_ts="2025-01-01T00:00:00",
-                exit_ts="2025-01-02T00:00:00", pnl_pct=0.002, hold_bars=24):
+                exit_ts="2025-01-02T00:00:00", pnl_pct=0.002, hold_bars=24,
+                reason="signal"):
     return {
         "pnl_abs": pnl_abs, "direction": direction,
         "entry_ts": entry_ts, "exit_ts": exit_ts,
         "pnl_pct": pnl_pct, "hold_bars": hold_bars,
+        "reason": reason,
     }
 
 
@@ -193,3 +195,15 @@ class TestGenerateReport:
         trades = [{"pnl_abs": 100.0}, {"pnl_abs": -50.0}]
         html = generate_report(SAMPLE_PARAMS, trades)
         assert "<!DOCTYPE html>" in html
+
+
+class TestCatastrophicStopKeyFix:
+    def test_counts_catastrophic_stops_with_reason_key(self):
+        """Bug: report used 'exit_reason' but backtest stores 'reason'."""
+        trades = [
+            _make_trade(100, reason="signal"),
+            _make_trade(-500, reason="catastrophic_stop"),
+            _make_trade(50, reason="signal"),
+        ]
+        html = generate_report(SAMPLE_PARAMS, trades)
+        assert "1 / 3" in html

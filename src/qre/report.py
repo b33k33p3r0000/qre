@@ -372,7 +372,7 @@ def _render_strategy_flow(params: Dict[str, Any], trades: List[Dict] | None = No
     total_trades = 0
     if trades:
         total_trades = len(trades)
-        cat_stop_count = sum(1 for t in trades if t.get("exit_reason") == "catastrophic_stop")
+        cat_stop_count = sum(1 for t in trades if t.get("reason") == "catastrophic_stop")
 
     mode_label = "Long only" if long_only else "Long + Short"
 
@@ -594,7 +594,7 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
     start_equity = params.get("start_equity", 50000.0)
 
     # Catastrophic stop stats
-    cat_stops = [t for t in trades if t.get("exit_reason") == "catastrophic_stop"]
+    cat_stops = [t for t in trades if t.get("reason") == "catastrophic_stop"]
     cat_stop_count = len(cat_stops)
     cat_stop_active = cat_stop_count > 0
 
