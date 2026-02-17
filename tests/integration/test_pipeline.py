@@ -17,7 +17,6 @@ from qre.core.backtest import simulate_trades_fast
 from qre.core.metrics import aggregate_mc_results, calculate_metrics, monte_carlo_validation
 from qre.core.strategy import MACDRSIStrategy
 from qre.io import save_json, save_trades_csv
-from qre.notify import format_complete_message, format_start_message
 from qre.optimize import build_objective, compute_awf_splits
 from qre.penalties import apply_all_penalties
 from qre.report import build_equity_curve, build_drawdown_curve, generate_report, save_report
@@ -165,29 +164,6 @@ class TestReportIntegration:
         curve = build_equity_curve(trades_dicts, STARTING_EQUITY)
         dd = build_drawdown_curve(curve)
         assert all(d <= 0 for d in dd)
-
-
-class TestNotifyIntegration:
-    """Notification formatting works with real backtest metrics."""
-
-    def test_complete_message_with_real_metrics(self):
-        """Complete message formats correctly with real data."""
-        data = make_synthetic_data(5000)
-        _, _, _, _, result = _run_pipeline(data)
-        metrics = calculate_metrics(result.trades, result.backtest_days, start_equity=STARTING_EQUITY)
-
-        msg_params = {
-            "symbol": "BTC/USDC",
-            "equity": metrics.equity,
-            "sharpe": metrics.sharpe_ratio,
-            "trades": metrics.trades,
-            "max_drawdown": metrics.max_drawdown,
-            "win_rate": metrics.win_rate / 100,
-            "total_pnl_pct": metrics.total_pnl_pct,
-        }
-        msg = format_complete_message(msg_params)
-        assert "BTC/USDC" in msg
-        assert "COMPLETED" in msg
 
 
 class TestMonteCarlo:

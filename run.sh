@@ -22,13 +22,13 @@ QRE Optimizer — MACD+RSI AWF
 
 Presets:
   1) Test        —  2k trials, ~2yr, 2 splits    (~5 min)
-  2) Prod        — 10k trials, ~2yr, 3 splits    (~60 min)
-  3) Deep        — 15k trials, ~2yr, 3 splits    (~120 min)
-  4) Über        — 25k trials, ~2yr, 3 splits    (~300 min)
+  2) Prod        — 15k trials, ~21yr, 5 splits   (~90 min)
+  3) Deep        — 25k trials, ~21yr, 5 splits   (~180 min)
+  4) Über        — 35k trials, ~21yr, 5 splits   (~360 min)
   5) Custom      — You choose everything
 
-All presets use --hours 18600 --skip-recent 1080 by default
-(~2yr data, skip last 45 days). Override with --full or manual flags.
+All presets use --hours 186000 --skip-recent 720 by default
+(~21yr data, skip last 30 days). Override with --full or manual flags.
 
 Pairs:
   --btc                BTC/USDC only
@@ -60,16 +60,16 @@ EOF
 }
 
 # =============================================================================
-# DEFAULTS (2yr window + skip recent 45 days)
+# DEFAULTS (~21yr window + skip recent 30 days)
 # =============================================================================
 
-TRIALS=10000
-HOURS=18600
+TRIALS=15000
+HOURS=186000
 SPLITS=""
 PAIRS="both"
 TAG=""
 PRESET=""
-SKIP_RECENT=1080
+SKIP_RECENT=720
 FOREGROUND=false
 LOG_DIR="$SCRIPT_DIR/logs"
 mkdir -p "$LOG_DIR"
@@ -226,9 +226,9 @@ done
 
 case "$PRESET" in
     test)       TRIALS=2000;  SPLITS=2 ;;
-    production) TRIALS=10000; SPLITS=3 ;;
-    deep)       TRIALS=15000; SPLITS=3 ;;
-    uber)       TRIALS=25000; SPLITS=3 ;;
+    production) TRIALS=15000; SPLITS=5 ;;
+    deep)       TRIALS=25000; SPLITS=5 ;;
+    uber)       TRIALS=35000; SPLITS=5 ;;
     custom)     ;; # Use --trials, --hours, --splits from args
     "")
         # Interactive mode
@@ -237,14 +237,14 @@ case "$PRESET" in
         read -p "Select preset (1-5): " choice
         case "$choice" in
             1) TRIALS=2000;  SPLITS=2 ;;
-            2) TRIALS=10000; SPLITS=3 ;;
-            3) TRIALS=15000; SPLITS=3 ;;
-            4) TRIALS=25000; SPLITS=3 ;;
+            2) TRIALS=15000; SPLITS=5 ;;
+            3) TRIALS=25000; SPLITS=5 ;;
+            4) TRIALS=35000; SPLITS=5 ;;
             5)
-                read -p "Trials [10000]: " TRIALS; TRIALS="${TRIALS:-10000}"
-                read -p "Hours [18600]: " HOURS; HOURS="${HOURS:-18600}"
-                read -p "Splits [3]: " SPLITS; SPLITS="${SPLITS:-3}"
-                read -p "Skip recent hours [1080]: " SKIP_RECENT; SKIP_RECENT="${SKIP_RECENT:-1080}"
+                read -p "Trials [15000]: " TRIALS; TRIALS="${TRIALS:-15000}"
+                read -p "Hours [186000]: " HOURS; HOURS="${HOURS:-186000}"
+                read -p "Splits [5]: " SPLITS; SPLITS="${SPLITS:-5}"
+                read -p "Skip recent hours [720]: " SKIP_RECENT; SKIP_RECENT="${SKIP_RECENT:-720}"
                 ;;
             *) echo "Invalid choice"; exit 1 ;;
         esac
