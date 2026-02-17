@@ -357,69 +357,6 @@ def _render_performance_charts(trades: List[Dict]) -> tuple[str, str]:
     return html, js
 
 
-def _render_cumulative_pnl_chart(trades: List[Dict]) -> tuple[str, str]:
-    """Render cumulative P&L chart with trade markers."""
-    if not trades:
-        return "", ""
-
-    cum_pnl = []
-    running = 0.0
-    dates = []
-    colors = []
-    hover_texts = []
-    for t in trades:
-        pnl = t.get("pnl_abs", 0)
-        running += pnl
-        cum_pnl.append(round(running, 2))
-        exit_ts = t.get("exit_ts", "")
-        dates.append(exit_ts[:10] if exit_ts else "")
-        colors.append("#c3e88d" if pnl > 0 else "#ff757f")
-        hover_texts.append(f"Trade: ${pnl:+,.0f}<br>Cumulative: ${running:,.0f}")
-
-    html = """
-    <h2>Cumulative P&amp;L</h2>
-    <div class="chart-container">
-        <div id="cumulative-pnl-chart"></div>
-    </div>
-    """
-
-    js = f"""
-        Plotly.newPlot('cumulative-pnl-chart', [{{
-            x: {json.dumps(dates)},
-            y: {json.dumps(cum_pnl)},
-            type: 'scatter',
-            mode: 'lines',
-            name: 'Cumulative P&L',
-            line: {{ color: '#86e1fc', width: 2 }},
-            fill: 'tozeroy',
-            fillcolor: 'rgba(134, 225, 252, 0.08)',
-            hoverinfo: 'skip'
-        }}, {{
-            x: {json.dumps(dates)},
-            y: {json.dumps(cum_pnl)},
-            type: 'scatter',
-            mode: 'markers',
-            name: 'Trades',
-            marker: {{
-                color: {json.dumps(colors)},
-                size: 7,
-                line: {{ color: '#1e2030', width: 1 }}
-            }},
-            text: {json.dumps(hover_texts)},
-            hoverinfo: 'text'
-        }}], {{
-            paper_bgcolor: '#2f334d',
-            plot_bgcolor: '#2f334d',
-            font: {{ color: '#c8d3f5', size: 10 }},
-            margin: {{ t: 20, b: 60, l: 60, r: 20 }},
-            xaxis: {{ gridcolor: '#3b4261', title: 'Date', type: 'category', tickangle: -45 }},
-            yaxis: {{ gridcolor: '#3b4261', title: 'Cumulative P&L ($)' }},
-            showlegend: false
-        }});
-    """
-
-    return html, js
-
 
 def _render_rolling_metrics(trades: List[Dict], window: int = 30) -> tuple[str, str]:
     """Render rolling win rate, avg P&L, and Sharpe over trade sequence."""
@@ -1006,6 +943,15 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
     else:
         equity_dates = [str(i) for i in range(len(equity_curve))]
 
+    # Trade markers for equity chart (merged from Cumulative P&L)
+    marker_colors_json = json.dumps(
+        ["#c3e88d" if t.get("pnl_abs", 0) > 0 else "#ff757f" for t in trades]
+    )
+    marker_texts_json = json.dumps(
+        [f"Trade: ${t.get('pnl_abs', 0):+,.0f}<br>Equity: ${eq:,.0f}"
+         for t, eq in zip(trades, equity_curve[1:])]
+    )
+
     split_html = _render_split_results(params)
     mc_html = _render_mc_section(params)
     flow_html = _render_strategy_flow(params, trades)
@@ -1515,7 +1461,6 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
         <div id="drawdown-chart"></div>
     </div>
 
-    {cum_pnl_html}
     {rolling_html}
     {streak_html}
 
@@ -1540,16 +1485,32 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
             y: {json.dumps(equity_curve)},
             type: 'scatter',
             mode: 'lines',
+            name: 'Equity',
             line: {{ color: '#86e1fc', width: 2 }},
             fill: 'tozeroy',
-            fillcolor: 'rgba(134, 225, 252, 0.08)'
+            fillcolor: 'rgba(134, 225, 252, 0.08)',
+            hoverinfo: 'skip'
+        }}, {{
+            x: {json.dumps(equity_dates[1:])},
+            y: {json.dumps(equity_curve[1:])},
+            type: 'scatter',
+            mode: 'markers',
+            name: 'Trades',
+            marker: {{
+                color: {marker_colors_json},
+                size: 7,
+                line: {{ color: '#1e2030', width: 1 }}
+            }},
+            text: {marker_texts_json},
+            hoverinfo: 'text'
         }}], {{
             paper_bgcolor: '#2f334d',
             plot_bgcolor: '#2f334d',
             font: {{ color: '#c8d3f5', size: 10 }},
             margin: {{ t: 20, b: 60, l: 60, r: 20 }},
             xaxis: {{ gridcolor: '#3b4261', title: 'Date', type: 'category', tickangle: -45 }},
-            yaxis: {{ gridcolor: '#3b4261', title: 'Equity ($)' }}
+            yaxis: {{ gridcolor: '#3b4261', title: 'Equity ($)' }},
+            showlegend: false
         }});
 
         Plotly.newPlot('drawdown-chart', [{{
@@ -1568,7 +1529,6 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
             xaxis: {{ gridcolor: '#3b4261', title: 'Date', type: 'category', tickangle: -45 }},
             yaxis: {{ gridcolor: '#3b4261', title: 'Drawdown (%)' }}
         }});
-        {cum_pnl_js}
         {rolling_js}
         {streak_js}
         {perf_js}

@@ -218,12 +218,15 @@ class TestColorConsistency:
         assert "rgba(195, 232, 141" in html
 
 
-class TestCumulativePnlChart:
-    def test_cumulative_pnl_chart_present(self):
+class TestEquityTradeMarkers:
+    def test_equity_chart_has_trade_markers(self):
         trades = [_make_trade(100), _make_trade(-50), _make_trade(200)]
         html = generate_report(SAMPLE_PARAMS, trades)
-        assert "cumulative-pnl-chart" in html
-        assert "Cumulative P&amp;L" in html or "Cumulative P&L" in html
+        assert "equity-chart" in html
+        # Trade markers merged into equity chart
+        assert "#c3e88d" in html  # green marker for winners
+        assert "#ff757f" in html  # red marker for losers
+        assert "Trade: $" in html  # hover text
 
 
 class TestRollingMetrics:
@@ -340,7 +343,6 @@ class TestReportLayoutOrder:
         html = generate_report(params, trades, optuna_history=[{"number": 0, "value": 50000}])
         eq_pos = html.index("equity-chart")
         dd_pos = html.index("drawdown-chart")
-        cum_pos = html.index("cumulative-pnl-chart")
         streak_pos = html.index("streak-timeline-chart")
         ls_pos = html.index("Long / Short Breakdown")
         perf_pos = html.index("Performance Analysis")
@@ -348,5 +350,5 @@ class TestReportLayoutOrder:
         flow_pos = html.index("Strategy Flow")
         params_pos = html.index("Strategy Parameters")
 
-        assert eq_pos < dd_pos < cum_pos < streak_pos < ls_pos
+        assert eq_pos < dd_pos < streak_pos < ls_pos
         assert ls_pos < perf_pos < heatmap_pos < flow_pos < params_pos
