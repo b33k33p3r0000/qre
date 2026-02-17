@@ -71,17 +71,17 @@ class MACDRSIStrategy(BaseStrategy):
         """9 Optuna parameters: 6 original + rsi_lookback + trend_tf + trend_strict."""
         params = {}
 
-        params["macd_fast"] = trial.suggest_int("macd_fast", 3, 20)
-        params["macd_slow"] = trial.suggest_int("macd_slow", 15, 45)
+        params["macd_fast"] = trial.suggest_int("macd_fast", 1, 20)
+        params["macd_slow"] = trial.suggest_int("macd_slow", 10, 45)
 
         # Constraint: macd_fast must be < macd_slow with minimum spread of 5
         if params["macd_slow"] - params["macd_fast"] < 5:
             raise optuna.TrialPruned("macd_slow - macd_fast < 5")
 
-        params["macd_signal"] = trial.suggest_int("macd_signal", 2, 15)
+        params["macd_signal"] = trial.suggest_int("macd_signal", 1, 15)
         params["rsi_period"] = trial.suggest_int("rsi_period", 3, 30)
-        params["rsi_lower"] = trial.suggest_int("rsi_lower", 20, 55)
-        params["rsi_upper"] = trial.suggest_int("rsi_upper", 45, 80)
+        params["rsi_lower"] = trial.suggest_int("rsi_lower", 25, 35)
+        params["rsi_upper"] = trial.suggest_int("rsi_upper", 65, 75)
         params["rsi_lookback"] = trial.suggest_int("rsi_lookback", 0, 24)
         params["trend_tf"] = trial.suggest_categorical("trend_tf", ["4h", "8h", "1d"])
         params["trend_strict"] = trial.suggest_int("trend_strict", 0, 1)
@@ -199,13 +199,13 @@ class MACDRSIStrategy(BaseStrategy):
     def get_default_params(self) -> dict[str, Any]:
         """Default params (midpoint of Optuna ranges)."""
         return {
-            "macd_fast": 12,
-            "macd_slow": 30,
+            "macd_fast": 10,
+            "macd_slow": 27,
             "macd_signal": 8,
             "rsi_period": 16,
-            "rsi_lower": 37,
-            "rsi_upper": 62,
-            "rsi_lookback": 0,
-            "trend_tf": "4h",
+            "rsi_lower": 30,
+            "rsi_upper": 70,
+            "rsi_lookback": 12,
+            "trend_tf": "8h",
             "trend_strict": 0,
         }

@@ -105,6 +105,9 @@ class MetricsResult:
     profitable_months_ratio: float  # v4.0 NEW
     monthly_returns: List[float]  # v4.0 NEW
 
+    # Time-in-market
+    time_in_market: float  # v4.1 NEW: podíl hodin v pozici (0.0-1.0)
+
 
 def calculate_annualized_trades(trades: List[Dict], backtest_days: int) -> float:
     """Spočítá průměrný počet obchodů za rok."""
@@ -428,6 +431,7 @@ def calculate_metrics(
             max_loss_streak=0,
             profitable_months_ratio=0.0,
             monthly_returns=[],
+            time_in_market=0.0,
         )
 
     df = pd.DataFrame(trades)
@@ -510,6 +514,11 @@ def calculate_metrics(
     profitable_months = sum(1 for r in monthly_returns if r > 0)
     profitable_months_ratio = profitable_months / len(monthly_returns) if monthly_returns else 0.0
 
+    # Time-in-market (v4.1 NEW)
+    total_hold_hours = float(total_hold_bars)  # 1h bars = hours
+    total_backtest_hours = backtest_days * 24.0
+    time_in_market = min(1.0, total_hold_hours / total_backtest_hours) if total_backtest_hours > 0 else 0.0
+
     return MetricsResult(
         equity=float(final_equity),
         total_pnl=float(total_pnl),
@@ -538,6 +547,7 @@ def calculate_metrics(
         max_loss_streak=int(max_loss_streak),
         profitable_months_ratio=float(profitable_months_ratio),
         monthly_returns=monthly_returns,
+        time_in_market=float(time_in_market),
     )
 
 

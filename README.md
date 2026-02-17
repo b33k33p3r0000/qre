@@ -25,13 +25,13 @@ Založena na studii Chio (2022) — MACD+RSI dosáhlo 78–86% win rate na US eq
 
 | Parametr | Rozsah | Popis |
 |----------|--------|-------|
-| `macd_fast` | 3–20 | Rychlá EMA perioda |
-| `macd_slow` | 15–45 | Pomalá EMA perioda |
-| `macd_signal` | 2–15 | Signal line perioda |
+| `macd_fast` | 1–20 | Rychlá EMA perioda |
+| `macd_slow` | 10–45 | Pomalá EMA perioda |
+| `macd_signal` | 1–15 | Signal line perioda |
 | `rsi_period` | 3–30 | RSI výpočetní perioda |
-| `rsi_lower` | 15–50 | Práh pro oversold zónu |
-| `rsi_upper` | 50–85 | Práh pro overbought zónu |
-| `rsi_lookback` | 0–12 | RSI lookback window (bary). 0 = v3.0 chování |
+| `rsi_lower` | 25–35 | Práh pro oversold zónu (±5 od standardu 30) |
+| `rsi_upper` | 65–75 | Práh pro overbought zónu (±5 od standardu 70) |
+| `rsi_lookback` | 0–24 | RSI lookback window (bary). 0 = v3.0 chování |
 | `trend_tf` | 4h/8h/1d | Vyšší TF pro trend filtr |
 | `trend_strict` | 0–1 | Trend filtr on/off. 0 = v3.0 chování |
 

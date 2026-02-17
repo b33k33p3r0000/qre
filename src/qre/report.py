@@ -17,6 +17,24 @@ logger = logging.getLogger("qre.report")
 
 PLOTLY_CDN = "https://cdn.plot.ly/plotly-2.27.0.min.js"
 
+SHARPE_CAP = 5.0  # Sharpe values above this are displayed as ">5.0"
+
+
+def _fmt_sharpe(value: float) -> str:
+    """Format Sharpe for display: cap at 5.0 with warning indicator."""
+    if value > SHARPE_CAP:
+        return f"&gt;{SHARPE_CAP:.1f}"
+    return f"{value:.2f}"
+
+
+def _sharpe_css(value: float) -> str:
+    """CSS class for Sharpe value."""
+    if value > SHARPE_CAP:
+        return "warning"
+    if value > 1:
+        return "positive"
+    return "negative"
+
 
 def build_equity_curve(trades: List[Dict], start_equity: float) -> List[float]:
     """Build equity curve from trades. Starts at start_equity."""
@@ -46,15 +64,13 @@ def _render_split_results(params: Dict[str, Any]) -> str:
     for s in splits:
         sharpe_time = s.get("test_sharpe_time", s.get("test_sharpe", 0))
         sharpe_equity = s.get("test_sharpe_equity", 0)
-        css_time = "positive" if sharpe_time > 0 else "negative"
-        css_equity = "positive" if sharpe_equity > 0 else "negative"
         rows += (
             f'<tr>'
             f'<td>Split {s.get("split", "?")}</td>'
             f'<td>${s.get("test_equity", 0):,.2f}</td>'
             f'<td>{s.get("test_trades", 0)}</td>'
-            f'<td class="{css_time}">{sharpe_time:.4f}</td>'
-            f'<td class="{css_equity}">{sharpe_equity:.4f}</td>'
+            f'<td class="{_sharpe_css(sharpe_time)}">{_fmt_sharpe(sharpe_time)}</td>'
+            f'<td class="{_sharpe_css(sharpe_equity)}">{_fmt_sharpe(sharpe_equity)}</td>'
             f'</tr>\n'
         )
 
@@ -1089,6 +1105,7 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
         }}
         .positive {{ color: var(--accent-green); }}
         .negative {{ color: var(--accent-red); }}
+        .warning {{ color: #ffc777; }}
         .chart-container {{
             background: var(--bg-secondary);
             border-radius: 6px;
@@ -1396,14 +1413,14 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
         </div>
         <div class="hero-card">
             <div class="hero-label">Sharpe (time)</div>
-            <div class="hero-value {'positive' if params.get('sharpe_time', params.get('sharpe', 0)) > 1 else 'negative'}">
-                {params.get('sharpe_time', params.get('sharpe', 0)):.2f}
+            <div class="hero-value {_sharpe_css(params.get('sharpe_time', params.get('sharpe', 0)))}">
+                {_fmt_sharpe(params.get('sharpe_time', params.get('sharpe', 0)))}
             </div>
         </div>
         <div class="hero-card">
             <div class="hero-label">Sharpe (equity)</div>
-            <div class="hero-value {'positive' if params.get('sharpe_equity', 0) > 1 else 'negative'}">
-                {params.get('sharpe_equity', 0):.2f}
+            <div class="hero-value {_sharpe_css(params.get('sharpe_equity', 0))}">
+                {_fmt_sharpe(params.get('sharpe_equity', 0))}
             </div>
         </div>
     </div>
@@ -1448,6 +1465,10 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
         <div class="detail-row">
             <span class="detail-label">Catastrophic Stops</span>
             <span class="detail-value {'negative' if cat_stop_count > 0 else 'positive'}">{cat_stop_count} / {len(trades)}{f' ({cat_stop_count/len(trades)*100:.0f}%)' if trades else ''}</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Time in Market</span>
+            <span class="detail-value">{params.get('time_in_market', 0) * 100:.1f}%</span>
         </div>
     </div>
 

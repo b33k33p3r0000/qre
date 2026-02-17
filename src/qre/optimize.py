@@ -368,6 +368,7 @@ def run_optimization(
         "profit_factor": round(full_metrics.profit_factor, 4),
         "expectancy": round(full_metrics.expectancy, 2),
         "profitable_months_ratio": round(full_metrics.profitable_months_ratio, 4),
+        "time_in_market": round(full_metrics.time_in_market, 4),
         "split_results": split_metrics,
         "run_timestamp": run_timestamp,
         "trades_file": f"trades_{symbol.replace('/', '_')}_1h_FULL.csv",
