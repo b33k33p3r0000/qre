@@ -113,8 +113,9 @@ class TestFullPipeline:
         import optuna
         optuna.logging.set_verbosity(optuna.logging.WARNING)
         study = optuna.create_study(direction="maximize")
-        study.optimize(objective, n_trials=1, show_progress_bar=False)
-        assert study.best_value is not None
+        study.optimize(objective, n_trials=10, show_progress_bar=False)
+        completed = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
+        assert len(completed) > 0
 
 
 class TestReportIntegration:

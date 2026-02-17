@@ -22,14 +22,14 @@ Založena na studii Chio (2022) — MACD+RSI dosáhlo 78–86% win rate na US eq
 
 | Parametr | Rozsah | Popis |
 |----------|--------|-------|
-| `macd_fast` | 5–15 | Rychlá EMA perioda |
-| `macd_slow` | 17–30 | Pomalá EMA perioda |
-| `macd_signal` | 3–12 | Signal line perioda |
-| `rsi_period` | 3–25 | RSI výpočetní perioda |
-| `rsi_lower` | 20–40 | Práh pro oversold zónu |
-| `rsi_upper` | 60–80 | Práh pro overbought zónu |
+| `macd_fast` | 3–20 | Rychlá EMA perioda |
+| `macd_slow` | 15–45 | Pomalá EMA perioda |
+| `macd_signal` | 2–15 | Signal line perioda |
+| `rsi_period` | 3–30 | RSI výpočetní perioda |
+| `rsi_lower` | 15–50 | Práh pro oversold zónu |
+| `rsi_upper` | 50–85 | Práh pro overbought zónu |
 
-Constraint: `macd_fast < macd_slow` (jinak trial pruned).
+Constraint: `macd_slow - macd_fast >= 5` (minimální MACD spread, jinak trial pruned).
 
 **Vlastnosti:**
 - Jeden timeframe: 1H
@@ -173,11 +173,15 @@ Klíčové konstanty v `config.py`:
 | `BASE_TF` | 1h | Jediný timeframe |
 | `STARTING_EQUITY` | $50,000 | Per-pair alokace ($100k / 2) |
 | `BACKTEST_POSITION_PCT` | 0.25 | 25% kapitálu na trade |
-| `CATASTROPHIC_STOP_PCT` | 0.15 | -15% emergency exit |
+| `CATASTROPHIC_STOP_PCT` | 0.10 | -10% emergency exit (Chio Extreme spec) |
 | `LONG_ONLY` | False | Long + Short povoleno |
 | `MIN_HOLD_HOURS` | 2 | Min bary před exit signálem |
 | `FEE` | 0.075% | Trading fee |
 | `MIN_TRADES_YEAR_HARD` | 30 | Hard constraint |
+| `MIN_TRADES_TEST_HARD` | 5 | Hard constraint per test split |
+| `MIN_TRADES_TEST_SOFT` | 15 | Soft penalty threshold (-15%) |
+| AWF `n_splits` | 5 | Default počet AWF splitů |
+| AWF `test_size` | 0.20 | Test window = 20% dat |
 
 Trading costs (slippage): BTC 0.08%, SOL 0.18%.
 

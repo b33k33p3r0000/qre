@@ -56,7 +56,7 @@ logger = logging.getLogger("qre.optimize")
 
 
 def compute_awf_splits(
-    total_hours: int, n_splits: Optional[int] = None, test_size: float = 0.15
+    total_hours: int, n_splits: Optional[int] = None, test_size: float = 0.20
 ) -> Optional[List[Dict[str, float]]]:
     """Compute Anchored Walk-Forward splits based on data length."""
     if total_hours < ANCHORED_WF_MIN_DATA_HOURS:
@@ -110,11 +110,11 @@ def build_objective(
     base_df = data[BASE_TF]
     total_bars = len(base_df)
 
-    # Pre-compute RSI for all possible Optuna periods (3-25)
+    # Pre-compute RSI for all possible Optuna periods (3-30)
     from qre.core.indicators import rsi as compute_rsi
 
     precomputed_cache = {"rsi": {}}
-    for period in range(3, 26):
+    for period in range(3, 31):
         precomputed_cache["rsi"][period] = compute_rsi(
             base_df["close"], period
         ).values.astype(np.float64)
@@ -159,6 +159,7 @@ def build_objective(
                 train_metrics.trades_per_year,
                 test_trades=len(test_result.trades),
                 symbol=symbol,
+                params=params,
             )
             split_scores.append(penalized)
 
@@ -180,7 +181,7 @@ def run_optimization(
     results_dir: str = "results",
     run_tag: Optional[str] = None,
     skip_recent_hours: int = 0,
-    test_size: float = 0.15,
+    test_size: float = 0.20,
 ) -> Dict[str, Any]:
     """
     Run full AWF optimization pipeline for a single symbol.
@@ -199,7 +200,7 @@ def run_optimization(
     # auto_diagnose disabled — using /diagnose skill manually instead
     # register_auto_diagnose()
     run_pre_hooks({"symbol": symbol, "hours": hours, "n_trials": n_trials})
-    notify_start(symbol=symbol, n_trials=n_trials, hours=hours, n_splits=n_splits or 3, run_tag=run_tag)
+    notify_start(symbol=symbol, n_trials=n_trials, hours=hours, n_splits=n_splits or 5, run_tag=run_tag)
 
     exchange = ccxt.binance({"enableRateLimit": True})
 
@@ -422,15 +423,15 @@ def main():
     parser.add_argument("--symbol", type=str, default="BTC/USDC", choices=["BTC/USDC", "SOL/USDC"])
     parser.add_argument("--hours", type=int, default=8760)
     parser.add_argument("--trials", type=int, default=DEFAULT_TRIALS)
-    parser.add_argument("--splits", type=int, default=None)
+    parser.add_argument("--splits", type=int, default=5)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--timeout", type=int, default=0)
     parser.add_argument("--tag", type=str, default=None)
     parser.add_argument("--skip-recent", type=int, default=0,
                         help="Skip most recent N hours of data (e.g., 720 = skip last month)")
     parser.add_argument("--results-dir", type=str, default="results")
-    parser.add_argument("--test-size", type=float, default=0.15,
-                        help="Test window size as fraction (default: 0.15 = 15%%)")
+    parser.add_argument("--test-size", type=float, default=0.20,
+                        help="Test window size as fraction (default: 0.20 = 20%%)")
 
     args = parser.parse_args()
 

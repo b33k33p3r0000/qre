@@ -66,20 +66,20 @@ class MACDRSIStrategy(BaseStrategy):
     description = "Chio Extreme: MACD crossover + RSI extreme zones"
 
     def get_optuna_params(self, trial: optuna.trial.Trial, symbol: str | None = None) -> dict[str, Any]:
-        """6 Optuna parameters with evidence-based ranges."""
+        """6 Optuna parameters with expanded ranges (post-diagnose 2026-02-17)."""
         params = {}
 
-        params["macd_fast"] = trial.suggest_int("macd_fast", 5, 15)
-        params["macd_slow"] = trial.suggest_int("macd_slow", 17, 30)
+        params["macd_fast"] = trial.suggest_int("macd_fast", 3, 20)
+        params["macd_slow"] = trial.suggest_int("macd_slow", 15, 45)
 
-        # Constraint: macd_fast must be < macd_slow
-        if params["macd_fast"] >= params["macd_slow"]:
-            raise optuna.TrialPruned("macd_fast >= macd_slow")
+        # Constraint: macd_fast must be < macd_slow with minimum spread of 5
+        if params["macd_slow"] - params["macd_fast"] < 5:
+            raise optuna.TrialPruned("macd_slow - macd_fast < 5")
 
-        params["macd_signal"] = trial.suggest_int("macd_signal", 3, 12)
-        params["rsi_period"] = trial.suggest_int("rsi_period", 3, 25)
-        params["rsi_lower"] = trial.suggest_int("rsi_lower", 20, 40)
-        params["rsi_upper"] = trial.suggest_int("rsi_upper", 60, 80)
+        params["macd_signal"] = trial.suggest_int("macd_signal", 2, 15)
+        params["rsi_period"] = trial.suggest_int("rsi_period", 3, 30)
+        params["rsi_lower"] = trial.suggest_int("rsi_lower", 15, 50)
+        params["rsi_upper"] = trial.suggest_int("rsi_upper", 50, 85)
 
         return params
 
@@ -146,12 +146,12 @@ class MACDRSIStrategy(BaseStrategy):
         return buy_signal.astype(np.bool_), sell_signal.astype(np.bool_)
 
     def get_default_params(self) -> dict[str, Any]:
-        """Default params (midpoint of Optuna ranges)."""
+        """Default params (midpoint of expanded Optuna ranges)."""
         return {
-            "macd_fast": 10,
-            "macd_slow": 23,
-            "macd_signal": 7,
-            "rsi_period": 14,
-            "rsi_lower": 30,
-            "rsi_upper": 70,
+            "macd_fast": 12,
+            "macd_slow": 30,
+            "macd_signal": 8,
+            "rsi_period": 16,
+            "rsi_lower": 32,
+            "rsi_upper": 68,
         }
