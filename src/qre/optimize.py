@@ -39,6 +39,7 @@ from qre.config import (
     MONTE_CARLO_SIMULATIONS,
     STARTING_EQUITY,
     STARTUP_TRIALS_RATIO,
+    TF_MS,
     TPE_CONSIDER_ENDPOINTS,
     TPE_N_EI_CANDIDATES,
 )
@@ -204,10 +205,17 @@ def run_optimization(
     logger.info(f"Loading {symbol} data ({hours}h history)...")
     data = load_all_data(exchange, symbol, hours)
 
-    # Trim recent data if requested (1H base TF: 1 bar = 1 hour)
+    # Trim recent data if requested
     if skip_recent_hours > 0:
         if skip_recent_hours < len(data[BASE_TF]):
             data[BASE_TF] = data[BASE_TF].iloc[:-skip_recent_hours]
+        # Trim higher TFs proportionally
+        for tf in list(data.keys()):
+            if tf != BASE_TF and len(data[tf]) > 0:
+                tf_hours = TF_MS[tf] // TF_MS["1h"]
+                tf_bars_to_skip = max(1, skip_recent_hours // tf_hours)
+                if tf_bars_to_skip < len(data[tf]):
+                    data[tf] = data[tf].iloc[:-tf_bars_to_skip]
         logger.info(f"Trimmed {skip_recent_hours}h of recent data")
 
     total_bars = len(data[BASE_TF])
