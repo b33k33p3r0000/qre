@@ -22,13 +22,13 @@ QRE Optimizer — MACD+RSI AWF
 
 Presets:
   1) Test        —  2k trials, ~2yr, 2 splits    (~5 min)
-  2) Prod        — 15k trials, ~21yr, 5 splits   (~90 min)
-  3) Deep        — 25k trials, ~21yr, 5 splits   (~180 min)
-  4) Über        — 35k trials, ~21yr, 5 splits   (~360 min)
+  2) Prod        — 15k trials, ~2yr, 5 splits    (~90 min)
+  3) Deep        — 25k trials, ~2yr, 5 splits    (~180 min)
+  4) Über        — 35k trials, ~2yr, 5 splits    (~360 min)
   5) Custom      — You choose everything
 
-All presets use --hours 186000 --skip-recent 720 by default
-(~21yr data, skip last 30 days). Override with --full or manual flags.
+All presets use --hours 18600 --skip-recent 720 by default
+(~2yr data, skip last 30 days). Override with --full or manual flags.
 
 Pairs:
   --btc                BTC/USDC only
@@ -42,11 +42,11 @@ Options:
   --skip-recent N      Skip most recent N hours from training data
   --tag NAME           Run tag (e.g. 'test-v1')
   --full               Full data, no skip (--hours 8760 --skip-recent 0)
-  --fg                 Run in foreground (default: background)
+  --bg                 Run in background (default: foreground)
 
 Examples:
-  ./run.sh 2 --btc                    # Prod, BTC, background
-  ./run.sh 2 --btc --fg               # Prod, BTC, foreground
+  ./run.sh 2 --btc                    # Prod, BTC, foreground
+  ./run.sh 2 --btc --bg               # Prod, BTC, background
   ./run.sh 4 --sol                    # Über, SOL
   ./run.sh 2 --btc --full             # Prod, full data (no skip)
   ./run.sh 5 --btc --trials 8000      # Custom trials
@@ -60,17 +60,17 @@ EOF
 }
 
 # =============================================================================
-# DEFAULTS (~21yr window + skip recent 30 days)
+# DEFAULTS (~2yr window + skip recent 30 days)
 # =============================================================================
 
 TRIALS=15000
-HOURS=186000
+HOURS=18600
 SPLITS=""
 PAIRS="both"
 TAG=""
 PRESET=""
 SKIP_RECENT=720
-FOREGROUND=false
+FOREGROUND=true
 LOG_DIR="$SCRIPT_DIR/logs"
 mkdir -p "$LOG_DIR"
 
@@ -94,7 +94,8 @@ while [[ $# -gt 0 ]]; do
         --tag) TAG="$2"; shift ;;
         --skip-recent) SKIP_RECENT="$2"; shift ;;
         --full) HOURS=8760; SKIP_RECENT=0 ;;
-        --fg) FOREGROUND=true ;;
+        --bg) FOREGROUND=false ;;
+        --fg) FOREGROUND=true ;;  # backward compat
         attach)
             # Find actively written logs (modified in last 5 min)
             ACTIVE_LOGS=()
@@ -242,7 +243,7 @@ case "$PRESET" in
             4) TRIALS=35000; SPLITS=5 ;;
             5)
                 read -p "Trials [15000]: " TRIALS; TRIALS="${TRIALS:-15000}"
-                read -p "Hours [186000]: " HOURS; HOURS="${HOURS:-186000}"
+                read -p "Hours [18600]: " HOURS; HOURS="${HOURS:-18600}"
                 read -p "Splits [5]: " SPLITS; SPLITS="${SPLITS:-5}"
                 read -p "Skip recent hours [720]: " SKIP_RECENT; SKIP_RECENT="${SKIP_RECENT:-720}"
                 ;;
