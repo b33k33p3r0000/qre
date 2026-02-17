@@ -325,7 +325,7 @@ def _render_performance_charts(trades: List[Dict]) -> tuple[str, str]:
             y: lsLong,
             type: 'bar',
             name: 'Long',
-            marker: {{ color: 'rgba(255, 199, 119, 0.8)' }},
+            marker: {{ color: 'rgba(195, 232, 141, 0.8)' }},
             text: lsLong.map(function(v, i) {{ return i === 3 ? v.toFixed(1) + '%' : v; }}),
             textposition: 'outside',
             textfont: {{ size: 10, color: '#c8d3f5' }}
@@ -470,11 +470,10 @@ def _render_strategy_flow(params: Dict[str, Any], trades: List[Dict] | None = No
 def _render_strategy_params(params: Dict[str, Any]) -> str:
     """Render strategy parameters table."""
     strategy_keys = [
-        ("kB", "K smoothing"), ("dB", "D smoothing"), ("k_sell", "Sell K"),
-        ("min_hold", "Min hold (bars)"), ("p_buy", "Buy probability"),
         ("macd_fast", "MACD fast"), ("macd_slow", "MACD slow"), ("macd_signal", "MACD signal"),
-        ("macd_mode", "MACD mode"), ("rsi_mode", "RSI mode"),
-        ("rsi_upper", "RSI upper"), ("rsi_lower", "RSI lower"),
+        ("rsi_period", "RSI period"), ("rsi_lower", "RSI lower"), ("rsi_upper", "RSI upper"),
+        ("rsi_lookback", "RSI lookback"), ("trend_tf", "Trend TF"), ("trend_strict", "Trend strict"),
+        ("min_hold", "Min hold (bars)"),
     ]
 
     rows = ""

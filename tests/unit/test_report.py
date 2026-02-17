@@ -207,3 +207,29 @@ class TestCatastrophicStopKeyFix:
         ]
         html = generate_report(SAMPLE_PARAMS, trades)
         assert "1 / 3" in html
+
+
+class TestColorConsistency:
+    def test_long_short_chart_uses_green_not_yellow(self):
+        """Long bars should use green (#c3e88d) not yellow (#ffc777)."""
+        trades = [_make_trade(100, "long"), _make_trade(-50, "short")]
+        html = generate_report(SAMPLE_PARAMS, trades)
+        assert "rgba(255, 199, 119" not in html
+        assert "rgba(195, 232, 141" in html
+
+
+class TestStrategyParamsV4:
+    def test_v4_params_shown(self):
+        """v4.0 params (rsi_lookback, trend_tf, trend_strict) should appear in report."""
+        params = {
+            **SAMPLE_PARAMS,
+            "rsi_period": 14, "rsi_lookback": 3,
+            "trend_tf": "4h", "trend_strict": 1,
+            "macd_fast": 12, "macd_slow": 26, "macd_signal": 9,
+            "rsi_upper": 70, "rsi_lower": 30,
+        }
+        trades = [_make_trade(100)]
+        html = generate_report(params, trades)
+        assert "RSI lookback" in html or "rsi_lookback" in html
+        assert "Trend TF" in html or "trend_tf" in html
+        assert "Trend strict" in html or "trend_strict" in html
