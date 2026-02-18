@@ -66,11 +66,11 @@ MIN_TRADES_TEST_HARD = 5
 # =============================================================================
 
 # Sharpe soft penalty tiers: (threshold, multiplier)
-# Penalizes unrealistically high Sharpe to prevent overfitting
+# Sweet spot ~1.5-2.5 (no penalty). Higher = increasingly penalized.
 SHARPE_PENALTY_TIERS = [
-    (9.0, 0.70),   # > 9.0: score * 0.70 (-30%)
-    (6.0, 0.80),   # > 6.0: score * 0.80 (-20%)
-    (3.0, 0.90),   # > 3.0: score * 0.90 (-10%)
+    (6.0, 0.70),   # > 6.0: score * 0.70 (-30%)
+    (4.0, 0.80),   # > 4.0: score * 0.80 (-20%)
+    (2.5, 0.90),   # > 2.5: score * 0.90 (-10%)
 ]
 DEFAULT_TRIALS = 10000
 DEFAULT_TIMEOUT = 0  # 0 = no timeout
