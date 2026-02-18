@@ -18,7 +18,7 @@ from qre.core.metrics import aggregate_mc_results, calculate_metrics, monte_carl
 from qre.core.strategy import MACDRSIStrategy
 from qre.io import save_json, save_trades_csv
 from qre.optimize import build_objective, compute_awf_splits
-from qre.penalties import apply_all_penalties
+from qre.penalties import check_hard_constraints
 from qre.report import build_equity_curve, build_drawdown_curve, generate_report, save_report
 
 
@@ -76,12 +76,12 @@ class TestFullPipeline:
         assert metrics.equity > 0
         assert metrics.trades > 0
 
-    def test_penalties_on_metrics(self, data):
-        """Penalties return a non-negative score."""
+    def test_hard_constraints_on_metrics(self, data):
+        """Hard constraints pass for valid backtest output."""
         _, _, _, _, result = _run_pipeline(data)
         metrics = calculate_metrics(result.trades, result.backtest_days, start_equity=STARTING_EQUITY)
-        score = apply_all_penalties(metrics.equity, metrics.trades_per_year)
-        assert score >= 0
+        passed, reason = check_hard_constraints(metrics.trades_per_year)
+        assert passed, f"Hard constraint failed: {reason}"
 
     def test_io_save_and_load(self, data, tmp_path):
         """Results can be saved and loaded correctly."""
