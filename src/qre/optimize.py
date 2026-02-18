@@ -109,7 +109,7 @@ def build_objective(
 ) -> callable:
     """Build Optuna objective function for AWF optimization.
 
-    Returns test-fold Sharpe ratio (time-based), capped at SHARPE_CAP.
+    Returns test-fold Sharpe ratio (equity-based), capped at SHARPE_CAP.
     Hard constraints: MIN_TRADES_YEAR_HARD on train, MIN_TRADES_TEST_HARD on test.
     """
     strategy = MACDRSIStrategy()
@@ -174,13 +174,10 @@ def build_objective(
             test_metrics = calculate_metrics(
                 test_result.trades, test_result.backtest_days,
                 start_equity=STARTING_EQUITY,
-                price_data=base_df,
-                start_idx=train_end,
-                end_idx=test_end,
             )
 
-            # Score = test Sharpe (time-based), capped at SHARPE_CAP
-            score = max(0.0, min(test_metrics.sharpe_ratio_time_based, SHARPE_CAP))
+            # Score = test Sharpe (equity-based), capped at SHARPE_CAP
+            score = max(0.0, min(test_metrics.sharpe_ratio_equity_based, SHARPE_CAP))
             split_scores.append(score)
 
         if not split_scores or all(s == 0 for s in split_scores):

@@ -80,8 +80,8 @@ class MACDRSIStrategy(BaseStrategy):
 
         params["macd_signal"] = trial.suggest_int("macd_signal", 1, 15)
         params["rsi_period"] = trial.suggest_int("rsi_period", 3, 30)
-        params["rsi_lower"] = trial.suggest_int("rsi_lower", 25, 35)
-        params["rsi_upper"] = trial.suggest_int("rsi_upper", 65, 75)
+        params["rsi_lower"] = trial.suggest_int("rsi_lower", 20, 40)
+        params["rsi_upper"] = trial.suggest_int("rsi_upper", 60, 80)
         params["rsi_lookback"] = trial.suggest_int("rsi_lookback", 1, 3)
         params["trend_tf"] = trial.suggest_categorical("trend_tf", ["4h", "8h", "1d"])
         params["trend_strict"] = trial.suggest_int("trend_strict", 0, 1)

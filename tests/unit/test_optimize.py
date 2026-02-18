@@ -104,7 +104,7 @@ class TestBuildObjective:
         assert completed > 0
 
     def test_objective_returns_sharpe_range(self):
-        """Objective should return value in [0.0, 3.0] (Sharpe capped)."""
+        """Objective should return value in [0.0, 5.0] (Sharpe capped)."""
         np.random.seed(42)
         n = 2000
         dates = pd.date_range("2025-01-01", periods=n, freq="1h")
@@ -123,7 +123,7 @@ class TestBuildObjective:
             trial = study.ask()
             try:
                 result = objective(trial)
-                assert 0.0 <= result <= 3.0, f"Objective {result} outside [0, 3.0]"
+                assert 0.0 <= result <= 5.0, f"Objective {result} outside [0, 5.0]"
                 completed_values.append(result)
                 study.tell(trial, result)
             except optuna.TrialPruned:

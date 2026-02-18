@@ -64,7 +64,7 @@ def test_trend_tfs_constant():
 def test_sharpe_cap_exists():
     """SHARPE_CAP constant for objective function capping."""
     from qre.config import SHARPE_CAP
-    assert SHARPE_CAP == 3.0
+    assert SHARPE_CAP == 5.0
 
 
 def test_soft_penalty_constants_removed():

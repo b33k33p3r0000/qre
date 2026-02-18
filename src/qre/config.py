@@ -65,7 +65,7 @@ MIN_TRADES_TEST_HARD = 5
 # OPTIMIZATION
 # =============================================================================
 
-SHARPE_CAP = 3.0  # Maximum Sharpe ratio for objective function (prevent overfit)
+SHARPE_CAP = 5.0  # Maximum Sharpe ratio for objective function (prevent overfit)
 DEFAULT_TRIALS = 10000
 DEFAULT_TIMEOUT = 0  # 0 = no timeout
 
