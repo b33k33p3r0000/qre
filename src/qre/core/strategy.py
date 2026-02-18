@@ -1,5 +1,5 @@
 """
-Quant Whale Strategy Strategy v4.0
+Quant Whale Strategy v4.1
 ==========================
 
 MACD signal-line crossover + RSI extreme zones + multi-TF trend filter.
@@ -7,9 +7,9 @@ MACD signal-line crossover + RSI extreme zones + multi-TF trend filter.
 Evidence:
 - Chio (2022): MACD + RSI achieved win rates of 84%, 86%, 78% on US equities
 - Entry: MACD crossover AND RSI in extreme zone (with lookback) AND higher-TF trend
-- Exit: Opposite signal (symmetric flip)
+- Exit: Opposite signal (flip or flat, controlled by allow_flip)
 
-9 Optuna parameters. Base TF 1H + trend filter from 4H/8H/1D.
+10 Optuna parameters. Base TF 1H + trend filter from 4H/8H/1D.
 """
 
 from abc import ABC, abstractmethod
@@ -64,11 +64,11 @@ class MACDRSIStrategy(BaseStrategy):
     """
 
     name = "macd_rsi"
-    version = "4.0.0"
+    version = "4.1.0"
     description = "Quant Whale Strategy: MACD crossover + RSI extreme zones"
 
     def get_optuna_params(self, trial: optuna.trial.Trial, symbol: str | None = None) -> dict[str, Any]:
-        """9 Optuna parameters: 6 original + rsi_lookback + trend_tf + trend_strict."""
+        """10 Optuna parameters: 6 original + rsi_lookback + trend_tf + trend_strict + allow_flip."""
         params = {}
 
         params["macd_fast"] = trial.suggest_float("macd_fast", 1.0, 20.0)
@@ -85,6 +85,7 @@ class MACDRSIStrategy(BaseStrategy):
         params["rsi_lookback"] = trial.suggest_int("rsi_lookback", 4, 8)
         params["trend_tf"] = trial.suggest_categorical("trend_tf", ["4h", "8h", "1d"])
         params["trend_strict"] = trial.suggest_int("trend_strict", 0, 1)
+        params["allow_flip"] = trial.suggest_int("allow_flip", 0, 1)
 
         return params
 
@@ -208,4 +209,5 @@ class MACDRSIStrategy(BaseStrategy):
             "rsi_lookback": 6,
             "trend_tf": "8h",
             "trend_strict": 0,
+            "allow_flip": 1,  # backward compat: flip enabled by default
         }

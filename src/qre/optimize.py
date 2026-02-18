@@ -126,6 +126,8 @@ def build_objective(
             data, params, precomputed_cache=precomputed_cache,
         )
 
+        allow_flip = bool(params.get("allow_flip", 1))
+
         split_scores = []
         for split in splits:
             train_end = int(total_bars * split["train_end"])
@@ -135,6 +137,7 @@ def build_objective(
             train_result = simulate_trades_fast(
                 symbol, data, buy_signal, sell_signal,
                 start_idx=MIN_WARMUP_BARS, end_idx=train_end,
+                allow_flip=allow_flip,
             )
             if not train_result.trades:
                 split_scores.append(0.0)
@@ -149,6 +152,7 @@ def build_objective(
             test_result = simulate_trades_fast(
                 symbol, data, buy_signal, sell_signal,
                 start_idx=train_end, end_idx=test_end,
+                allow_flip=allow_flip,
             )
             if not test_result.trades or len(test_result.trades) < 3:
                 split_scores.append(0.0)
@@ -292,8 +296,9 @@ def run_optimization(
         "strategy": strategy.name, "strategy_version": strategy.version,
     })
 
+    allow_flip_final = bool(best_params.get("allow_flip", 1))
     buy_s, sell_s = strategy.precompute_signals(data, best_params)
-    full_result = simulate_trades_fast(symbol, data, buy_s, sell_s)
+    full_result = simulate_trades_fast(symbol, data, buy_s, sell_s, allow_flip=allow_flip_final)
     full_metrics = calculate_metrics(
         full_result.trades, full_result.backtest_days,
         start_equity=STARTING_EQUITY,
@@ -313,6 +318,7 @@ def run_optimization(
             tr = simulate_trades_fast(
                 symbol, data, buy_s, sell_s,
                 start_idx=MIN_WARMUP_BARS, end_idx=train_end,
+                allow_flip=allow_flip_final,
             )
             if tr.trades:
                 last_train_metrics = calculate_metrics(
@@ -323,6 +329,7 @@ def run_optimization(
         te_r = simulate_trades_fast(
             symbol, data, buy_s, sell_s,
             start_idx=train_end, end_idx=test_end,
+            allow_flip=allow_flip_final,
         )
         if te_r.trades:
             tm = calculate_metrics(

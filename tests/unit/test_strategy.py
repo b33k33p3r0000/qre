@@ -63,7 +63,7 @@ class TestMACDRSIStrategy:
         assert strategy.name == "macd_rsi"
 
     def test_version(self, strategy):
-        assert strategy.version == "4.0.0"
+        assert strategy.version == "4.1.0"
 
     def test_required_indicators(self, strategy):
         indicators = strategy.get_required_indicators()
@@ -72,12 +72,13 @@ class TestMACDRSIStrategy:
         assert "stochrsi" not in indicators
 
     def test_optuna_params_count(self, strategy):
-        """9 Optuna params (6 original + rsi_lookback + trend_tf + trend_strict)."""
+        """10 Optuna params (6 original + rsi_lookback + trend_tf + trend_strict + allow_flip)."""
         import optuna
         study = optuna.create_study()
         optuna_keys = {"macd_fast", "macd_slow", "macd_signal",
                        "rsi_period", "rsi_lower", "rsi_upper",
-                       "rsi_lookback", "trend_tf", "trend_strict"}
+                       "rsi_lookback", "trend_tf", "trend_strict",
+                       "allow_flip"}
         # Retry on prune (MACD spread constraint may reject random combos)
         for _ in range(50):
             trial = study.ask()

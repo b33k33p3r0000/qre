@@ -87,6 +87,7 @@ def trading_loop_numba(
     end_idx: int,
     catastrophic_stop_pct: float,
     long_only: bool,
+    allow_flip: bool,
 ) -> Tuple[float, np.ndarray, int]:
     """
     Numba trading loop with Long+Short support.
@@ -195,8 +196,8 @@ def trading_loop_numba(
             position = 0
             position_size = 0.0
 
-            # Flip to short
-            if not long_only and cash > 0:
+            # Flip to short (only if allow_flip)
+            if allow_flip and not long_only and cash > 0:
                 entry_price = current_price * (1.0 - slippage)
                 capital_at_entry = cash * position_pct
                 position_size = capital_at_entry / (entry_price * (1.0 + fee))
@@ -228,8 +229,8 @@ def trading_loop_numba(
             position = 0
             position_size = 0.0
 
-            # Flip to long
-            if cash > 0:
+            # Flip to long (only if allow_flip)
+            if allow_flip and cash > 0:
                 entry_price = current_price * (1.0 + slippage)
                 capital_at_entry = cash * position_pct
                 position_size = capital_at_entry / (entry_price * (1.0 + fee))
@@ -302,6 +303,7 @@ def simulate_trades_fast(
     start_idx: Optional[int] = None,
     end_idx: Optional[int] = None,
     long_only: Optional[bool] = None,
+    allow_flip: Optional[bool] = None,
 ) -> BacktestResult:
     """
     Backtest with 1D buy/sell signals. Supports Long+Short.
@@ -320,6 +322,9 @@ def simulate_trades_fast(
     """
     if long_only is None:
         long_only = LONG_ONLY
+
+    if allow_flip is None:
+        allow_flip = True  # backward compat: default = flip (v4.0 behavior)
 
     base = data[BASE_TF]
 
@@ -354,6 +359,7 @@ def simulate_trades_fast(
         end_idx=actual_end,
         catastrophic_stop_pct=CATASTROPHIC_STOP_PCT,
         long_only=long_only,
+        allow_flip=allow_flip,
     )
 
     reason_map = {0: "signal", 1: "catastrophic_stop", 2: "force_close"}
