@@ -37,7 +37,7 @@ def rsi(series: pd.Series, length: int = RSI_LENGTH) -> pd.Series:
 
 
 def macd(
-    series: pd.Series, fast_period: int = 12, slow_period: int = 26, signal_period: int = 9
+    series: pd.Series, fast_period: int | float = 12, slow_period: int = 26, signal_period: int = 9
 ) -> Tuple[pd.Series, pd.Series, pd.Series]:
     """
     MACD (Moving Average Convergence Divergence).

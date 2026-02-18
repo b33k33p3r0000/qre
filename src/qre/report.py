@@ -672,14 +672,15 @@ def _render_strategy_flow(params: Dict[str, Any], trades: List[Dict] | None = No
 def _render_strategy_params(params: Dict[str, Any]) -> str:
     """Render strategy parameters as bullet chart visualization."""
     numeric_params = [
-        ("macd_fast", "MACD fast", 3, 20),
+        ("macd_fast", "MACD fast", 1, 20),
         ("macd_slow", "MACD slow", 15, 45),
         ("macd_signal", "MACD signal", 2, 15),
         ("rsi_period", "RSI period", 3, 30),
         ("rsi_lower", "RSI lower", 15, 50),
         ("rsi_upper", "RSI upper", 50, 85),
-        ("rsi_lookback", "RSI lookback", 0, 12),
+        ("rsi_lookback", "RSI lookback", 4, 8),
         ("trend_strict", "Trend strict", 0, 1),
+        ("allow_flip", "Allow flip", 0, 1),
     ]
     categorical_params = [
         ("trend_tf", "Trend TF", ["4h", "8h", "1d"]),
