@@ -103,8 +103,8 @@ class TestBuildObjective:
                 study.tell(trial, state=optuna.trial.TrialState.PRUNED)
         assert completed > 0
 
-    def test_objective_returns_sharpe_range(self):
-        """Objective should return value in [0.0, 5.0] (Sharpe capped)."""
+    def test_objective_returns_non_negative(self):
+        """Objective should return value >= 0.0 (soft penalties, no hard cap)."""
         np.random.seed(42)
         n = 2000
         dates = pd.date_range("2025-01-01", periods=n, freq="1h")
@@ -123,7 +123,7 @@ class TestBuildObjective:
             trial = study.ask()
             try:
                 result = objective(trial)
-                assert 0.0 <= result <= 5.0, f"Objective {result} outside [0, 5.0]"
+                assert result >= 0.0, f"Objective {result} is negative"
                 completed_values.append(result)
                 study.tell(trial, result)
             except optuna.TrialPruned:

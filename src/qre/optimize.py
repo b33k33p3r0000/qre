@@ -39,7 +39,7 @@ from qre.config import (
     MIN_WARMUP_BARS,
     MONTE_CARLO_MIN_TRADES,
     MONTE_CARLO_SIMULATIONS,
-    SHARPE_CAP,
+    SHARPE_PENALTY_TIERS,
     STARTING_EQUITY,
     STARTUP_TRIALS_RATIO,
     TF_MS,
@@ -109,7 +109,7 @@ def build_objective(
 ) -> callable:
     """Build Optuna objective function for AWF optimization.
 
-    Returns test-fold Sharpe ratio (equity-based), capped at SHARPE_CAP.
+    Returns test-fold Sharpe ratio (equity-based) with tiered soft penalties.
     Hard constraints: MIN_TRADES_YEAR_HARD on train, MIN_TRADES_TEST_HARD on test.
     """
     strategy = MACDRSIStrategy()
@@ -176,8 +176,13 @@ def build_objective(
                 start_equity=STARTING_EQUITY,
             )
 
-            # Score = test Sharpe (equity-based), capped at SHARPE_CAP
-            score = max(0.0, min(test_metrics.sharpe_ratio_equity_based, SHARPE_CAP))
+            # Score = test Sharpe (equity-based) with soft penalties
+            raw_sharpe = max(0.0, test_metrics.sharpe_ratio_equity_based)
+            score = raw_sharpe
+            for threshold, multiplier in SHARPE_PENALTY_TIERS:
+                if raw_sharpe > threshold:
+                    score = raw_sharpe * multiplier
+                    break
             split_scores.append(score)
 
         if not split_scores or all(s == 0 for s in split_scores):

@@ -61,10 +61,17 @@ def test_trend_tfs_constant():
     assert "1h" not in TREND_TFS
 
 
-def test_sharpe_cap_exists():
-    """SHARPE_CAP constant for objective function capping."""
-    from qre.config import SHARPE_CAP
-    assert SHARPE_CAP == 5.0
+def test_sharpe_penalty_tiers_exist():
+    """SHARPE_PENALTY_TIERS for soft penalty on high Sharpe."""
+    from qre.config import SHARPE_PENALTY_TIERS
+    assert isinstance(SHARPE_PENALTY_TIERS, list)
+    assert len(SHARPE_PENALTY_TIERS) == 3
+    # Tiers sorted descending by threshold
+    thresholds = [t[0] for t in SHARPE_PENALTY_TIERS]
+    assert thresholds == sorted(thresholds, reverse=True)
+    # All multipliers between 0 and 1
+    for threshold, mult in SHARPE_PENALTY_TIERS:
+        assert 0 < mult < 1
 
 
 def test_soft_penalty_constants_removed():
@@ -91,4 +98,4 @@ def test_kept_constants():
     assert hasattr(config, "RSI_LENGTH")
     assert hasattr(config, "MIN_WARMUP_BARS")
     assert hasattr(config, "MIN_TRADES_YEAR_HARD")
-    assert hasattr(config, "SHARPE_CAP")
+    assert hasattr(config, "SHARPE_PENALTY_TIERS")
