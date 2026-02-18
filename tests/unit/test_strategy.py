@@ -199,7 +199,7 @@ class TestRSILookback:
         assert sell_6.sum() >= sell_0.sum()
 
     def test_lookback_in_optuna_params(self, strategy):
-        """rsi_lookback is in Optuna search space (4-8)."""
+        """rsi_lookback is in Optuna search space (1-3)."""
         import optuna
         study = optuna.create_study()
         for _ in range(50):
@@ -209,15 +209,15 @@ class TestRSILookback:
             except optuna.TrialPruned:
                 continue
             assert "rsi_lookback" in params
-            assert 4 <= params["rsi_lookback"] <= 8
+            assert 1 <= params["rsi_lookback"] <= 3
             return
         pytest.fail("All 50 trials pruned")
 
     def test_lookback_in_default_params(self, strategy):
-        """Default rsi_lookback is midpoint of range (6)."""
+        """Default rsi_lookback is midpoint of range (2)."""
         params = strategy.get_default_params()
         assert "rsi_lookback" in params
-        assert params["rsi_lookback"] == 6
+        assert params["rsi_lookback"] == 2
 
 
 class TestTrendFilter:

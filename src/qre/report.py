@@ -678,7 +678,7 @@ def _render_strategy_params(params: Dict[str, Any]) -> str:
         ("rsi_period", "RSI period", 3, 30),
         ("rsi_lower", "RSI lower", 15, 50),
         ("rsi_upper", "RSI upper", 50, 85),
-        ("rsi_lookback", "RSI lookback", 4, 8),
+        ("rsi_lookback", "RSI lookback", 1, 3),
         ("trend_strict", "Trend strict", 0, 1),
         ("allow_flip", "Allow flip", 0, 1),
     ]

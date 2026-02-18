@@ -82,7 +82,7 @@ class MACDRSIStrategy(BaseStrategy):
         params["rsi_period"] = trial.suggest_int("rsi_period", 3, 30)
         params["rsi_lower"] = trial.suggest_int("rsi_lower", 25, 35)
         params["rsi_upper"] = trial.suggest_int("rsi_upper", 65, 75)
-        params["rsi_lookback"] = trial.suggest_int("rsi_lookback", 4, 8)
+        params["rsi_lookback"] = trial.suggest_int("rsi_lookback", 1, 3)
         params["trend_tf"] = trial.suggest_categorical("trend_tf", ["4h", "8h", "1d"])
         params["trend_strict"] = trial.suggest_int("trend_strict", 0, 1)
         params["allow_flip"] = trial.suggest_int("allow_flip", 0, 1)
@@ -206,7 +206,7 @@ class MACDRSIStrategy(BaseStrategy):
             "rsi_period": 16,
             "rsi_lower": 30,
             "rsi_upper": 70,
-            "rsi_lookback": 6,
+            "rsi_lookback": 2,
             "trend_tf": "8h",
             "trend_strict": 0,
             "allow_flip": 1,  # backward compat: flip enabled by default
