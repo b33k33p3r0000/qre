@@ -61,6 +61,24 @@ def test_trend_tfs_constant():
     assert "1h" not in TREND_TFS
 
 
+def test_sharpe_cap_exists():
+    """SHARPE_CAP constant for objective function capping."""
+    from qre.config import SHARPE_CAP
+    assert SHARPE_CAP == 3.0
+
+
+def test_soft_penalty_constants_removed():
+    """All soft penalty constants removed from config."""
+    from qre import config
+    for name in [
+        "MIN_TRADES_TEST_SOFT", "LOW_TEST_TRADES_PENALTY",
+        "RSI_ASYMMETRY_THRESHOLD", "RSI_ASYMMETRY_PENALTY",
+        "SOL_MIN_TRADES_YEAR", "SOL_LOW_TRADE_PENALTY",
+        "OVERTRADING_PENALTY", "MAX_TRADES_YEAR",
+    ]:
+        assert not hasattr(config, name), f"{name} should be removed"
+
+
 def test_kept_constants():
     """Critical constants still present."""
     from qre import config
@@ -73,5 +91,4 @@ def test_kept_constants():
     assert hasattr(config, "RSI_LENGTH")
     assert hasattr(config, "MIN_WARMUP_BARS")
     assert hasattr(config, "MIN_TRADES_YEAR_HARD")
-    assert hasattr(config, "MAX_TRADES_YEAR")
-    assert hasattr(config, "OVERTRADING_PENALTY")
+    assert hasattr(config, "SHARPE_CAP")

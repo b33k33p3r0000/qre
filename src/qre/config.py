@@ -60,25 +60,12 @@ def get_slippage(symbol: str) -> float:
 
 MIN_TRADES_YEAR_HARD = 30
 MIN_TRADES_TEST_HARD = 5
-MAX_TRADES_YEAR = 500
-OVERTRADING_PENALTY = 0.15
-
-# Soft penalty: test splits with <15 trades get -15% (Sharpe unreliable)
-MIN_TRADES_TEST_SOFT = 15
-LOW_TEST_TRADES_PENALTY = 0.15
-
-# RSI asymmetry penalty: penalize strong long/short bias in RSI zones
-RSI_ASYMMETRY_THRESHOLD = 15  # |rsi_lower - (100 - rsi_upper)| > 15
-RSI_ASYMMETRY_PENALTY = 0.05  # -5% soft penalty
-
-# Per-symbol soft penalty: SOL needs more trades for statistical significance
-SOL_MIN_TRADES_YEAR = 50
-SOL_LOW_TRADE_PENALTY = 0.15
 
 # =============================================================================
 # OPTIMIZATION
 # =============================================================================
 
+SHARPE_CAP = 3.0  # Maximum Sharpe ratio for objective function (prevent overfit)
 DEFAULT_TRIALS = 10000
 DEFAULT_TIMEOUT = 0  # 0 = no timeout
 
