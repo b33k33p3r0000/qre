@@ -21,7 +21,7 @@ QRE Optimizer — MACD+RSI AWF
 =============================
 
 Presets:
-  1) Test        —  2k trials, ~2yr, 2 splits    (~5 min)
+  1) Test        —  5k trials, ~2yr, 5 splits    (~15 min)
   2) Prod        — 15k trials, ~2yr, 5 splits    (~90 min)
   3) Deep        — 25k trials, ~2yr, 5 splits    (~180 min)
   4) Über        — 35k trials, ~2yr, 5 splits    (~360 min)
@@ -226,7 +226,7 @@ done
 # =============================================================================
 
 case "$PRESET" in
-    test)       TRIALS=2000;  SPLITS=2 ;;
+    test)       TRIALS=5000;  SPLITS=5 ;;
     production) TRIALS=15000; SPLITS=5 ;;
     deep)       TRIALS=25000; SPLITS=5 ;;
     uber)       TRIALS=35000; SPLITS=5 ;;
@@ -237,7 +237,7 @@ case "$PRESET" in
         show_help
         read -p "Select preset (1-5): " choice
         case "$choice" in
-            1) TRIALS=2000;  SPLITS=2 ;;
+            1) TRIALS=5000;  SPLITS=5 ;;
             2) TRIALS=15000; SPLITS=5 ;;
             3) TRIALS=25000; SPLITS=5 ;;
             4) TRIALS=35000; SPLITS=5 ;;
