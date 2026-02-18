@@ -98,16 +98,18 @@ class TestAllowFlipBacktest:
             "BTC/USDC", sample_data_multi_tf, buy, sell, allow_flip=True,
         )
 
-        if len(result.trades) >= 5:
-            consecutive_flips = 0
-            for i in range(len(result.trades) - 1):
-                if result.trades[i]["reason"] == "signal":
-                    if result.trades[i]["exit_ts"] == result.trades[i + 1]["entry_ts"]:
-                        consecutive_flips += 1
-            signal_exits = sum(1 for t in result.trades if t["reason"] == "signal")
-            if signal_exits > 3:
-                assert consecutive_flips >= signal_exits * 0.8, \
-                    f"Only {consecutive_flips}/{signal_exits} signal exits flipped"
+        assert len(result.trades) >= 5, \
+            f"Need >= 5 trades for meaningful flip test, got {len(result.trades)}"
+        consecutive_flips = 0
+        for i in range(len(result.trades) - 1):
+            if result.trades[i]["reason"] == "signal":
+                if result.trades[i]["exit_ts"] == result.trades[i + 1]["entry_ts"]:
+                    consecutive_flips += 1
+        signal_exits = sum(1 for t in result.trades if t["reason"] == "signal")
+        assert signal_exits > 3, \
+            f"Need > 3 signal exits for meaningful test, got {signal_exits}"
+        assert consecutive_flips >= signal_exits * 0.8, \
+            f"Only {consecutive_flips}/{signal_exits} signal exits flipped"
 
     def test_flip_off_produces_flat_periods(self, strategy, sample_data_multi_tf):
         """allow_flip=0: strategy has flat periods between positions."""
@@ -121,16 +123,18 @@ class TestAllowFlipBacktest:
             "BTC/USDC", sample_data_multi_tf, buy, sell, allow_flip=False,
         )
 
-        if len(result.trades) >= 5:
-            consecutive_flips = 0
-            for i in range(len(result.trades) - 1):
-                if result.trades[i]["reason"] == "signal":
-                    if result.trades[i]["exit_ts"] == result.trades[i + 1]["entry_ts"]:
-                        consecutive_flips += 1
-            signal_exits = sum(1 for t in result.trades if t["reason"] == "signal")
-            if signal_exits > 3:
-                assert consecutive_flips < signal_exits * 0.5, \
-                    f"Too many flips ({consecutive_flips}/{signal_exits}) with allow_flip=0"
+        assert len(result.trades) >= 5, \
+            f"Need >= 5 trades for meaningful flip test, got {len(result.trades)}"
+        consecutive_flips = 0
+        for i in range(len(result.trades) - 1):
+            if result.trades[i]["reason"] == "signal":
+                if result.trades[i]["exit_ts"] == result.trades[i + 1]["entry_ts"]:
+                    consecutive_flips += 1
+        signal_exits = sum(1 for t in result.trades if t["reason"] == "signal")
+        assert signal_exits > 3, \
+            f"Need > 3 signal exits for meaningful test, got {signal_exits}"
+        assert consecutive_flips < signal_exits * 0.5, \
+            f"Too many flips ({consecutive_flips}/{signal_exits}) with allow_flip=0"
 
     def test_flip_on_backward_compat(self, strategy, sample_data_multi_tf):
         """allow_flip=True produces identical results to default (no allow_flip param)."""

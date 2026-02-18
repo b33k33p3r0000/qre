@@ -7,6 +7,10 @@ v3.0: Simplified for Quant Whale Strategy strategy.
 - 1D buy/sell signal arrays (no 2D vote matrices)
 - Long + Short positions with flipping
 - Catastrophic stop for both directions
+
+v4.1: Added allow_flip parameter.
+- allow_flip=True: position flip on signal exit (always-in behavior, v4.0 default)
+- allow_flip=False: exit to flat, new entry requires fresh signal on next bar
 """
 
 import logging
@@ -316,6 +320,9 @@ def simulate_trades_fast(
         start_idx: Start index for backtest (default: MIN_WARMUP_BARS).
         end_idx: End index for backtest (default: len(data)).
         long_only: Override LONG_ONLY config flag.
+        allow_flip: If True, exit signal opens opposite position (always-in).
+            If False, exit closes to flat; new entry needs fresh signal.
+            Default: True (backward compat with v4.0).
 
     Returns:
         BacktestResult with equity, trades list, and backtest_days.
