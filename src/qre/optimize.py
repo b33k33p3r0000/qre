@@ -34,9 +34,12 @@ from qre.config import (
     DEFAULT_TRIALS,
     ENABLE_PRUNING,
     MIN_STARTUP_TRIALS,
+    MIN_TRADES_TEST_HARD,
+    MIN_TRADES_YEAR_HARD,
     MIN_WARMUP_BARS,
     MONTE_CARLO_MIN_TRADES,
     MONTE_CARLO_SIMULATIONS,
+    SHARPE_CAP,
     STARTING_EQUITY,
     STARTUP_TRIALS_RATIO,
     TF_MS,
@@ -49,7 +52,6 @@ from qre.core.strategy import MACDRSIStrategy
 from qre.data.fetch import load_all_data
 from qre.io import save_json, save_trades_csv
 from qre.notify import notify_complete, notify_start
-from qre.penalties import apply_all_penalties
 from qre.report import save_report
 
 logger = logging.getLogger("qre.optimize")
@@ -105,7 +107,11 @@ def build_objective(
     data: Dict[str, pd.DataFrame],
     splits: List[Dict[str, float]],
 ) -> callable:
-    """Build Optuna objective function for AWF optimization."""
+    """Build Optuna objective function for AWF optimization.
+
+    Returns test-fold Sharpe ratio (time-based), capped at SHARPE_CAP.
+    Hard constraints: MIN_TRADES_YEAR_HARD on train, MIN_TRADES_TEST_HARD on test.
+    """
     strategy = MACDRSIStrategy()
     base_df = data[BASE_TF]
     total_bars = len(base_df)
@@ -133,7 +139,7 @@ def build_objective(
             train_end = int(total_bars * split["train_end"])
             test_end = int(total_bars * split["test_end"])
 
-            # TRAIN
+            # TRAIN — only for hard constraint check
             train_result = simulate_trades_fast(
                 symbol, data, buy_signal, sell_signal,
                 start_idx=MIN_WARMUP_BARS, end_idx=train_end,
@@ -148,24 +154,34 @@ def build_objective(
                 start_equity=STARTING_EQUITY,
             )
 
-            # TEST
+            # Hard constraint: minimum trades per year (on train)
+            if train_metrics.trades_per_year < MIN_TRADES_YEAR_HARD:
+                split_scores.append(0.0)
+                continue
+
+            # TEST — this is what we optimize
             test_result = simulate_trades_fast(
                 symbol, data, buy_signal, sell_signal,
                 start_idx=train_end, end_idx=test_end,
                 allow_flip=allow_flip,
             )
-            if not test_result.trades or len(test_result.trades) < 3:
+
+            # Hard constraint: minimum test trades
+            if not test_result.trades or len(test_result.trades) < MIN_TRADES_TEST_HARD:
                 split_scores.append(0.0)
                 continue
 
-            penalized = apply_all_penalties(
-                train_metrics.equity,
-                train_metrics.trades_per_year,
-                test_trades=len(test_result.trades),
-                symbol=symbol,
-                params=params,
+            test_metrics = calculate_metrics(
+                test_result.trades, test_result.backtest_days,
+                start_equity=STARTING_EQUITY,
+                price_data=base_df,
+                start_idx=train_end,
+                end_idx=test_end,
             )
-            split_scores.append(penalized)
+
+            # Score = test Sharpe (time-based), capped at SHARPE_CAP
+            score = max(0.0, min(test_metrics.sharpe_ratio_time_based, SHARPE_CAP))
+            split_scores.append(score)
 
         if not split_scores or all(s == 0 for s in split_scores):
             return 0.0

@@ -103,6 +103,40 @@ class TestBuildObjective:
                 study.tell(trial, state=optuna.trial.TrialState.PRUNED)
         assert completed > 0
 
+    def test_objective_returns_sharpe_range(self):
+        """Objective should return value in [0.0, 3.0] (Sharpe capped)."""
+        np.random.seed(42)
+        n = 2000
+        dates = pd.date_range("2025-01-01", periods=n, freq="1h")
+        close = 100 + np.cumsum(np.random.randn(n) * 0.3)
+        mock_data = {"1h": pd.DataFrame(
+            {"open": close, "high": close + 1, "low": close - 1, "close": close},
+            index=dates,
+        )}
+        splits = [{"train_end": 0.60, "test_end": 0.80}]
+        objective = build_objective(symbol="BTC/USDC", data=mock_data, splits=splits)
+
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
+        study = optuna.create_study()
+        completed_values = []
+        for _ in range(30):
+            trial = study.ask()
+            try:
+                result = objective(trial)
+                assert 0.0 <= result <= 3.0, f"Objective {result} outside [0, 3.0]"
+                completed_values.append(result)
+                study.tell(trial, result)
+            except optuna.TrialPruned:
+                study.tell(trial, state=optuna.trial.TrialState.PRUNED)
+        assert len(completed_values) > 0
+
+    def test_objective_no_penalties_import(self):
+        """Objective should not import apply_all_penalties."""
+        import inspect
+        import qre.optimize as mod
+        source = inspect.getsource(mod.build_objective)
+        assert "apply_all_penalties" not in source
+
 
 class TestNoLegacyImports:
     def test_no_split_fail_penalty(self):
