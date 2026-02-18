@@ -71,7 +71,7 @@ class MACDRSIStrategy(BaseStrategy):
         """9 Optuna parameters: 6 original + rsi_lookback + trend_tf + trend_strict."""
         params = {}
 
-        params["macd_fast"] = trial.suggest_int("macd_fast", 1, 20)
+        params["macd_fast"] = trial.suggest_float("macd_fast", 1.0, 20.0)
         params["macd_slow"] = trial.suggest_int("macd_slow", 10, 45)
 
         # Constraint: macd_fast must be < macd_slow with minimum spread of 5
@@ -107,7 +107,7 @@ class MACDRSIStrategy(BaseStrategy):
         n_bars = len(base)
 
         # MACD params
-        macd_fast = int(params.get("macd_fast", 8))
+        macd_fast = float(params.get("macd_fast", 8))
         macd_slow = int(params.get("macd_slow", 21))
         macd_signal_period = int(params.get("macd_signal", 9))
 
@@ -199,7 +199,7 @@ class MACDRSIStrategy(BaseStrategy):
     def get_default_params(self) -> dict[str, Any]:
         """Default params (midpoint of Optuna ranges)."""
         return {
-            "macd_fast": 10,
+            "macd_fast": 10.0,
             "macd_slow": 27,
             "macd_signal": 8,
             "rsi_period": 16,

@@ -133,6 +133,21 @@ class TestMACDRSIStrategy:
         params = strategy.get_default_params()
         assert "macd_mode" not in params
 
+    def test_macd_fast_is_float(self, strategy):
+        """macd_fast should be float in Optuna params."""
+        import optuna
+        study = optuna.create_study()
+        for _ in range(50):
+            trial = study.ask()
+            try:
+                params = strategy.get_optuna_params(trial)
+            except optuna.TrialPruned:
+                continue
+            assert isinstance(params["macd_fast"], float), f"macd_fast is {type(params['macd_fast'])}"
+            assert 1.0 <= params["macd_fast"] <= 20.0
+            return
+        pytest.fail("All 50 trials pruned")
+
     def test_default_params(self, strategy):
         params = strategy.get_default_params()
         assert "macd_fast" in params
