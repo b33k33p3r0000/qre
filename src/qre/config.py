@@ -65,13 +65,14 @@ MIN_TRADES_TEST_HARD = 5
 # OPTIMIZATION
 # =============================================================================
 
-# Sharpe soft penalty tiers: (threshold, multiplier)
-# Sweet spot ~1.5-2.5 (no penalty). Higher = increasingly penalized.
-SHARPE_PENALTY_TIERS = [
-    (6.0, 0.70),   # > 6.0: score * 0.70 (-30%)
-    (4.0, 0.80),   # > 4.0: score * 0.80 (-20%)
-    (2.5, 0.90),   # > 2.5: score * 0.90 (-10%)
-]
+# --- Objective: Calmar + Sharpe sanity penalty ---
+SHARPE_SUSPECT_THRESHOLD = 3.0   # OOS Sharpe above this triggers decay penalty
+SHARPE_DECAY_RATE = 0.3          # Decay rate: penalty = 1/(1 + rate*(sharpe - threshold))
+MIN_DRAWDOWN_FLOOR = 0.001       # Prevent division by zero in Calmar
+
+# --- Walk-forward purge gap ---
+PURGE_GAP_BARS = 50              # Bars skipped between train end and test start
+                                 # = max(macd_slow_max=45, rsi_period_max=30) + 5
 DEFAULT_TRIALS = 10000
 DEFAULT_TIMEOUT = 0  # 0 = no timeout
 

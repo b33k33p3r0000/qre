@@ -61,17 +61,35 @@ def test_trend_tfs_constant():
     assert "1h" not in TREND_TFS
 
 
-def test_sharpe_penalty_tiers_exist():
-    """SHARPE_PENALTY_TIERS for soft penalty on high Sharpe."""
-    from qre.config import SHARPE_PENALTY_TIERS
-    assert isinstance(SHARPE_PENALTY_TIERS, list)
-    assert len(SHARPE_PENALTY_TIERS) == 3
-    # Tiers sorted descending by threshold
-    thresholds = [t[0] for t in SHARPE_PENALTY_TIERS]
-    assert thresholds == sorted(thresholds, reverse=True)
-    # All multipliers between 0 and 1
-    for threshold, mult in SHARPE_PENALTY_TIERS:
-        assert 0 < mult < 1
+def test_calmar_objective_constants_exist():
+    """Calmar objective constants for Sharpe sanity penalty."""
+    from qre.config import (
+        SHARPE_SUSPECT_THRESHOLD,
+        SHARPE_DECAY_RATE,
+        MIN_DRAWDOWN_FLOOR,
+    )
+    assert isinstance(SHARPE_SUSPECT_THRESHOLD, float)
+    assert SHARPE_SUSPECT_THRESHOLD > 0
+
+    assert isinstance(SHARPE_DECAY_RATE, float)
+    assert SHARPE_DECAY_RATE > 0
+
+    assert isinstance(MIN_DRAWDOWN_FLOOR, float)
+    assert MIN_DRAWDOWN_FLOOR > 0
+
+
+def test_purge_gap_bars_exists():
+    """PURGE_GAP_BARS for walk-forward purge gap."""
+    from qre.config import PURGE_GAP_BARS
+    assert isinstance(PURGE_GAP_BARS, int)
+    assert PURGE_GAP_BARS >= 30
+
+
+def test_sharpe_penalty_tiers_removed():
+    """SHARPE_PENALTY_TIERS replaced by Calmar constants."""
+    from qre import config
+    assert not hasattr(config, "SHARPE_PENALTY_TIERS"), \
+        "SHARPE_PENALTY_TIERS should be removed"
 
 
 def test_soft_penalty_constants_removed():
@@ -98,4 +116,7 @@ def test_kept_constants():
     assert hasattr(config, "RSI_LENGTH")
     assert hasattr(config, "MIN_WARMUP_BARS")
     assert hasattr(config, "MIN_TRADES_YEAR_HARD")
-    assert hasattr(config, "SHARPE_PENALTY_TIERS")
+    assert hasattr(config, "SHARPE_SUSPECT_THRESHOLD")
+    assert hasattr(config, "SHARPE_DECAY_RATE")
+    assert hasattr(config, "MIN_DRAWDOWN_FLOOR")
+    assert hasattr(config, "PURGE_GAP_BARS")
