@@ -418,6 +418,8 @@ def run_optimization(
         "sharpe_equity": round(full_metrics.sharpe_ratio_equity_based, 4),
         "sortino": round(full_metrics.sortino_ratio, 4),
         "calmar": round(full_metrics.calmar_ratio, 4),
+        "calmar_raw": round(full_metrics.calmar_ratio, 4),
+        "objective_type": "calmar",
         "recovery_factor": round(full_metrics.recovery_factor, 4),
         "profit_factor": round(full_metrics.profit_factor, 4),
         "expectancy": round(full_metrics.expectancy, 2),
