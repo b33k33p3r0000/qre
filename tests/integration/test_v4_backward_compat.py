@@ -48,7 +48,12 @@ def realistic_data():
 
 class TestV4BackwardCompat:
     def test_v3_params_produce_same_signals(self, strategy, realistic_data):
-        """v3.0 default params (no lookback, no trend) = identical signals."""
+        """v4.1 with lookback=4 and trend_strict=0: superset of v3.0 signals.
+
+        NOTE: v3.0 exact compat (lookback=0) intentionally dropped in v4.1
+        because lookback < 4 is excluded from the search space to prevent
+        RSI bypass (diagnosed in run-legit-v1).
+        """
         v3_params = {
             "macd_fast": 12, "macd_slow": 30, "macd_signal": 8,
             "rsi_period": 16, "rsi_lower": 32, "rsi_upper": 68,
@@ -58,12 +63,16 @@ class TestV4BackwardCompat:
         data_1h_only = {"1h": realistic_data["1h"]}
         buy_v3, sell_v3 = strategy.precompute_signals(data_1h_only, v3_params)
 
-        # v4.0 with legacy params
-        v4_params = {**v3_params, "rsi_lookback": 0, "trend_strict": 0, "trend_tf": "4h"}
+        # v4.1 with minimum lookback (4) — superset of v3.0 signals
+        v4_params = {**v3_params, "rsi_lookback": 4, "trend_strict": 0, "trend_tf": "4h"}
         buy_v4, sell_v4 = strategy.precompute_signals(realistic_data, v4_params)
 
-        np.testing.assert_array_equal(buy_v3, buy_v4)
-        np.testing.assert_array_equal(sell_v3, sell_v4)
+        # With lookback=4, every v3.0 signal is still present (superset)
+        assert (buy_v3 & buy_v4).sum() == buy_v3.sum(), "v4.1 lost v3.0 buy signals"
+        assert (sell_v3 & sell_v4).sum() == sell_v3.sum(), "v4.1 lost v3.0 sell signals"
+        # v4.1 may have additional signals due to lookback window
+        assert buy_v4.sum() >= buy_v3.sum()
+        assert sell_v4.sum() >= sell_v3.sum()
 
     def test_lookback_generates_more_trades(self, strategy, realistic_data):
         """rsi_lookback=6 generates strictly more signals than lookback=0."""

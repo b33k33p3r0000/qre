@@ -145,9 +145,31 @@ class TestMACDRSIStrategy:
             except optuna.TrialPruned:
                 continue
             assert isinstance(params["macd_fast"], float), f"macd_fast is {type(params['macd_fast'])}"
-            assert 1.0 <= params["macd_fast"] <= 20.0
+            assert 2.0 <= params["macd_fast"] <= 20.0
             return
         pytest.fail("All 50 trials pruned")
+
+    def test_search_space_lower_bounds(self, strategy):
+        """Degenerate parameter values must be excluded from search space."""
+        import optuna
+
+        study = optuna.create_study()
+        for _ in range(100):
+            trial = study.ask()
+            try:
+                params = strategy.get_optuna_params(trial)
+            except optuna.TrialPruned:
+                continue
+            # macd_fast >= 2.0 (EMA(1.0) = close price = degenerate)
+            assert params["macd_fast"] >= 2.0, f"macd_fast={params['macd_fast']} < 2.0"
+            # macd_signal >= 2 (signal=1 = no smoothing = degenerate)
+            assert params["macd_signal"] >= 2, f"macd_signal={params['macd_signal']} < 2"
+            # rsi_period >= 5 (RSI(3) = noise)
+            assert params["rsi_period"] >= 5, f"rsi_period={params['rsi_period']} < 5"
+            # rsi_lookback >= 4
+            assert params["rsi_lookback"] >= 4, f"rsi_lookback={params['rsi_lookback']} < 4"
+            return
+        pytest.fail("All 100 trials pruned")
 
     def test_default_params(self, strategy):
         params = strategy.get_default_params()
@@ -199,7 +221,7 @@ class TestRSILookback:
         assert sell_6.sum() >= sell_0.sum()
 
     def test_lookback_in_optuna_params(self, strategy):
-        """rsi_lookback is in Optuna search space (1-3)."""
+        """rsi_lookback is in Optuna search space (4-8)."""
         import optuna
         study = optuna.create_study()
         for _ in range(50):
@@ -209,15 +231,15 @@ class TestRSILookback:
             except optuna.TrialPruned:
                 continue
             assert "rsi_lookback" in params
-            assert 1 <= params["rsi_lookback"] <= 3
+            assert 4 <= params["rsi_lookback"] <= 8
             return
         pytest.fail("All 50 trials pruned")
 
     def test_lookback_in_default_params(self, strategy):
-        """Default rsi_lookback is midpoint of range (2)."""
+        """Default rsi_lookback is midpoint of range (6)."""
         params = strategy.get_default_params()
         assert "rsi_lookback" in params
-        assert params["rsi_lookback"] == 2
+        assert params["rsi_lookback"] == 6
 
 
 class TestTrendFilter:
