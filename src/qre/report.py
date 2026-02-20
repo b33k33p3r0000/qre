@@ -808,7 +808,7 @@ def _render_optuna_history(optuna_history: List[Dict]) -> tuple[str, str]:
             margin: {{ t: 30, b: 40, l: 60, r: 20 }},
             title: {{ text: 'Optimization Progress', font: {{ size: 12, color: '#636da6' }} }},
             xaxis: {{ gridcolor: '#3b4261', title: 'Trial #' }},
-            yaxis: {{ gridcolor: '#3b4261', title: 'Objective Value (Equity)' }},
+            yaxis: {{ gridcolor: '#3b4261', title: 'Objective Value (Calmar)' }},
             legend: {{ font: {{ size: 10 }} }}
         }});
     """
@@ -1392,7 +1392,7 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
 <body>
     <h1>QRE Report: {symbol}</h1>
     <p style="color: var(--text-secondary); margin-bottom: 20px;">
-        Generated: {now} | Start equity: ${start_equity:,.0f}
+        Generated: {now} | Start equity: ${start_equity:,.0f} | Objective: {params.get('objective_type', 'sharpe').upper()}
     </p>
 
     <h2>Key Metrics</h2>
@@ -1411,9 +1411,9 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
             </div>
         </div>
         <div class="hero-card">
-            <div class="hero-label">Sharpe (time)</div>
-            <div class="hero-value {_sharpe_css(params.get('sharpe_time', params.get('sharpe', 0)))}">
-                {_fmt_sharpe(params.get('sharpe_time', params.get('sharpe', 0)))}
+            <div class="hero-label">Calmar Ratio</div>
+            <div class="hero-value {'positive' if params.get('calmar', 0) > 1 else 'negative'}">
+                {params.get('calmar', 0):.2f}
             </div>
         </div>
         <div class="hero-card">
@@ -1442,12 +1442,12 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
             <span class="detail-value">{params.get('trades_per_year', 0):.1f}</span>
         </div>
         <div class="detail-row">
-            <span class="detail-label">Sortino</span>
-            <span class="detail-value">{params.get('sortino', 0):.2f}</span>
+            <span class="detail-label">Sharpe (time)</span>
+            <span class="detail-value {_sharpe_css(params.get('sharpe_time', params.get('sharpe', 0)))}">{_fmt_sharpe(params.get('sharpe_time', params.get('sharpe', 0)))}</span>
         </div>
         <div class="detail-row">
-            <span class="detail-label">Calmar</span>
-            <span class="detail-value">{params.get('calmar', 0):.2f}</span>
+            <span class="detail-label">Sortino</span>
+            <span class="detail-value">{params.get('sortino', 0):.2f}</span>
         </div>
         <div class="detail-row">
             <span class="detail-label">Recovery Factor</span>
