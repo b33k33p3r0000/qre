@@ -43,6 +43,17 @@ class TestComputeAwfSplits:
             assert "test_end" in s
             assert s["test_end"] > s["train_end"]
 
+    def test_splits_have_purge_gap(self):
+        """Each split must have a gap between train_end and test_start."""
+        from qre.config import PURGE_GAP_BARS
+        total_hours = 20000
+        splits = compute_awf_splits(total_hours, n_splits=5)
+        assert splits is not None
+        for split in splits:
+            assert "test_start" in split, "Split must have explicit test_start key"
+            gap_hours = (split["test_start"] - split["train_end"]) * total_hours
+            assert gap_hours >= PURGE_GAP_BARS - 1, f"Gap {gap_hours:.0f}h < {PURGE_GAP_BARS} bars"
+
 
 class TestCreateSampler:
     def test_returns_sampler(self):

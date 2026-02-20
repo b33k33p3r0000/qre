@@ -40,6 +40,7 @@ from qre.config import (
     MIN_WARMUP_BARS,
     MONTE_CARLO_MIN_TRADES,
     MONTE_CARLO_SIMULATIONS,
+    PURGE_GAP_BARS,
     SHARPE_DECAY_RATE,
     SHARPE_SUSPECT_THRESHOLD,
     STARTING_EQUITY,
@@ -66,20 +67,38 @@ def compute_awf_splits(
     if total_hours < ANCHORED_WF_MIN_DATA_HOURS:
         return None
 
+    purge_frac = PURGE_GAP_BARS / total_hours  # gap as fraction of total data
+
     if n_splits is not None and n_splits >= 2:
         splits = []
         train_start = 0.50
-        available = 1.0 - train_start - test_size
+        available = 1.0 - train_start - test_size - purge_frac
         train_step = available / n_splits
         for i in range(n_splits):
             train_end = train_start + (i + 1) * train_step
-            test_end = min(train_end + test_size, 1.0)
-            splits.append({"train_end": train_end, "test_end": test_end})
+            test_start = train_end + purge_frac
+            test_end = min(test_start + test_size, 1.0)
+            splits.append({
+                "train_end": train_end,
+                "test_start": test_start,
+                "test_end": test_end,
+            })
         return splits
 
-    if total_hours < ANCHORED_WF_SHORT_THRESHOLD_HOURS:
-        return list(ANCHORED_WF_SPLITS_SHORT)
-    return list(ANCHORED_WF_SPLITS)
+    # Static splits — add purge gap
+    base_splits = (
+        ANCHORED_WF_SPLITS_SHORT
+        if total_hours < ANCHORED_WF_SHORT_THRESHOLD_HOURS
+        else ANCHORED_WF_SPLITS
+    )
+    return [
+        {
+            "train_end": s["train_end"],
+            "test_start": s["train_end"] + purge_frac,
+            "test_end": s["test_end"],
+        }
+        for s in base_splits
+    ]
 
 
 def create_sampler(seed: int, n_trials: int) -> optuna.samplers.BaseSampler:
@@ -139,6 +158,7 @@ def build_objective(
         split_scores = []
         for split in splits:
             train_end = int(total_bars * split["train_end"])
+            test_start = int(total_bars * split.get("test_start", split["train_end"]))
             test_end = int(total_bars * split["test_end"])
 
             # TRAIN — only for hard constraint check
@@ -161,10 +181,10 @@ def build_objective(
                 split_scores.append(0.0)
                 continue
 
-            # TEST — this is what we optimize
+            # TEST — this is what we optimize (start after purge gap)
             test_result = simulate_trades_fast(
                 symbol, data, buy_signal, sell_signal,
-                start_idx=train_end, end_idx=test_end,
+                start_idx=test_start, end_idx=test_end,
                 allow_flip=allow_flip,
             )
 
@@ -258,8 +278,9 @@ def run_optimization(
     logger.info(f"AWF: {len(splits)} splits, {total_bars} total bars")
     for i, s in enumerate(splits):
         te = int(total_bars * s["train_end"])
+        ts = int(total_bars * s.get("test_start", s["train_end"]))
         tse = int(total_bars * s["test_end"])
-        logger.info(f"  Split {i+1}: Train 0-{te}, Test {te}-{tse}")
+        logger.info(f"  Split {i+1}: Train 0-{te}, Purge {te}-{ts}, Test {ts}-{tse}")
 
     # 3. Run Optuna
     sampler = create_sampler(seed, n_trials)
@@ -337,6 +358,7 @@ def run_optimization(
     last_test_metrics = None
     for i, split in enumerate(splits):
         train_end = int(total_bars * split["train_end"])
+        test_start = int(total_bars * split.get("test_start", split["train_end"]))
         test_end = int(total_bars * split["test_end"])
 
         if i == len(splits) - 1:
@@ -353,13 +375,13 @@ def run_optimization(
 
         te_r = simulate_trades_fast(
             symbol, data, buy_s, sell_s,
-            start_idx=train_end, end_idx=test_end,
+            start_idx=test_start, end_idx=test_end,
             allow_flip=allow_flip_final,
         )
         if te_r.trades:
             tm = calculate_metrics(
                 te_r.trades, te_r.backtest_days, start_equity=STARTING_EQUITY,
-                price_data=base_df, start_idx=train_end, end_idx=test_end,
+                price_data=base_df, start_idx=test_start, end_idx=test_end,
             )
             split_entry = {
                 "split": i + 1,
