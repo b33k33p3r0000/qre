@@ -33,13 +33,15 @@ from qre.config import (
     BASE_TF,
     DEFAULT_TRIALS,
     ENABLE_PRUNING,
+    MIN_DRAWDOWN_FLOOR,
     MIN_STARTUP_TRIALS,
     MIN_TRADES_TEST_HARD,
     MIN_TRADES_YEAR_HARD,
     MIN_WARMUP_BARS,
     MONTE_CARLO_MIN_TRADES,
     MONTE_CARLO_SIMULATIONS,
-    SHARPE_PENALTY_TIERS,
+    SHARPE_DECAY_RATE,
+    SHARPE_SUSPECT_THRESHOLD,
     STARTING_EQUITY,
     STARTUP_TRIALS_RATIO,
     TF_MS,
@@ -109,7 +111,7 @@ def build_objective(
 ) -> callable:
     """Build Optuna objective function for AWF optimization.
 
-    Returns test-fold Sharpe ratio (equity-based) with tiered soft penalties.
+    Returns test-fold Calmar ratio with smooth Sharpe decay penalty.
     Hard constraints: MIN_TRADES_YEAR_HARD on train, MIN_TRADES_TEST_HARD on test.
     """
     strategy = MACDRSIStrategy()
@@ -176,14 +178,19 @@ def build_objective(
                 start_equity=STARTING_EQUITY,
             )
 
-            # Score = test Sharpe (equity-based) with soft penalties
-            raw_sharpe = max(0.0, test_metrics.sharpe_ratio_equity_based)
-            score = raw_sharpe
-            for threshold, multiplier in SHARPE_PENALTY_TIERS:
-                if raw_sharpe > threshold:
-                    score = raw_sharpe * multiplier
-                    break
-            split_scores.append(score)
+            # Score = Calmar ratio with smooth Sharpe decay penalty
+            annual_return = test_metrics.total_pnl_pct / (test_result.backtest_days / 365.25)
+            max_dd = abs(test_metrics.max_drawdown / 100.0)  # convert % to fraction
+            raw_calmar = annual_return / max(max_dd, MIN_DRAWDOWN_FLOOR)
+            raw_calmar = max(0.0, raw_calmar)
+
+            # Smooth Sharpe decay — penalize suspiciously high Sharpe
+            sharpe = max(0.0, test_metrics.sharpe_ratio_equity_based)
+            if sharpe > SHARPE_SUSPECT_THRESHOLD:
+                penalty = 1.0 / (1.0 + SHARPE_DECAY_RATE * (sharpe - SHARPE_SUSPECT_THRESHOLD))
+                raw_calmar *= penalty
+
+            split_scores.append(raw_calmar)
 
         if not split_scores or all(s == 0 for s in split_scores):
             return 0.0

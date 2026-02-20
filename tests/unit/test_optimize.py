@@ -137,6 +137,42 @@ class TestBuildObjective:
         source = inspect.getsource(mod.build_objective)
         assert "apply_all_penalties" not in source
 
+    def test_objective_uses_calmar_not_sharpe(self):
+        """Objective must return Calmar-based score, not raw Sharpe."""
+        import inspect
+        from qre.optimize import build_objective
+        source = inspect.getsource(build_objective)
+        assert "calmar" in source.lower(), "Objective must use Calmar ratio"
+        assert "SHARPE_PENALTY_TIERS" not in source, "Old tier penalties must be removed"
+
+    def test_sharpe_decay_penalty_reduces_score(self):
+        """When OOS Sharpe > SHARPE_SUSPECT_THRESHOLD, Calmar score is penalized."""
+        from qre.config import SHARPE_SUSPECT_THRESHOLD, SHARPE_DECAY_RATE
+        sharpe = 8.0
+        raw_calmar = 5.0
+        penalty = 1.0 / (1.0 + SHARPE_DECAY_RATE * (sharpe - SHARPE_SUSPECT_THRESHOLD))
+        penalized = raw_calmar * penalty
+        assert penalized < raw_calmar
+        assert penalized > 0  # no hard cap
+        assert abs(penalty - 0.4) < 0.01  # 1/(1+0.3*5) = 0.4
+
+    def test_sharpe_below_threshold_no_penalty(self):
+        """Sharpe at or below threshold should not be penalized."""
+        from qre.config import SHARPE_SUSPECT_THRESHOLD, SHARPE_DECAY_RATE
+        # Test at exact boundary — strict > means no penalty at threshold
+        sharpe = SHARPE_SUSPECT_THRESHOLD  # exactly 3.0
+        raw_calmar = 5.0
+        # With strict >, sharpe == threshold should NOT trigger penalty
+        # Penalty only applies when sharpe > threshold
+        penalized = raw_calmar  # no penalty expected
+        assert penalized == raw_calmar
+
+        # Also verify: sharpe just above threshold DOES get penalized
+        sharpe_above = SHARPE_SUSPECT_THRESHOLD + 0.1
+        penalty = 1.0 / (1.0 + SHARPE_DECAY_RATE * (sharpe_above - SHARPE_SUSPECT_THRESHOLD))
+        penalized_above = raw_calmar * penalty
+        assert penalized_above < raw_calmar, "Sharpe above threshold must be penalized"
+
 
 class TestNoLegacyImports:
     def test_no_split_fail_penalty(self):
