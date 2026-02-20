@@ -17,13 +17,11 @@ logger = logging.getLogger("qre.report")
 
 PLOTLY_CDN = "https://cdn.plot.ly/plotly-2.27.0.min.js"
 
-SHARPE_CAP = 5.0  # Sharpe values above this are displayed as ">5.0"
+SHARPE_CAP = 5.0  # Sharpe values above this get warning CSS class
 
 
 def _fmt_sharpe(value: float) -> str:
-    """Format Sharpe for display: cap at 5.0 with warning indicator."""
-    if value > SHARPE_CAP:
-        return f"&gt;{SHARPE_CAP:.1f}"
+    """Format Sharpe for display: always show exact value."""
     return f"{value:.2f}"
 
 
