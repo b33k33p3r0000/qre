@@ -15,6 +15,7 @@ Only AWF mode. Only Quant Whale Strategy (MACD+RSI) strategy.
 """
 
 import logging
+import math
 import signal
 import time
 from datetime import datetime, timezone
@@ -44,6 +45,7 @@ from qre.config import (
     SHARPE_DECAY_RATE,
     SHARPE_SUSPECT_THRESHOLD,
     STARTING_EQUITY,
+    TARGET_TRADES_YEAR,
     STARTUP_TRIALS_RATIO,
     TF_MS,
     TPE_CONSIDER_ENDPOINTS,
@@ -130,7 +132,7 @@ def build_objective(
 ) -> callable:
     """Build Optuna objective function for AWF optimization.
 
-    Returns test-fold Calmar ratio with smooth Sharpe decay penalty.
+    Returns log(1+Calmar) with trade count ramp and smooth Sharpe decay penalty.
     Hard constraints: MIN_TRADES_YEAR_HARD on train, MIN_TRADES_TEST_HARD on test.
     """
     strategy = MACDRSIStrategy()
@@ -198,19 +200,26 @@ def build_objective(
                 start_equity=STARTING_EQUITY,
             )
 
-            # Score = Calmar ratio with smooth Sharpe decay penalty
+            # Score = Log Calmar with trade ramp and Sharpe decay
             annual_return = test_metrics.total_pnl_pct / (test_result.backtest_days / 365.25)
             max_dd = abs(test_metrics.max_drawdown / 100.0)  # convert % to fraction
             raw_calmar = annual_return / max(max_dd, MIN_DRAWDOWN_FLOOR)
             raw_calmar = max(0.0, raw_calmar)
 
+            # Log dampening — compress extreme Calmar values
+            log_calmar = math.log(1.0 + raw_calmar)
+
+            # Trade count ramp — penalize low frequency
+            trades_per_year = len(test_result.trades) / (test_result.backtest_days / 365.25)
+            trade_mult = min(1.0, max(0.0, trades_per_year / TARGET_TRADES_YEAR))
+
             # Smooth Sharpe decay — penalize suspiciously high Sharpe
             sharpe = max(0.0, test_metrics.sharpe_ratio_equity_based)
             if sharpe > SHARPE_SUSPECT_THRESHOLD:
                 penalty = 1.0 / (1.0 + SHARPE_DECAY_RATE * (sharpe - SHARPE_SUSPECT_THRESHOLD))
-                raw_calmar *= penalty
+                log_calmar *= penalty
 
-            split_scores.append(raw_calmar)
+            split_scores.append(log_calmar * trade_mult)
 
         if not split_scores or all(s == 0 for s in split_scores):
             return 0.0

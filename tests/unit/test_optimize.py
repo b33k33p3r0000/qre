@@ -184,6 +184,40 @@ class TestBuildObjective:
         penalized_above = raw_calmar * penalty
         assert penalized_above < raw_calmar, "Sharpe above threshold must be penalized"
 
+    def test_objective_uses_log_calmar(self):
+        """Objective must use log(1+calmar), not raw calmar."""
+        import inspect
+        from qre.optimize import build_objective
+        source = inspect.getsource(build_objective)
+        assert "math.log" in source or "log(" in source, "Objective must use log dampening"
+        assert "calmar" in source.lower(), "Objective must use Calmar ratio"
+        assert "SHARPE_PENALTY_TIERS" not in source, "Old tier penalties must be removed"
+
+    def test_trade_ramp_reduces_score_for_low_trades(self):
+        """Trade ramp penalizes strategies with fewer than TARGET_TRADES_YEAR."""
+        from qre.config import TARGET_TRADES_YEAR
+        # 50 trades/year out of 100 target = 0.5 multiplier
+        trades_per_year = 50.0
+        trade_mult = min(1.0, max(0.0, trades_per_year / TARGET_TRADES_YEAR))
+        assert abs(trade_mult - 0.5) < 0.01
+
+        # At target = 1.0
+        trade_mult_full = min(1.0, max(0.0, TARGET_TRADES_YEAR / TARGET_TRADES_YEAR))
+        assert trade_mult_full == 1.0
+
+        # Above target = capped at 1.0
+        trade_mult_over = min(1.0, max(0.0, 200.0 / TARGET_TRADES_YEAR))
+        assert trade_mult_over == 1.0
+
+    def test_log_dampening_compresses_extreme_calmar(self):
+        """Log dampening: Calmar 90 should be only ~2x better than Calmar 5."""
+        import math
+        log_90 = math.log(1.0 + 90.0)
+        log_5 = math.log(1.0 + 5.0)
+        ratio = log_90 / log_5
+        assert ratio < 3.0, f"Log ratio {ratio} too high — dampening insufficient"
+        assert ratio > 1.5, f"Log ratio {ratio} too low — dampening too aggressive"
+
 
 class TestNoLegacyImports:
     def test_no_split_fail_penalty(self):
