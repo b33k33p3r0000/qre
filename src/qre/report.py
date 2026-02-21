@@ -980,11 +980,22 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
             font-size: 28px;
             font-weight: bold;
         }}
+        .detail-group {{
+            margin-bottom: 16px;
+        }}
+        .detail-group-title {{
+            font-size: 11px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 6px;
+            font-weight: normal;
+        }}
         .detail-list {{
             background: var(--bg-secondary);
             border-radius: 8px;
             padding: 14px 18px;
-            margin-bottom: 16px;
+            margin-bottom: 0;
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 0;
@@ -1362,62 +1373,77 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
         </div>
     </div>
 
-    <div class="detail-list">
-        <div class="detail-row">
-            <span class="detail-label">Max Drawdown</span>
-            <span class="detail-value negative">{params.get('max_drawdown', 0):.1f}%</span>
+    <div class="detail-group">
+        <h3 class="detail-group-title">Risk &amp; Returns</h3>
+        <div class="detail-list">
+            <div class="detail-row">
+                <span class="detail-label">Max Drawdown</span>
+                <span class="detail-value negative">{params.get('max_drawdown', 0):.1f}%</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Sharpe (time)</span>
+                <span class="detail-value {_sharpe_css(params.get('sharpe_time', params.get('sharpe', 0)))}">{_fmt_sharpe(params.get('sharpe_time', params.get('sharpe', 0)))}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Sortino</span>
+                <span class="detail-value">{params.get('sortino', 0):.2f}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Log Calmar (objective)</span>
+                <span class="detail-value">{params.get('log_calmar', 0):.4f}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Recovery Factor</span>
+                <span class="detail-value">{params.get('recovery_factor', 0):.2f}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Profit Factor</span>
+                <span class="detail-value">{params.get('profit_factor', 0):.2f}</span>
+            </div>
         </div>
-        <div class="detail-row">
-            <span class="detail-label">Win Rate</span>
-            <span class="detail-value {'positive' if params.get('win_rate', 0) > 0.5 else 'negative'}">{params.get('win_rate', 0) * 100:.1f}%</span>
+    </div>
+
+    <div class="detail-group">
+        <h3 class="detail-group-title">Trade Statistics</h3>
+        <div class="detail-list">
+            <div class="detail-row">
+                <span class="detail-label">Trades</span>
+                <span class="detail-value">{params.get('trades', 0)}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Trades/Year</span>
+                <span class="detail-value">{params.get('trades_per_year', 0):.1f}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Win Rate</span>
+                <span class="detail-value {'positive' if params.get('win_rate', 0) > 0.5 else 'negative'}">{params.get('win_rate', 0) * 100:.1f}%</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Expectancy</span>
+                <span class="detail-value">${params.get('expectancy', 0):.2f}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Avg Win / Avg Loss</span>
+                <span class="detail-value">${avg_win:,.0f} / ${avg_loss:,.0f} ({win_loss_ratio:.2f}x)</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Catastrophic Stops</span>
+                <span class="detail-value {'negative' if cat_stop_count > 0 else 'positive'}">{cat_stop_count} / {len(trades)}{f' ({cat_stop_count/len(trades)*100:.0f}%)' if trades else ''}</span>
+            </div>
         </div>
-        <div class="detail-row">
-            <span class="detail-label">Profitable Months</span>
-            <span class="detail-value {'positive' if params.get('profitable_months_ratio', 0) > 0.6 else 'negative'}">{params.get('profitable_months_ratio', 0) * 100:.0f}%</span>
-        </div>
-        <div class="detail-row">
-            <span class="detail-label">Trades</span>
-            <span class="detail-value">{params.get('trades', 0)}</span>
-        </div>
-        <div class="detail-row">
-            <span class="detail-label">Trades/Year</span>
-            <span class="detail-value">{params.get('trades_per_year', 0):.1f}</span>
-        </div>
-        <div class="detail-row">
-            <span class="detail-label">Sharpe (time)</span>
-            <span class="detail-value {_sharpe_css(params.get('sharpe_time', params.get('sharpe', 0)))}">{_fmt_sharpe(params.get('sharpe_time', params.get('sharpe', 0)))}</span>
-        </div>
-        <div class="detail-row">
-            <span class="detail-label">Sortino</span>
-            <span class="detail-value">{params.get('sortino', 0):.2f}</span>
-        </div>
-        <div class="detail-row">
-            <span class="detail-label">Log Calmar (objective)</span>
-            <span class="detail-value">{params.get('log_calmar', 0):.4f}</span>
-        </div>
-        <div class="detail-row">
-            <span class="detail-label">Recovery Factor</span>
-            <span class="detail-value">{params.get('recovery_factor', 0):.2f}</span>
-        </div>
-        <div class="detail-row">
-            <span class="detail-label">Profit Factor</span>
-            <span class="detail-value">{params.get('profit_factor', 0):.2f}</span>
-        </div>
-        <div class="detail-row">
-            <span class="detail-label">Expectancy</span>
-            <span class="detail-value">${params.get('expectancy', 0):.2f}</span>
-        </div>
-        <div class="detail-row">
-            <span class="detail-label">Avg Win / Avg Loss</span>
-            <span class="detail-value">${avg_win:,.0f} / ${avg_loss:,.0f} ({win_loss_ratio:.2f}x)</span>
-        </div>
-        <div class="detail-row">
-            <span class="detail-label">Catastrophic Stops</span>
-            <span class="detail-value {'negative' if cat_stop_count > 0 else 'positive'}">{cat_stop_count} / {len(trades)}{f' ({cat_stop_count/len(trades)*100:.0f}%)' if trades else ''}</span>
-        </div>
-        <div class="detail-row">
-            <span class="detail-label">Time in Market</span>
-            <span class="detail-value">{params.get('time_in_market', 0) * 100:.1f}%</span>
+    </div>
+
+    <div class="detail-group">
+        <h3 class="detail-group-title">Consistency</h3>
+        <div class="detail-list">
+            <div class="detail-row">
+                <span class="detail-label">Profitable Months</span>
+                <span class="detail-value {'positive' if params.get('profitable_months_ratio', 0) > 0.6 else 'negative'}">{params.get('profitable_months_ratio', 0) * 100:.0f}%</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Time in Market</span>
+                <span class="detail-value">{params.get('time_in_market', 0) * 100:.1f}%</span>
+            </div>
         </div>
     </div>
 
@@ -1481,8 +1507,9 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
             name: 'Trades',
             marker: {{
                 color: {marker_colors_json},
-                size: 7,
-                line: {{ color: '#1e2030', width: 1 }}
+                size: 4,
+                opacity: 0.8,
+                line: {{ color: '#1e2030', width: 0.5 }}
             }},
             text: {marker_texts_json},
             hoverinfo: 'text',
@@ -1501,8 +1528,15 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
             paper_bgcolor: '#2f334d',
             plot_bgcolor: '#2f334d',
             font: {{ color: '#c8d3f5', size: 10 }},
-            margin: {{ t: 20, b: 60, l: 60, r: 60 }},
-            xaxis: {{ gridcolor: '#3b4261', title: 'Date', type: 'category', tickangle: -45 }},
+            margin: {{ t: 20, b: 40, l: 60, r: 60 }},
+            xaxis: {{
+                gridcolor: '#3b4261',
+                type: 'category',
+                nticks: 12,
+                tickangle: -45,
+                tickfont: {{ size: 9 }},
+                anchor: 'y2'
+            }},
             yaxis: {{
                 gridcolor: '#3b4261',
                 title: 'Equity ($)',
@@ -1514,7 +1548,7 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
                 domain: [0, 0.22],
                 autorange: true
             }},
-            legend: {{ font: {{ size: 10 }}, orientation: 'h', y: -0.15 }},
+            legend: {{ font: {{ size: 10 }}, orientation: 'h', y: -0.12 }},
             showlegend: true
         }});
         {monthly_js}
