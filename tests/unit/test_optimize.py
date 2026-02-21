@@ -236,3 +236,75 @@ class TestOptimizeImports:
     def test_report_importable(self):
         from qre.optimize import save_report
         assert callable(save_report)
+
+
+class TestTrialUserAttrs:
+    """Verify objective stores extended metrics as trial user_attrs for live monitor."""
+
+    def _run_trial_with_attrs(self):
+        """Helper: run one completed trial and return it."""
+        np.random.seed(42)
+        n = 2000
+        dates = pd.date_range("2025-01-01", periods=n, freq="1h")
+        close = 100 + np.cumsum(np.random.randn(n) * 0.3)
+        mock_data = {"1h": pd.DataFrame(
+            {"open": close, "high": close + 1, "low": close - 1, "close": close},
+            index=dates,
+        )}
+        splits = [{"train_end": 0.60, "test_end": 0.80}]
+        objective = build_objective(symbol="BTC/USDC", data=mock_data, splits=splits)
+
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
+        study = optuna.create_study(direction="maximize")
+        for _ in range(50):
+            trial = study.ask()
+            try:
+                result = objective(trial)
+                study.tell(trial, result)
+                if result > 0:
+                    return study.trials[trial.number]
+            except optuna.TrialPruned:
+                study.tell(trial, state=optuna.trial.TrialState.PRUNED)
+        pytest.skip("No trial with value > 0 found in 50 attempts")
+
+    def test_user_attrs_keys_present(self):
+        """Completed trial with value > 0 must have monitor user_attrs."""
+        trial = self._run_trial_with_attrs()
+        expected_keys = {"sharpe_equity", "max_drawdown", "total_pnl_pct", "trades", "trades_per_year"}
+        actual_keys = set(trial.user_attrs.keys())
+        assert expected_keys.issubset(actual_keys), f"Missing keys: {expected_keys - actual_keys}"
+
+    def test_user_attrs_types(self):
+        """User attr values must be numeric."""
+        trial = self._run_trial_with_attrs()
+        for key in ["sharpe_equity", "max_drawdown", "total_pnl_pct", "trades", "trades_per_year"]:
+            val = trial.user_attrs[key]
+            assert isinstance(val, (int, float)), f"{key} is {type(val)}, expected numeric"
+
+    def test_zero_value_trial_has_no_attrs(self):
+        """Trials with value=0 (constraint violation) should NOT have user_attrs."""
+        np.random.seed(42)
+        n = 500
+        dates = pd.date_range("2025-01-01", periods=n, freq="1h")
+        close = 100 + np.cumsum(np.random.randn(n) * 0.01)
+        mock_data = {"1h": pd.DataFrame(
+            {"open": close, "high": close + 0.1, "low": close - 0.1, "close": close},
+            index=dates,
+        )}
+        splits = [{"train_end": 0.60, "test_end": 0.80}]
+        objective = build_objective(symbol="BTC/USDC", data=mock_data, splits=splits)
+
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
+        study = optuna.create_study(direction="maximize")
+        for _ in range(30):
+            trial = study.ask()
+            try:
+                result = objective(trial)
+                study.tell(trial, result)
+                if result == 0.0:
+                    frozen = study.trials[trial.number]
+                    assert len(frozen.user_attrs) == 0, "Zero-value trial should have no user_attrs"
+                    return
+            except optuna.TrialPruned:
+                study.tell(trial, state=optuna.trial.TrialState.PRUNED)
+        pytest.skip("No zero-value trial found in 30 attempts")

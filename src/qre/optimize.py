@@ -158,6 +158,11 @@ def build_objective(
         allow_flip = bool(params.get("allow_flip", 1))
 
         split_scores = []
+        _sharpes = []
+        _drawdowns = []
+        _pnls = []
+        _trade_counts = []
+        _tpy = []
         for split in splits:
             train_end = int(total_bars * split["train_end"])
             test_start = int(total_bars * split.get("test_start", split["train_end"]))
@@ -219,10 +224,24 @@ def build_objective(
                 penalty = 1.0 / (1.0 + SHARPE_DECAY_RATE * (sharpe - SHARPE_SUSPECT_THRESHOLD))
                 log_calmar *= penalty
 
+            _sharpes.append(test_metrics.sharpe_ratio_equity_based)
+            _drawdowns.append(test_metrics.max_drawdown)
+            _pnls.append(test_metrics.total_pnl_pct)
+            _trade_counts.append(len(test_result.trades))
+            _tpy.append(trades_per_year)
+
             split_scores.append(log_calmar * trade_mult)
 
         if not split_scores or all(s == 0 for s in split_scores):
             return 0.0
+
+        # Store extended metrics for live monitor
+        if _sharpes:
+            trial.set_user_attr("sharpe_equity", round(float(np.mean(_sharpes)), 4))
+            trial.set_user_attr("max_drawdown", round(float(np.mean(_drawdowns)), 2))
+            trial.set_user_attr("total_pnl_pct", round(float(np.mean(_pnls)), 2))
+            trial.set_user_attr("trades", int(np.mean(_trade_counts)))
+            trial.set_user_attr("trades_per_year", round(float(np.mean(_tpy)), 2))
 
         return float(np.mean(split_scores))
 
@@ -315,6 +334,8 @@ def run_optimization(
         pruner=pruner,
         load_if_exists=True,
     )
+    study.set_user_attr("n_trials_requested", n_trials)
+    study.set_user_attr("symbol", symbol)
 
     # Graceful shutdown: SIGTERM → study.stop()
     def _graceful_stop(signum, frame):
