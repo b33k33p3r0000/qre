@@ -300,7 +300,8 @@ def main():
 
     parser = argparse.ArgumentParser(description="QRE Live Monitor — real-time optimizer dashboard")
     parser.add_argument("filter", nargs="?", default=None, help="Partial run name filter")
-    parser.add_argument("--results-dir", type=str, default="results", help="Results directory path")
+    default_results = Path(__file__).resolve().parent.parent.parent / "results"
+    parser.add_argument("--results-dir", type=str, default=str(default_results), help="Results directory path")
     parser.add_argument("--interval", type=int, default=10, help="Refresh interval in seconds")
     args = parser.parse_args()
 
