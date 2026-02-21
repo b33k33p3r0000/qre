@@ -335,3 +335,20 @@ class TestReportLayoutOrder:
 
         assert eq_pos < dd_pos < streak_pos < ls_pos
         assert ls_pos < perf_pos < flow_pos < params_pos
+
+
+class TestSectionDividers:
+    def test_report_has_section_dividers(self):
+        params = {
+            **SAMPLE_PARAMS,
+            "macd_fast": 12, "macd_slow": 26, "macd_signal": 9,
+            "rsi_period": 14, "rsi_lower": 30, "rsi_upper": 70,
+            "rsi_lookback": 3, "trend_tf": "4h", "trend_strict": 1,
+        }
+        trades = [_make_trade(100)]
+        html = generate_report(params, trades)
+        assert "section-divider" in html
+        assert ">PERFORMANCE<" in html
+        assert ">ROBUSTNESS<" in html
+        assert ">TRADE ANALYSIS<" in html
+        assert ">STRATEGY<" in html

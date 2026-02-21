@@ -825,6 +825,11 @@ def _render_hold_duration_chart(trades: List[Dict]) -> tuple[str, str]:
     return html, js
 
 
+def _section_divider(title: str) -> str:
+    """Render a category section divider."""
+    return f'<div class="section-divider"><span>{title.upper()}</span></div>'
+
+
 def generate_report(params: Dict[str, Any], trades: List[Dict],
                     optuna_history: List[Dict] | None = None) -> str:
     """
@@ -1023,6 +1028,18 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
         .params-table th {{
             color: var(--text-secondary);
             font-weight: normal;
+            text-transform: uppercase;
+        }}
+        .section-divider {{
+            margin: 32px 0 16px 0;
+            border-bottom: 2px solid var(--accent-purple);
+            padding-bottom: 6px;
+        }}
+        .section-divider span {{
+            font-size: 11px;
+            font-weight: bold;
+            letter-spacing: 2px;
+            color: var(--accent-purple);
             text-transform: uppercase;
         }}
         footer {{
@@ -1382,6 +1399,8 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
         </div>
     </div>
 
+    {_section_divider("Performance")}
+
     <h2>Equity Curve</h2>
     <div class="chart-container">
         <div id="equity-chart"></div>
@@ -1395,13 +1414,19 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
     {rolling_html}
     {streak_html}
 
+    {_section_divider("Trade Analysis")}
+
     {ls_html}
+
+    {_section_divider("Robustness")}
 
     {split_html}
     {mc_html}
     {optuna_html}
     {perf_html}
     {hold_dur_html}
+    {_section_divider("Strategy")}
+
     {flow_html}
     {strategy_html}
 
