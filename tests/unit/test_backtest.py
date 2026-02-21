@@ -11,22 +11,12 @@ from qre.core.backtest import (
     precompute_timeframe_indices,
     BacktestResult,
 )
+from tests.conftest import make_1h_ohlcv
 
 
 def _make_1h_data(n_bars=500, seed=42):
     """Helper: create 1H OHLCV data."""
-    np.random.seed(seed)
-    dates = pd.date_range("2025-01-01", periods=n_bars, freq="1h")
-    close = 100 + np.cumsum(np.random.randn(n_bars) * 0.3)
-    high = close + np.abs(np.random.randn(n_bars) * 0.5)
-    low = close - np.abs(np.random.randn(n_bars) * 0.5)
-    open_ = close + np.random.randn(n_bars) * 0.1
-    return {
-        "1h": pd.DataFrame(
-            {"open": open_, "high": high, "low": low, "close": close},
-            index=dates,
-        )
-    }
+    return {"1h": make_1h_ohlcv(n_bars=n_bars, seed=seed)}
 
 
 def _make_signals(n_bars, buy_bars=None, sell_bars=None):

@@ -598,11 +598,10 @@ def monte_carlo_validation(
             robustness_score=0.0,
         )
 
-    np.random.seed(seed)
+    rng = np.random.default_rng(seed)
 
     # Extract PnL values from trades
     pnl_values = np.array([t.get("pnl_abs", 0.0) for t in trades])
-    pnl_pct_values = np.array([t.get("pnl_pct", 0.0) for t in trades])
     n_trades = len(pnl_values)
 
     # Storage for simulation results
@@ -612,7 +611,7 @@ def monte_carlo_validation(
 
     for _ in range(n_simulations):
         # Shuffle trade order
-        indices = np.random.permutation(n_trades)
+        indices = rng.permutation(n_trades)
         shuffled_pnl = pnl_values[indices]
 
         # Build equity curve

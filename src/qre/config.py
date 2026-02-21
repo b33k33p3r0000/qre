@@ -19,7 +19,6 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 SYMBOLS = ["BTC/USDC", "SOL/USDC"]
 
-TF_LIST = ["2h", "4h", "6h", "8h", "12h", "1d"]
 TREND_TFS = ["4h", "8h", "1d"]
 BASE_TF = "1h"
 
@@ -78,7 +77,6 @@ DEFAULT_TRIALS = 10000
 DEFAULT_TIMEOUT = 0  # 0 = no timeout
 
 # Sampler (TPE)
-SAMPLER_STRATEGY = "tpe"
 MIN_STARTUP_TRIALS = 50
 STARTUP_TRIALS_RATIO = 0.10
 TPE_N_EI_CANDIDATES = 24
@@ -86,8 +84,6 @@ TPE_CONSIDER_ENDPOINTS = True
 
 # Pruning (SuccessiveHalving)
 ENABLE_PRUNING = True
-MIN_PRUNING_WARMUP = 30
-PRUNING_WARMUP_RATIO = 0.10
 
 # Monte Carlo
 MONTE_CARLO_SIMULATIONS = 1000
@@ -136,8 +132,6 @@ ACCOUNT_SIZE = 100_000.0
 TOTAL_PAIRS = 2  # QRE: only BTC + SOL
 PAIR_ALLOCATION = ACCOUNT_SIZE / TOTAL_PAIRS  # $50,000 per pair
 STARTING_EQUITY = PAIR_ALLOCATION
-DAILY_DRAWDOWN_LIMIT = 0.05
-TOTAL_DRAWDOWN_LIMIT = 0.10
 BACKTEST_POSITION_PCT = 0.25  # Statických 25% pro všechny backtesty i EE
 
 # =============================================================================

@@ -94,7 +94,7 @@ def query_db_stats(db_path: Path) -> Optional[SymbolStats]:
         stats = SymbolStats(symbol=symbol)
 
         # Trial counts by state
-        cur.execute("SELECT state, COUNT(*) as cnt FROM trials GROUP BY state")
+        cur.execute("SELECT state, COUNT(*) as cnt FROM trials GROUP BY state")  # noqa: S608
         for row in cur.fetchall():
             if row["state"] == "COMPLETE":
                 stats.completed = row["cnt"]
@@ -159,20 +159,21 @@ def query_db_stats(db_path: Path) -> Optional[SymbolStats]:
             try:
                 start_dt = datetime.fromisoformat(row["first_start"])
                 elapsed_min = (datetime.now() - start_dt).total_seconds() / 60.0
-                if elapsed_min > 0 and stats.completed > 0:
-                    stats.trials_per_min = round(stats.completed / elapsed_min, 1)
+                total_done = stats.completed + stats.pruned + stats.failed
+                if elapsed_min > 0 and total_done > 0:
+                    stats.trials_per_min = round(total_done / elapsed_min, 1)
                     if stats.n_trials_requested:
-                        remaining = stats.n_trials_requested - stats.completed
+                        remaining = stats.n_trials_requested - total_done
                         if remaining > 0 and stats.trials_per_min > 0:
                             stats.eta_minutes = round(remaining / stats.trials_per_min, 1)
             except (ValueError, TypeError):
                 pass
 
-        conn.close()
         return stats
     except Exception:
-        conn.close()
         return None
+    finally:
+        conn.close()
 
 
 def format_params(params: Dict) -> str:

@@ -669,17 +669,20 @@ def _render_strategy_flow(params: Dict[str, Any], trades: List[Dict] | None = No
 
 def _render_strategy_params(params: Dict[str, Any]) -> str:
     """Render strategy parameters as bullet chart visualization."""
+    # Ranges aligned with Optuna search space in strategy.py
     numeric_params = [
         ("macd_fast", "MACD fast", 1, 20),
         ("macd_slow", "MACD slow", 10, 45),
         ("macd_signal", "MACD signal", 2, 15),
-        ("rsi_period", "RSI period", 3, 30),
+        ("rsi_period", "RSI period", 5, 30),
         ("rsi_lower", "RSI lower", 20, 40),
         ("rsi_upper", "RSI upper", 60, 80),
         ("rsi_lookback", "RSI lookback", 4, 8),
     ]
     categorical_params = [
         ("trend_tf", "Trend TF", ["4h", "8h", "1d"]),
+        ("trend_strict", "Strict", [0, 1]),
+        ("allow_flip", "Allow Flip", [0, 1]),
     ]
 
     rows_html = ""
@@ -943,8 +946,6 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
     # Catastrophic stop stats
     cat_stops = [t for t in trades if t.get("reason") == "catastrophic_stop"]
     cat_stop_count = len(cat_stops)
-    cat_stop_active = cat_stop_count > 0
-
     # Avg win / avg loss
     wins = [t["pnl_abs"] for t in trades if t.get("pnl_abs", 0) > 0]
     losses = [t["pnl_abs"] for t in trades if t.get("pnl_abs", 0) < 0]

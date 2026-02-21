@@ -526,9 +526,10 @@ def build_discord_embed(analysis: dict[str, Any]) -> str:
 
     embed = "\n".join(lines)
 
-    # Truncate to 6000 chars if needed
-    if len(embed) > 6000:
-        embed = embed[:5993] + "\n..."
+    # Truncate to Discord message limit (2000 chars)
+    if len(embed) > 1900:
+        # Ensure closing code fence is preserved
+        embed = embed[:1890] + "\n```"
 
     return embed
 

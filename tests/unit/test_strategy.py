@@ -1,61 +1,25 @@
 """Unit tests for Quant Whale Strategy strategy."""
 
 import numpy as np
-import pandas as pd
 import pytest
 
 from qre.core.strategy import MACDRSIStrategy
+from tests.conftest import make_1h_ohlcv, resample_to_multi_tf
 
 
-@pytest.fixture
-def strategy():
-    return MACDRSIStrategy()
+# strategy fixture is inherited from tests/conftest.py
 
 
 @pytest.fixture
 def sample_data():
     """Create minimal 1H OHLCV data for testing."""
-    np.random.seed(42)
-    n_bars = 500
-    dates = pd.date_range("2025-01-01", periods=n_bars, freq="1h")
-    close = 100 + np.cumsum(np.random.randn(n_bars) * 0.5)
-    high = close + np.abs(np.random.randn(n_bars))
-    low = close - np.abs(np.random.randn(n_bars))
-    open_ = close + np.random.randn(n_bars) * 0.2
-    return {
-        "1h": pd.DataFrame(
-            {"open": open_, "high": high, "low": low, "close": close},
-            index=dates,
-        ),
-    }
+    return {"1h": make_1h_ohlcv(n_bars=500)}
 
 
 @pytest.fixture
 def sample_data_multi_tf():
     """Create 1H + 4H + 8H + 1D OHLCV data for testing."""
-    np.random.seed(42)
-    n_bars = 500
-    dates_1h = pd.date_range("2025-01-01", periods=n_bars, freq="1h")
-    close_1h = 100 + np.cumsum(np.random.randn(n_bars) * 0.5)
-    high_1h = close_1h + np.abs(np.random.randn(n_bars))
-    low_1h = close_1h - np.abs(np.random.randn(n_bars))
-    open_1h = close_1h + np.random.randn(n_bars) * 0.2
-
-    data = {
-        "1h": pd.DataFrame(
-            {"open": open_1h, "high": high_1h, "low": low_1h, "close": close_1h},
-            index=dates_1h,
-        ),
-    }
-
-    # Resample to higher TFs
-    for tf, rule in [("4h", "4h"), ("8h", "8h"), ("1d", "1D")]:
-        resampled = data["1h"].resample(rule).agg(
-            {"open": "first", "high": "max", "low": "min", "close": "last"}
-        ).dropna()
-        data[tf] = resampled
-
-    return data
+    return resample_to_multi_tf(make_1h_ohlcv(n_bars=500))
 
 
 class TestMACDRSIStrategy:

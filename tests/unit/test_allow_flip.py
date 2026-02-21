@@ -6,16 +6,15 @@ import pytest
 
 from qre.core.backtest import simulate_trades_fast
 from qre.core.strategy import MACDRSIStrategy
+from tests.conftest import resample_to_multi_tf
 
 
-@pytest.fixture
-def strategy():
-    return MACDRSIStrategy()
+# strategy fixture is inherited from tests/conftest.py
 
 
 @pytest.fixture
 def sample_data_multi_tf():
-    """Create 1H + higher TF data with clear trends for signal generation."""
+    """Create 1H + higher TF data with sinusoidal trends for signal generation."""
     np.random.seed(42)
     n_bars = 2000
     dates_1h = pd.date_range("2024-01-01", periods=n_bars, freq="1h")
@@ -28,19 +27,11 @@ def sample_data_multi_tf():
     low = close - np.abs(np.random.randn(n_bars))
     open_ = close + np.random.randn(n_bars) * 0.1
 
-    data = {
-        "1h": pd.DataFrame(
-            {"open": open_, "high": high, "low": low, "close": close},
-            index=dates_1h,
-        ),
-    }
-    for tf, rule in [("4h", "4h"), ("8h", "8h"), ("1d", "1D")]:
-        resampled = data["1h"].resample(rule).agg(
-            {"open": "first", "high": "max", "low": "min", "close": "last"}
-        ).dropna()
-        data[tf] = resampled
-
-    return data
+    df_1h = pd.DataFrame(
+        {"open": open_, "high": high, "low": low, "close": close},
+        index=dates_1h,
+    )
+    return resample_to_multi_tf(df_1h)
 
 
 class TestAllowFlipParam:
