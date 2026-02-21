@@ -145,7 +145,7 @@ class TestReportIntegration:
         html = report_path.read_text()
         assert "BTC/USDC" in html
         assert "plotly" in html.lower()
-        assert "equity-chart" in html
+        assert "equity-combo-chart" in html
 
     def test_equity_curve_from_real_trades(self):
         """Equity curve starts at start_equity and has correct length."""

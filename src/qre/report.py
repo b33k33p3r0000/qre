@@ -854,6 +854,13 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
     equity_curve = build_equity_curve(trades, start_equity)
     drawdown_curve = build_drawdown_curve(equity_curve)
 
+    # High-water mark
+    hwm = []
+    peak = equity_curve[0]
+    for eq in equity_curve:
+        peak = max(peak, eq)
+        hwm.append(peak)
+
     # Build date labels for equity/drawdown X-axis
     equity_dates: List[str] = []
     if trades and trades[0].get("entry_ts"):
@@ -1401,14 +1408,8 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
 
     {_section_divider("Performance")}
 
-    <h2>Equity Curve</h2>
     <div class="chart-container">
-        <div id="equity-chart"></div>
-    </div>
-
-    <h2>Drawdown</h2>
-    <div class="chart-container">
-        <div id="drawdown-chart"></div>
+        <div id="equity-combo-chart" style="height:450px"></div>
     </div>
 
     {rolling_html}
@@ -1435,7 +1436,7 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
     </footer>
 
     <script>
-        Plotly.newPlot('equity-chart', [{{
+        Plotly.newPlot('equity-combo-chart', [{{
             x: {json.dumps(equity_dates)},
             y: {json.dumps(equity_curve)},
             type: 'scatter',
@@ -1444,7 +1445,17 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
             line: {{ color: '#86e1fc', width: 2 }},
             fill: 'tozeroy',
             fillcolor: 'rgba(134, 225, 252, 0.08)',
-            hoverinfo: 'skip'
+            hoverinfo: 'skip',
+            yaxis: 'y'
+        }}, {{
+            x: {json.dumps(equity_dates)},
+            y: {json.dumps(hwm)},
+            type: 'scatter',
+            mode: 'lines',
+            name: 'High-Water Mark',
+            line: {{ color: '#636da6', width: 1, dash: 'dot' }},
+            hoverinfo: 'skip',
+            yaxis: 'y'
         }}, {{
             x: {json.dumps(equity_dates[1:])},
             y: {json.dumps(equity_curve[1:])},
@@ -1457,32 +1468,37 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
                 line: {{ color: '#1e2030', width: 1 }}
             }},
             text: {marker_texts_json},
-            hoverinfo: 'text'
-        }}], {{
-            paper_bgcolor: '#2f334d',
-            plot_bgcolor: '#2f334d',
-            font: {{ color: '#c8d3f5', size: 10 }},
-            margin: {{ t: 20, b: 60, l: 60, r: 20 }},
-            xaxis: {{ gridcolor: '#3b4261', title: 'Date', type: 'category', tickangle: -45 }},
-            yaxis: {{ gridcolor: '#3b4261', title: 'Equity ($)' }},
-            showlegend: false
-        }});
-
-        Plotly.newPlot('drawdown-chart', [{{
+            hoverinfo: 'text',
+            yaxis: 'y'
+        }}, {{
             x: {json.dumps(equity_dates)},
             y: {json.dumps(drawdown_curve)},
             type: 'scatter',
             mode: 'lines',
-            line: {{ color: '#ff757f', width: 2 }},
+            name: 'Drawdown',
+            line: {{ color: '#ff757f', width: 1.5 }},
             fill: 'tozeroy',
-            fillcolor: 'rgba(255, 117, 127, 0.15)'
+            fillcolor: 'rgba(255, 117, 127, 0.15)',
+            yaxis: 'y2'
         }}], {{
             paper_bgcolor: '#2f334d',
             plot_bgcolor: '#2f334d',
             font: {{ color: '#c8d3f5', size: 10 }},
-            margin: {{ t: 20, b: 60, l: 60, r: 20 }},
+            margin: {{ t: 20, b: 60, l: 60, r: 60 }},
             xaxis: {{ gridcolor: '#3b4261', title: 'Date', type: 'category', tickangle: -45 }},
-            yaxis: {{ gridcolor: '#3b4261', title: 'Drawdown (%)' }}
+            yaxis: {{
+                gridcolor: '#3b4261',
+                title: 'Equity ($)',
+                domain: [0.28, 1]
+            }},
+            yaxis2: {{
+                gridcolor: 'rgba(59,66,97,0.3)',
+                title: 'DD (%)',
+                domain: [0, 0.22],
+                autorange: true
+            }},
+            legend: {{ font: {{ size: 10 }}, orientation: 'h', y: -0.15 }},
+            showlegend: true
         }});
         {rolling_js}
         {streak_js}
