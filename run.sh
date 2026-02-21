@@ -21,14 +21,14 @@ QRE Optimizer — MACD+RSI AWF
 =============================
 
 Presets:
-  1) Test        —  5k trials, ~2yr, 5 splits    (~15 min)
-  2) Prod        — 15k trials, ~2yr, 5 splits    (~90 min)
-  3) Deep        — 25k trials, ~2yr, 5 splits    (~180 min)
-  4) Über        — 35k trials, ~2yr, 5 splits    (~360 min)
-  5) Custom      — You choose everything
+  1) Test        —  5k trials, ~2yr, 3 splits, BTC+SOL  (~15 min)
+  2) BTC Main    — 20k trials, ~2yr, 5 splits, BTC only (~60 min)
+  3) SOL Main    — 40k trials, ~2yr, 5 splits, SOL only (~180 min)
+  4) Custom      — You choose everything
 
-All presets use --hours 18600 --skip-recent 720 by default
-(~2yr data, skip last 30 days). Override with --full or manual flags.
+All presets use --hours 18600 --skip-recent 1080 by default
+(~2yr data, skip last 45 days). Override with --full or manual flags.
+All runs start in background by default (use --fg for foreground).
 
 Pairs:
   --btc                BTC/USDC only
@@ -42,14 +42,14 @@ Options:
   --skip-recent N      Skip most recent N hours from training data
   --tag NAME           Run tag (e.g. 'test-v1')
   --full               Full data, no skip (--hours 8760 --skip-recent 0)
-  --bg                 Run in background (default: foreground)
+  --fg                 Run in foreground (default: background)
 
 Examples:
-  ./run.sh 2 --btc                    # Prod, BTC, foreground
-  ./run.sh 2 --btc --bg               # Prod, BTC, background
-  ./run.sh 4 --sol                    # Über, SOL
-  ./run.sh 2 --btc --full             # Prod, full data (no skip)
-  ./run.sh 5 --btc --trials 8000      # Custom trials
+  ./run.sh 1                          # Test, BTC+SOL, background
+  ./run.sh 2                          # BTC Main, background
+  ./run.sh 3                          # SOL Main, background
+  ./run.sh 2 --fg                     # BTC Main, foreground
+  ./run.sh 4 --btc --trials 8000      # Custom trials
 
 Process management:
   ./run.sh attach          Attach to running/latest log
@@ -60,7 +60,7 @@ EOF
 }
 
 # =============================================================================
-# DEFAULTS (~2yr window + skip recent 30 days)
+# DEFAULTS (~2yr window + skip recent 45 days)
 # =============================================================================
 
 TRIALS=15000
@@ -69,8 +69,8 @@ SPLITS=""
 PAIRS="both"
 TAG=""
 PRESET=""
-SKIP_RECENT=720
-FOREGROUND=true
+SKIP_RECENT=1080
+FOREGROUND=false
 LOG_DIR="$SCRIPT_DIR/logs"
 mkdir -p "$LOG_DIR"
 
@@ -81,10 +81,9 @@ mkdir -p "$LOG_DIR"
 while [[ $# -gt 0 ]]; do
     case $1 in
         1) PRESET="test" ;;
-        2) PRESET="production" ;;
-        3) PRESET="deep" ;;
-        4) PRESET="uber" ;;
-        5) PRESET="custom" ;;
+        2) PRESET="btc-main" ;;
+        3) PRESET="sol-main" ;;
+        4) PRESET="custom" ;;
         --btc) PAIRS="btc" ;;
         --sol) PAIRS="sol" ;;
         --both) PAIRS="both" ;;
@@ -94,8 +93,8 @@ while [[ $# -gt 0 ]]; do
         --tag) TAG="$2"; shift ;;
         --skip-recent) SKIP_RECENT="$2"; shift ;;
         --full) HOURS=8760; SKIP_RECENT=0 ;;
-        --bg) FOREGROUND=false ;;
-        --fg) FOREGROUND=true ;;  # backward compat
+        --bg) FOREGROUND=false ;;  # already default, kept for explicitness
+        --fg) FOREGROUND=true ;;
         attach)
             # Find actively written logs (modified in last 5 min)
             ACTIVE_LOGS=()
@@ -226,37 +225,45 @@ done
 # =============================================================================
 
 case "$PRESET" in
-    test)       TRIALS=5000;  SPLITS=5 ;;
-    production) TRIALS=15000; SPLITS=5 ;;
-    deep)       TRIALS=25000; SPLITS=5 ;;
-    uber)       TRIALS=35000; SPLITS=5 ;;
+    test)       TRIALS=5000;  SPLITS=3 ;;
+    btc-main)   TRIALS=20000; SPLITS=5; PAIRS="btc" ;;
+    sol-main)   TRIALS=40000; SPLITS=5; PAIRS="sol" ;;
     custom)     ;; # Use --trials, --hours, --splits from args
     "")
         # Interactive mode
         echo ""
         show_help
-        read -p "Select preset (1-5): " choice
+        read -p "Select preset (1-4): " choice
         case "$choice" in
-            1) TRIALS=5000;  SPLITS=5 ;;
-            2) TRIALS=15000; SPLITS=5 ;;
-            3) TRIALS=25000; SPLITS=5 ;;
-            4) TRIALS=35000; SPLITS=5 ;;
-            5)
+            1) TRIALS=5000;  SPLITS=3 ;;
+            2) TRIALS=20000; SPLITS=5; PAIRS="btc" ;;
+            3) TRIALS=40000; SPLITS=5; PAIRS="sol" ;;
+            4)
                 read -p "Trials [15000]: " TRIALS; TRIALS="${TRIALS:-15000}"
                 read -p "Hours [18600]: " HOURS; HOURS="${HOURS:-18600}"
                 read -p "Splits [5]: " SPLITS; SPLITS="${SPLITS:-5}"
-                read -p "Skip recent hours [720]: " SKIP_RECENT; SKIP_RECENT="${SKIP_RECENT:-720}"
+                read -p "Skip recent hours [1080]: " SKIP_RECENT; SKIP_RECENT="${SKIP_RECENT:-1080}"
+                echo ""
+                read -p "Pairs — (1) BTC only, (2) SOL only, (3) Both [3]: " pair_choice
+                case "${pair_choice:-3}" in
+                    1) PAIRS="btc" ;;
+                    2) PAIRS="sol" ;;
+                    3) PAIRS="both" ;;
+                esac
                 ;;
             *) echo "Invalid choice"; exit 1 ;;
         esac
 
-        echo ""
-        read -p "Pairs — (1) BTC only, (2) SOL only, (3) Both [3]: " pair_choice
-        case "${pair_choice:-3}" in
-            1) PAIRS="btc" ;;
-            2) PAIRS="sol" ;;
-            3) PAIRS="both" ;;
-        esac
+        # Only ask for pairs in interactive if preset doesn't set them
+        if [ "$choice" = "1" ]; then
+            echo ""
+            read -p "Pairs — (1) BTC only, (2) SOL only, (3) Both [3]: " pair_choice
+            case "${pair_choice:-3}" in
+                1) PAIRS="btc" ;;
+                2) PAIRS="sol" ;;
+                3) PAIRS="both" ;;
+            esac
+        fi
 
         read -p "Run tag (optional, e.g. 'test-v1'): " TAG
         ;;
