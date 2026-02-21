@@ -808,7 +808,7 @@ def _render_optuna_history(optuna_history: List[Dict]) -> tuple[str, str]:
             margin: {{ t: 30, b: 40, l: 60, r: 20 }},
             title: {{ text: 'Optimization Progress', font: {{ size: 12, color: '#636da6' }} }},
             xaxis: {{ gridcolor: '#3b4261', title: 'Trial #' }},
-            yaxis: {{ gridcolor: '#3b4261', title: 'Objective Value (Calmar)' }},
+            yaxis: {{ gridcolor: '#3b4261', title: 'Objective Value (Log Calmar)' }},
             legend: {{ font: {{ size: 10 }} }}
         }});
     """
