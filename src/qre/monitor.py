@@ -19,6 +19,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from rich.console import Console
+from rich.panel import Panel
+
 
 ACTIVE_RUN_MAX_AGE = 300  # seconds — DB mtime threshold
 
@@ -170,3 +173,155 @@ def query_db_stats(db_path: Path) -> Optional[SymbolStats]:
     except Exception:
         conn.close()
         return None
+
+
+def format_params(params: Dict) -> str:
+    """Format strategy params into compact one-line string."""
+    mf = params.get("macd_fast", "?")
+    ms = params.get("macd_slow", "?")
+    msig = params.get("macd_signal", "?")
+    rp = params.get("rsi_period", "?")
+    rl = params.get("rsi_lower", "?")
+    ru = params.get("rsi_upper", "?")
+    rlb = params.get("rsi_lookback", "?")
+    ttf = params.get("trend_tf", "?")
+
+    # Format macd_fast: float → 1 decimal, int → as-is
+    if isinstance(mf, float):
+        mf = f"{mf:.1f}"
+    else:
+        mf = str(int(mf)) if isinstance(mf, (int, float)) else str(mf)
+
+    # trend_tf: Optuna stores categorical as index (0=4h, 1=8h, 2=1d)
+    tf_map = {0: "4h", 0.0: "4h", 1: "8h", 1.0: "8h", 2: "1d", 2.0: "1d"}
+    if ttf in tf_map:
+        ttf = tf_map[ttf]
+
+    ms = int(ms) if isinstance(ms, float) else ms
+    msig = int(msig) if isinstance(msig, float) else msig
+    rp = int(rp) if isinstance(rp, float) else rp
+    rl = int(rl) if isinstance(rl, float) else rl
+    ru = int(ru) if isinstance(ru, float) else ru
+    rlb = int(rlb) if isinstance(rlb, float) else rlb
+
+    return f"macd: {mf}/{ms}/{msig}  rsi: {rp} [{rl}-{ru}] lb={rlb}  trend: {ttf}"
+
+
+def render_symbol_panel(stats: SymbolStats, prev_best: Optional[float] = None) -> Panel:
+    """Render a Rich Panel for one symbol's stats."""
+    total = stats.completed + stats.pruned + stats.failed
+    requested = stats.n_trials_requested or total
+
+    # Line 1: progress
+    rate_str = f"{stats.trials_per_min} t/min" if stats.trials_per_min else "..."
+    eta_str = f"ETA ~{int(stats.eta_minutes)}min" if stats.eta_minutes else ""
+    line1 = f"{stats.symbol}   {stats.completed:,} / {requested:,} trials   {rate_str}   {eta_str}"
+
+    # Line 2: best value
+    is_new = prev_best is not None and stats.best_value is not None and stats.best_value > prev_best
+    new_marker = "  [bold green]NEW[/bold green]" if is_new else ""
+    trial_num = f"#{stats.best_trial_number:,}" if stats.best_trial_number is not None else "?"
+    val = f"{stats.best_value:.4f}" if stats.best_value is not None else "—"
+    line2 = f"Best trial {trial_num}          Log Calmar: {val}{new_marker}"
+
+    # Line 3: extended metrics (from user_attrs, if available)
+    ua = stats.user_attrs
+    if ua:
+        sharpe = ua.get("sharpe_equity", "—")
+        dd = ua.get("max_drawdown", "—")
+        pnl = ua.get("total_pnl_pct", "—")
+        trades = ua.get("trades", "—")
+        tpy = ua.get("trades_per_year", "—")
+
+        sharpe_str = f"{sharpe:.2f}" if isinstance(sharpe, (int, float)) else str(sharpe)
+        dd_str = f"{dd:.1f}%" if isinstance(dd, (int, float)) else str(dd)
+        pnl_str = f"+{pnl:.1f}%" if isinstance(pnl, (int, float)) and pnl > 0 else f"{pnl:.1f}%" if isinstance(pnl, (int, float)) else str(pnl)
+
+        line3 = f"Sharpe(eq): {sharpe_str}   DD: {dd_str}   P&L: {pnl_str}"
+        line4 = f"Trades: {trades}   Trades/yr: {tpy}"
+    else:
+        line3 = "[dim](extended metrics unavailable — legacy run)[/dim]"
+        line4 = None
+
+    # Line 5: params
+    line5 = format_params(stats.best_params) if stats.best_params else ""
+
+    lines = [line1, "", line2, line3]
+    if line4:
+        lines.append(line4)
+    lines.extend(["", line5])
+
+    content = "\n".join(lines)
+    return Panel(content, title=f"[bold]{stats.symbol}[/bold]", border_style="cyan")
+
+
+def render_dashboard(
+    console: Console,
+    all_runs: List[dict],
+    prev_bests: Dict[str, float],
+) -> Dict[str, float]:
+    """Render the full dashboard. Returns updated prev_bests dict."""
+    console.clear()
+    new_bests = {}
+
+    if not all_runs:
+        console.print("[yellow]No active runs detected. Waiting...[/yellow]\n")
+        return prev_bests
+
+    for run in all_runs:
+        console.print(f"[bold white]{run['run_name']}[/bold white]")
+        for db_path in run["db_files"]:
+            stats = query_db_stats(db_path)
+            if stats is None:
+                console.print(f"  [red]Error reading {db_path.name}[/red]")
+                continue
+
+            key = f"{run['run_name']}:{stats.symbol}"
+            prev = prev_bests.get(key)
+            panel = render_symbol_panel(stats, prev_best=prev)
+            console.print(panel)
+
+            if stats.best_value is not None:
+                new_bests[key] = stats.best_value
+
+        console.print()
+
+    now = datetime.now().strftime("%H:%M:%S")
+    console.print(f"[dim]Last refresh: {now}   Auto-refresh: 10s   Ctrl+C to exit[/dim]")
+
+    merged = {**prev_bests, **new_bests}
+    return merged
+
+
+def main():
+    """CLI entry point for live monitor."""
+    import argparse
+    import sys
+
+    parser = argparse.ArgumentParser(description="QRE Live Monitor — real-time optimizer dashboard")
+    parser.add_argument("filter", nargs="?", default=None, help="Partial run name filter")
+    parser.add_argument("--results-dir", type=str, default="results", help="Results directory path")
+    parser.add_argument("--interval", type=int, default=10, help="Refresh interval in seconds")
+    args = parser.parse_args()
+
+    console = Console()
+    results_dir = Path(args.results_dir)
+    prev_bests: Dict[str, float] = {}
+
+    console.print(f"[bold]QRE Live Monitor[/bold] — watching {results_dir.resolve()}")
+    if args.filter:
+        console.print(f"Filter: [cyan]{args.filter}[/cyan]")
+    console.print(f"Refresh: every {args.interval}s\n")
+
+    try:
+        while True:
+            runs = find_active_runs(results_dir, name_filter=args.filter)
+            prev_bests = render_dashboard(console, runs, prev_bests)
+            time.sleep(args.interval)
+    except KeyboardInterrupt:
+        console.print("\n[dim]Monitor stopped.[/dim]")
+        sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()

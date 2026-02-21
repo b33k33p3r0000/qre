@@ -6,6 +6,7 @@ requires-python = ">=3.11"
 
 [project.scripts]
 qre = "qre.optimize:main"
+qre-monitor = "qre.monitor:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
