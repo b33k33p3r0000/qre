@@ -181,12 +181,6 @@ class TestGenerateReport:
         # Equity chart xaxis should use 'Date', not 'Trade #'
         assert "equity-chart" in html
 
-    def test_long_short_chart_present(self):
-        trades = [_make_trade(100, "long"), _make_trade(-50, "short")]
-        html = generate_report(SAMPLE_PARAMS, trades)
-        assert "long-short-chart" in html
-        assert "Long vs Short" in html
-
     def test_no_trades_still_works(self):
         html = generate_report(SAMPLE_PARAMS, [])
         assert "<!DOCTYPE html>" in html
@@ -210,12 +204,12 @@ class TestCatastrophicStopKeyFix:
 
 
 class TestColorConsistency:
-    def test_long_short_chart_uses_green_not_yellow(self):
-        """Long bars should use green (#c3e88d) not yellow (#ffc777)."""
+    def test_long_card_uses_yellow_accent(self):
+        """Long cards should use yellow accent border, not in bar chart."""
         trades = [_make_trade(100, "long"), _make_trade(-50, "short")]
         html = generate_report(SAMPLE_PARAMS, trades)
-        assert "rgba(255, 199, 119" not in html
-        assert "rgba(195, 232, 141" in html
+        assert "ls-long" in html
+        assert "ls-short" in html
 
 
 class TestEquityTradeMarkers:

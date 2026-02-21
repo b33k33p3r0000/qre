@@ -218,9 +218,6 @@ def _build_performance_data(trades: List[Dict]) -> Dict[str, Any]:
     lose_hold = [t.get("hold_bars", 0) for t in trades if t.get("pnl_pct", 0) <= 0]
     lose_pnl = [t.get("pnl_pct", 0) * 100 for t in trades if t.get("pnl_pct", 0) <= 0]
 
-    # Long vs Short comparison data
-    ds = _compute_direction_stats(trades)
-
     return {
         "winners_pnl": winners_pnl,
         "losers_pnl": losers_pnl,
@@ -230,7 +227,6 @@ def _build_performance_data(trades: List[Dict]) -> Dict[str, Any]:
         "win_pnl": win_pnl,
         "lose_hold": lose_hold,
         "lose_pnl": lose_pnl,
-        "direction_stats": ds,
     }
 
 
@@ -251,9 +247,6 @@ def _render_performance_charts(trades: List[Dict]) -> tuple[str, str]:
     </div>
     <div class="chart-container">
         <div id="duration-pnl-chart"></div>
-    </div>
-    <div class="chart-container">
-        <div id="long-short-chart"></div>
     </div>
     """
 
@@ -333,39 +326,6 @@ def _render_performance_charts(trades: List[Dict]) -> tuple[str, str]:
             legend: {{ font: {{ size: 10 }} }}
         }});
 
-        // Long vs Short Comparison
-        var lsCategories = ['Trades', 'Winners', 'Losers', 'Win Rate (%)'];
-        var lsLong = [{perf['direction_stats']['long']['count']}, {perf['direction_stats']['long']['winners']}, {perf['direction_stats']['long']['losers']}, {perf['direction_stats']['long']['win_rate']:.1f}];
-        var lsShort = [{perf['direction_stats']['short']['count']}, {perf['direction_stats']['short']['winners']}, {perf['direction_stats']['short']['losers']}, {perf['direction_stats']['short']['win_rate']:.1f}];
-        Plotly.newPlot('long-short-chart', [{{
-            x: lsCategories,
-            y: lsLong,
-            type: 'bar',
-            name: 'Long',
-            marker: {{ color: 'rgba(195, 232, 141, 0.8)' }},
-            text: lsLong.map(function(v, i) {{ return i === 3 ? v.toFixed(1) + '%' : v; }}),
-            textposition: 'outside',
-            textfont: {{ size: 10, color: '#c8d3f5' }}
-        }}, {{
-            x: lsCategories,
-            y: lsShort,
-            type: 'bar',
-            name: 'Short',
-            marker: {{ color: 'rgba(255, 117, 127, 0.8)' }},
-            text: lsShort.map(function(v, i) {{ return i === 3 ? v.toFixed(1) + '%' : v; }}),
-            textposition: 'outside',
-            textfont: {{ size: 10, color: '#c8d3f5' }}
-        }}], {{
-            paper_bgcolor: '#2f334d',
-            plot_bgcolor: '#2f334d',
-            font: {{ color: '#c8d3f5', size: 10 }},
-            margin: {{ t: 30, b: 40, l: 50, r: 20 }},
-            title: {{ text: 'Long vs Short', font: {{ size: 12, color: '#636da6' }} }},
-            xaxis: {{ gridcolor: '#3b4261' }},
-            yaxis: {{ gridcolor: '#3b4261' }},
-            barmode: 'group',
-            legend: {{ font: {{ size: 10 }} }}
-        }});
     """
 
     return html, js
