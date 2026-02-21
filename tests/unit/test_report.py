@@ -256,16 +256,6 @@ class TestHoldDurationChart:
         assert "Hold Duration" in html
 
 
-class TestPnlHeatmap:
-    def test_pnl_heatmap_present(self):
-        trades = [
-            _make_trade(100, entry_ts="2025-01-06T09:00:00"),
-            _make_trade(-50, entry_ts="2025-01-07T14:00:00"),
-        ]
-        html = generate_report(SAMPLE_PARAMS, trades)
-        assert "pnl-heatmap-chart" in html
-        assert "Heatmap" in html or "heatmap" in html
-
 
 class TestBulletChart:
     def test_bullet_chart_replaces_table(self):
@@ -346,9 +336,8 @@ class TestReportLayoutOrder:
         streak_pos = html.index("streak-timeline-chart")
         ls_pos = html.index("Long / Short Breakdown")
         perf_pos = html.index("Performance Analysis")
-        heatmap_pos = html.index("pnl-heatmap-chart")
         flow_pos = html.index("Strategy Flow")
         params_pos = html.index("Strategy Parameters")
 
         assert eq_pos < dd_pos < streak_pos < ls_pos
-        assert ls_pos < perf_pos < heatmap_pos < flow_pos < params_pos
+        assert ls_pos < perf_pos < flow_pos < params_pos

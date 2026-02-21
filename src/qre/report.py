@@ -818,73 +818,6 @@ def _render_optuna_history(optuna_history: List[Dict]) -> tuple[str, str]:
     return html, js
 
 
-def _render_pnl_heatmap(trades: List[Dict]) -> tuple[str, str]:
-    """Render P&L heatmap by day-of-week and hour-of-day."""
-    if not trades:
-        return "", ""
-
-    from collections import defaultdict
-    pnl_sums: Dict[tuple, list] = defaultdict(list)
-    days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-
-    for t in trades:
-        entry_ts = t.get("entry_ts", "")
-        if not entry_ts or len(entry_ts) < 13:
-            continue
-        try:
-            dt = datetime.fromisoformat(entry_ts.replace("+00:00", ""))
-            dow = dt.weekday()
-            hour = dt.hour
-            pnl_sums[(dow, hour)].append(t.get("pnl_pct", 0) * 100)
-        except (ValueError, AttributeError):
-            continue
-
-    z = []
-    for day in range(7):
-        row = []
-        for hour in range(24):
-            vals = pnl_sums.get((day, hour), [])
-            row.append(round(sum(vals) / len(vals), 3) if vals else None)
-        z.append(row)
-
-    hours = list(range(24))
-
-    html = """
-    <h2>P&amp;L Heatmap (Entry Day &times; Hour)</h2>
-    <div class="chart-container">
-        <div id="pnl-heatmap-chart"></div>
-    </div>
-    """
-
-    js = f"""
-        Plotly.newPlot('pnl-heatmap-chart', [{{
-            z: {json.dumps(z)},
-            x: {json.dumps(hours)},
-            y: {json.dumps(days)},
-            type: 'heatmap',
-            colorscale: [[0, '#ff757f'], [0.5, '#2f334d'], [1, '#c3e88d']],
-            zmid: 0,
-            hoverongaps: false,
-            hovertemplate: '%{{y}} %{{x}}:00<br>Avg P&L: %{{z:.3f}}%<extra></extra>',
-            colorbar: {{
-                thickness: 12,
-                outlinewidth: 0,
-                tickfont: {{ color: '#636da6', size: 9 }},
-                ticksuffix: '%'
-            }}
-        }}], {{
-            paper_bgcolor: '#2f334d',
-            plot_bgcolor: '#2f334d',
-            font: {{ color: '#c8d3f5', size: 10 }},
-            margin: {{ t: 30, b: 40, l: 50, r: 20 }},
-            title: {{ text: 'Average P&L by Entry Time', font: {{ size: 12, color: '#636da6' }} }},
-            xaxis: {{ title: 'Hour (UTC)', dtick: 1 }},
-            yaxis: {{ autorange: 'reversed' }}
-        }});
-    """
-
-    return html, js
-
 
 def _render_hold_duration_chart(trades: List[Dict]) -> tuple[str, str]:
     """Render hold duration histogram with hour-based bins."""
@@ -981,7 +914,6 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
     ls_html = _render_long_short_metrics(trades)
     perf_html, perf_js = _render_performance_charts(trades)
     hold_dur_html, hold_dur_js = _render_hold_duration_chart(trades)
-    heatmap_html, heatmap_js = _render_pnl_heatmap(trades)
     rolling_html, rolling_js = _render_rolling_metrics(trades)
     streak_html, streak_js = _render_streak_timeline(trades)
     optuna_html, optuna_js = _render_optuna_history(optuna_history or [])
@@ -1510,7 +1442,6 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
     {optuna_html}
     {perf_html}
     {hold_dur_html}
-    {heatmap_html}
     {flow_html}
     {strategy_html}
 
@@ -1572,7 +1503,6 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
         {streak_js}
         {perf_js}
         {hold_dur_js}
-        {heatmap_js}
         {optuna_js}
     </script>
 </body>
