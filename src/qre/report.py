@@ -230,29 +230,65 @@ def _build_performance_data(trades: List[Dict]) -> Dict[str, Any]:
     }
 
 
-def _render_performance_charts(trades: List[Dict]) -> tuple[str, str]:
-    """Render performance analysis section (HTML + JS)."""
+def _render_monthly_returns(trades: List[Dict]) -> tuple[str, str]:
+    """Render monthly returns bar chart."""
+    if not trades:
+        return "", ""
+
+    perf = _build_performance_data(trades)
+    if not perf["month_labels"]:
+        return "", ""
+
+    month_colors = [
+        "'#c3e88d'" if v > 0 else "'#ff757f'" for v in perf["month_values"]
+    ]
+
+    html = """
+    <div class="chart-container">
+        <div id="monthly-returns-chart"></div>
+    </div>
+    """
+
+    js = f"""
+        // Monthly Returns
+        Plotly.newPlot('monthly-returns-chart', [{{
+            x: {json.dumps(perf['month_labels'])},
+            y: {json.dumps(perf['month_values'])},
+            type: 'bar',
+            marker: {{ color: [{', '.join(month_colors)}] }},
+            text: {json.dumps([f'${v:,.0f}' for v in perf['month_values']])},
+            textposition: 'outside',
+            textfont: {{ size: 9, color: '#c8d3f5' }}
+        }}], {{
+            paper_bgcolor: '#2f334d',
+            plot_bgcolor: '#2f334d',
+            font: {{ color: '#c8d3f5', size: 10 }},
+            margin: {{ t: 30, b: 60, l: 60, r: 20 }},
+            title: {{ text: 'Monthly Returns', font: {{ size: 12, color: '#636da6' }} }},
+            xaxis: {{ gridcolor: '#3b4261', title: 'Month' }},
+            yaxis: {{ gridcolor: '#3b4261', title: 'P&L ($)' }},
+            showlegend: false
+        }});
+    """
+
+    return html, js
+
+
+def _render_trade_charts(trades: List[Dict]) -> tuple[str, str]:
+    """Render P&L distribution and trade duration vs P&L scatter."""
     if not trades:
         return "", ""
 
     perf = _build_performance_data(trades)
 
     html = """
-    <h2>Performance Analysis</h2>
     <div class="chart-container">
         <div id="pnl-dist-chart"></div>
-    </div>
-    <div class="chart-container">
-        <div id="monthly-returns-chart"></div>
     </div>
     <div class="chart-container">
         <div id="duration-pnl-chart"></div>
     </div>
     """
-
-    month_colors = [
-        "'#c3e88d'" if v > 0 else "'#ff757f'" for v in perf["month_values"]
-    ]
 
     js = f"""
         // P&L Distribution
@@ -280,26 +316,6 @@ def _render_performance_charts(trades: List[Dict]) -> tuple[str, str]:
             legend: {{ font: {{ size: 10 }} }}
         }});
 
-        // Monthly Returns
-        Plotly.newPlot('monthly-returns-chart', [{{
-            x: {json.dumps(perf['month_labels'])},
-            y: {json.dumps(perf['month_values'])},
-            type: 'bar',
-            marker: {{ color: [{', '.join(month_colors)}] }},
-            text: {json.dumps([f'${v:,.0f}' for v in perf['month_values']])},
-            textposition: 'outside',
-            textfont: {{ size: 9, color: '#c8d3f5' }}
-        }}], {{
-            paper_bgcolor: '#2f334d',
-            plot_bgcolor: '#2f334d',
-            font: {{ color: '#c8d3f5', size: 10 }},
-            margin: {{ t: 30, b: 60, l: 60, r: 20 }},
-            title: {{ text: 'Monthly Returns', font: {{ size: 12, color: '#636da6' }} }},
-            xaxis: {{ gridcolor: '#3b4261', title: 'Month' }},
-            yaxis: {{ gridcolor: '#3b4261', title: 'P&L ($)' }},
-            showlegend: false
-        }});
-
         // Trade Duration vs P&L
         Plotly.newPlot('duration-pnl-chart', [{{
             x: {json.dumps(perf['win_hold'])},
@@ -325,11 +341,9 @@ def _render_performance_charts(trades: List[Dict]) -> tuple[str, str]:
             yaxis: {{ gridcolor: '#3b4261', title: 'P&L (%)' }},
             legend: {{ font: {{ size: 10 }} }}
         }});
-
     """
 
     return html, js
-
 
 
 def _render_rolling_metrics(trades: List[Dict], window: int = 30) -> tuple[str, str]:
@@ -884,7 +898,8 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
     flow_html = _render_strategy_flow(params, trades)
     strategy_html = _render_strategy_params(params)
     ls_html = _render_long_short_metrics(trades)
-    perf_html, perf_js = _render_performance_charts(trades)
+    monthly_html, monthly_js = _render_monthly_returns(trades)
+    trade_charts_html, trade_charts_js = _render_trade_charts(trades)
     hold_dur_html, hold_dur_js = _render_hold_duration_chart(trades)
     rolling_html, rolling_js = _render_rolling_metrics(trades)
     streak_html, streak_js = _render_streak_timeline(trades)
@@ -1412,20 +1427,22 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
         <div id="equity-combo-chart" style="height:450px"></div>
     </div>
 
-    {rolling_html}
-    {streak_html}
-
-    {_section_divider("Trade Analysis")}
-
-    {ls_html}
+    {monthly_html}
 
     {_section_divider("Robustness")}
 
     {split_html}
     {mc_html}
     {optuna_html}
-    {perf_html}
+
+    {_section_divider("Trade Analysis")}
+
+    {ls_html}
+    {trade_charts_html}
+    {rolling_html}
+    {streak_html}
     {hold_dur_html}
+
     {_section_divider("Strategy")}
 
     {flow_html}
@@ -1500,9 +1517,10 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
             legend: {{ font: {{ size: 10 }}, orientation: 'h', y: -0.15 }},
             showlegend: true
         }});
+        {monthly_js}
+        {trade_charts_js}
         {rolling_js}
         {streak_js}
-        {perf_js}
         {hold_dur_js}
         {optuna_js}
     </script>

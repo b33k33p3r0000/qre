@@ -346,15 +346,33 @@ class TestReportLayoutOrder:
                               exit_ts=f"2025-01-{i+2:02d}T15:00:00")
                   for i in range(35)]
         html = generate_report(params, trades, optuna_history=[{"number": 0, "value": 50000}])
+
+        # Section divider order
+        perf_div = html.index(">PERFORMANCE<")
+        robust_div = html.index(">ROBUSTNESS<")
+        trades_div = html.index(">TRADE ANALYSIS<")
+        strategy_div = html.index(">STRATEGY<")
+        assert perf_div < robust_div < trades_div < strategy_div
+
+        # Performance section: combo chart + detail metrics + monthly returns
         combo_pos = html.index("equity-combo-chart")
-        streak_pos = html.index("streak-timeline-chart")
+        monthly_pos = html.index("monthly-returns-chart")
+        assert perf_div < combo_pos < monthly_pos < robust_div
+
+        # Robustness section: splits + MC + optuna
+        split_pos = html.index("Walk-Forward")
+        optuna_pos = html.index("Optimization History")
+        assert robust_div < split_pos < optuna_pos < trades_div
+
+        # Trade Analysis section: L/S + P&L dist + rolling + streaks
         ls_pos = html.index("Long / Short Breakdown")
-        perf_pos = html.index("Performance Analysis")
+        pnl_dist_pos = html.index("pnl-dist-chart")
+        assert trades_div < ls_pos < pnl_dist_pos < strategy_div
+
+        # Strategy section: flow + params
         flow_pos = html.index("Strategy Flow")
         params_pos = html.index("Strategy Parameters")
-
-        assert combo_pos < streak_pos < ls_pos
-        assert ls_pos < perf_pos < flow_pos < params_pos
+        assert strategy_div < flow_pos < params_pos
 
 
 class TestSectionDividers:
