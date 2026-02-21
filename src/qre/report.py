@@ -155,6 +155,54 @@ def _fmt_usd(value: float) -> str:
     return f"${value:,.2f}"
 
 
+def _render_exit_reason_breakdown(trades: List[Dict]) -> str:
+    """Render exit reason breakdown table (signal / catastrophic_stop / force_close)."""
+    if not trades:
+        return ""
+
+    reason_order = ["signal", "catastrophic_stop", "force_close"]
+    reason_labels = {
+        "signal": "Signal (planned exit)",
+        "catastrophic_stop": "Catastrophic Stop (-10%)",
+        "force_close": "Force Close (end of period)",
+    }
+    reason_css = {
+        "signal": "",
+        "catastrophic_stop": "negative",
+        "force_close": "warning",
+    }
+
+    total = len(trades)
+    rows = ""
+    for reason in reason_order:
+        subset = [t for t in trades if t.get("reason") == reason]
+        count = len(subset)
+        pct = count / total * 100 if total else 0
+        avg_pnl = sum(t.get("pnl_abs", 0) for t in subset) / count if count else 0
+        avg_pnl_pct = sum(t.get("pnl_pct", 0) for t in subset) / count * 100 if count else 0
+        css = reason_css.get(reason, "")
+        pnl_css = "positive" if avg_pnl >= 0 else "negative"
+        rows += (
+            f'<tr>'
+            f'<td class="{css}">{reason_labels.get(reason, reason)}</td>'
+            f'<td>{count}</td>'
+            f'<td>{pct:.0f}%</td>'
+            f'<td class="{pnl_css}">{_fmt_usd(avg_pnl)}</td>'
+            f'<td class="{pnl_css}">{avg_pnl_pct:+.2f}%</td>'
+            f'</tr>\n'
+        )
+
+    return f"""
+    <h2>Exit Reasons</h2>
+    <div class="chart-container">
+        <table class="params-table">
+            <tr><th>Reason</th><th>Count</th><th>%</th><th>Avg P&amp;L ($)</th><th>Avg P&amp;L (%)</th></tr>
+            {rows}
+        </table>
+    </div>
+    """
+
+
 def _render_long_short_metrics(trades: List[Dict]) -> str:
     """Render long/short breakdown section."""
     ds = _compute_direction_stats(trades)
@@ -897,6 +945,7 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
     mc_html = _render_mc_section(params)
     flow_html = _render_strategy_flow(params, trades)
     strategy_html = _render_strategy_params(params)
+    exit_reasons_html = _render_exit_reason_breakdown(trades)
     ls_html = _render_long_short_metrics(trades)
     monthly_html, monthly_js = _render_monthly_returns(trades)
     trade_charts_html, trade_charts_js = _render_trade_charts(trades)
@@ -1464,6 +1513,7 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
     {_section_divider("Trade Analysis")}
 
     {ls_html}
+    {exit_reasons_html}
     {trade_charts_html}
     {rolling_html}
     {streak_html}
