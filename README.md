@@ -6,34 +6,36 @@ Cíl: najít robustní parametry pro live trading přes [EE (Execution Engine)](
 
 ---
 
-## Strategie — Quant Whale Strategy v4.0
+## Strategie — Quant Whale Strategy v4.1.0
 
 Založena na studii Chio (2022) — MACD+RSI dosáhlo 78–86% win rate na US equities.
 
 **Entry logika (3 vrstvy):**
 - **Layer 1 — MACD crossover (trigger):** MACD protne signal line na 1H baru
-- **Layer 2 — RSI lookback:** RSI bylo v extrémní zóně během posledních `rsi_lookback` barů (0–12h)
+- **Layer 2 — RSI lookback:** RSI bylo v extrémní zóně během posledních `rsi_lookback` barů (4–8h)
 - **Layer 3 — Trend filtr:** MACD trend na vyšším TF (4h/8h/1d) souhlasí se směrem
 - **LONG:** MACD bull cross AND RSI oversold (lookback) AND higher-TF bullish
 - **SHORT:** MACD bear cross AND RSI overbought (lookback) AND higher-TF bearish
 
 **Exit logika:**
 - Opačný signál (symetrický flip) — long se zavře a otevře short na sell signálu a naopak
+- `allow_flip=0`: exit to flat, nový vstup potřebuje čerstvý signál
 - Catastrophic stop: -10% emergency exit
 
-**9 Optuna parametrů:**
+**10 Optuna parametrů:**
 
 | Parametr | Rozsah | Popis |
 |----------|--------|-------|
-| `macd_fast` | 1–20 | Rychlá EMA perioda |
+| `macd_fast` | 2.0–20.0 (float) | Rychlá EMA perioda |
 | `macd_slow` | 10–45 | Pomalá EMA perioda |
-| `macd_signal` | 1–15 | Signal line perioda |
-| `rsi_period` | 3–30 | RSI výpočetní perioda |
+| `macd_signal` | 2–15 | Signal line perioda |
+| `rsi_period` | 5–30 | RSI výpočetní perioda |
 | `rsi_lower` | 25–35 | Práh pro oversold zónu (±5 od standardu 30) |
 | `rsi_upper` | 65–75 | Práh pro overbought zónu (±5 od standardu 70) |
-| `rsi_lookback` | 0–24 | RSI lookback window (bary). 0 = v3.0 chování |
+| `rsi_lookback` | 4–8 | RSI lookback window (bary) |
 | `trend_tf` | 4h/8h/1d | Vyšší TF pro trend filtr |
 | `trend_strict` | 0–1 | Trend filtr on/off. 0 = v3.0 chování |
+| `allow_flip` | 0–1 | 1=position flip (always-in), 0=exit to flat |
 
 Constraints: `macd_slow - macd_fast >= 5` (minimální MACD spread, jinak trial pruned).
 
@@ -70,7 +72,7 @@ run.sh (presets)
 | Modul | Popis |
 |-------|-------|
 | `optimize.py` | AWF orchestrátor — Optuna TPE + SHA pruner, RSI cache |
-| `core/strategy.py` | Quant Whale Strategy v4.0 — MACD crossover + RSI lookback + trend filter |
+| `core/strategy.py` | Quant Whale Strategy v4.1.0 — MACD crossover + RSI lookback + trend filter |
 | `core/backtest.py` | Numba JIT trading loop — Long+Short, position flipping |
 | `core/indicators.py` | RSI a MACD výpočty |
 | `core/metrics.py` | Sharpe, Sortino, Calmar, drawdown, win rate, Monte Carlo |
@@ -97,13 +99,18 @@ Split 3:  [============ train 80% ============][= test =]
 
 - 2 splity pro krátká data (<1.5 roku), 3 splity jinak
 - Optuna TPE sampler s SuccessiveHalving prunerem
-- RSI pre-computed cache: 28 period (3–30) místo počítání per-trial
-- Objective = penalizované equity z posledního test splitu
-- Monte Carlo validace (1000 simulací) na finálním výsledku
+- RSI pre-computed cache: 26 period (5–30) místo počítání per-trial
+- **Purge gap:** 50 barů mezi train/test splity (eliminace indicator leakage)
+- Monte Carlo validace (1000 simulací) na OOS splitech
 
-**Penalties:**
-1. **Hard constraint:** < 30 trades/rok NEBO < 3 test trades → equity = 0
-2. **Overtrading:** > 500 trades/rok → až -15% penalizace
+**Objective — Log Calmar + anti-gaming guards:**
+```
+score = log(1 + calmar) × trade_ramp × sharpe_penalty
+```
+- **Log Calmar:** `log(1 + annual_return / max(DD, 5%))` — komprese extrémních hodnot
+- **Trade ramp:** `min(1.0, trades_per_year / 100)` — penalizuje <100 trades/rok
+- **Sharpe decay:** `1/(1 + 0.3*(sharpe - 3.0))` když Sharpe > 3.0
+- **Hard constraint:** < 30 trades/rok NEBO < 5 test trades → score = 0
 
 ---
 
@@ -186,7 +193,10 @@ Klíčové konstanty v `config.py`:
 | `FEE` | 0.075% | Trading fee |
 | `MIN_TRADES_YEAR_HARD` | 30 | Hard constraint |
 | `MIN_TRADES_TEST_HARD` | 5 | Hard constraint per test split |
-| `MIN_TRADES_TEST_SOFT` | 15 | Soft penalty threshold (-15%) |
+| `MIN_DRAWDOWN_FLOOR` | 0.05 | 5% DD floor pro Calmar (anti-gaming) |
+| `TARGET_TRADES_YEAR` | 100 | Trade ramp target (plný score od 100/rok) |
+| `SHARPE_SUSPECT_THRESHOLD` | 3.0 | Sharpe decay práh |
+| `PURGE_GAP_BARS` | 50 | Purge gap mezi train/test splity |
 | AWF `n_splits` | 5 | Default počet AWF splitů |
 | AWF `test_size` | 0.20 | Test window = 20% dat |
 
