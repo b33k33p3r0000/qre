@@ -65,10 +65,11 @@ MIN_TRADES_TEST_HARD = 5
 # OPTIMIZATION
 # =============================================================================
 
-# --- Objective: Calmar + Sharpe sanity penalty ---
+# --- Objective: Log Calmar + anti-gaming guards ---
 SHARPE_SUSPECT_THRESHOLD = 3.0   # OOS Sharpe above this triggers decay penalty
 SHARPE_DECAY_RATE = 0.3          # Decay rate: penalty = 1/(1 + rate*(sharpe - threshold))
-MIN_DRAWDOWN_FLOOR = 0.001       # Prevent division by zero in Calmar
+MIN_DRAWDOWN_FLOOR = 0.05        # DD floor 5% — prevents Calmar gaming via tiny drawdowns
+TARGET_TRADES_YEAR = 100          # Trade count ramp: full score at 100+ trades/year
 
 # --- Walk-forward purge gap ---
 PURGE_GAP_BARS = 50              # Bars skipped between train end and test start

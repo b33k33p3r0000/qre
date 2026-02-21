@@ -75,7 +75,14 @@ def test_calmar_objective_constants_exist():
     assert SHARPE_DECAY_RATE > 0
 
     assert isinstance(MIN_DRAWDOWN_FLOOR, float)
-    assert MIN_DRAWDOWN_FLOOR > 0
+    assert MIN_DRAWDOWN_FLOOR >= 0.05  # DD floor must be at least 5%
+
+
+def test_target_trades_year_exists():
+    """TARGET_TRADES_YEAR for trade count ramp in objective."""
+    from qre.config import TARGET_TRADES_YEAR
+    assert isinstance(TARGET_TRADES_YEAR, (int, float))
+    assert TARGET_TRADES_YEAR >= 50
 
 
 def test_purge_gap_bars_exists():
