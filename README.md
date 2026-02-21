@@ -77,6 +77,7 @@ run.sh (presets)
 | `core/indicators.py` | RSI a MACD výpočty |
 | `core/metrics.py` | Sharpe, Sortino, Calmar, drawdown, win rate, Monte Carlo |
 | `penalties.py` | Hard constraint (min trades/year) + overtrading penalty |
+| `monitor.py` | Live TUI dashboard — sledování běžících optimalizací v reálném čase |
 | `analyze.py` | Post-run diagnostika — health check, suggestions, Discord embed |
 | `data/fetch.py` | Binance OHLCV fetch (1H + 4H/8H/1D, fresh data bez cache) |
 | `report.py` | Self-contained HTML report s Plotly grafy |
@@ -162,6 +163,31 @@ CLI parametry: `--symbol`, `--hours`, `--trials`, `--splits`, `--seed`, `--timeo
 
 ---
 
+## Live Monitor
+
+Sledování běžících optimalizací v reálném čase. Čte Optuna SQLite checkpoint DB v read-only modu.
+
+```bash
+python -m qre.monitor                           # auto-detect aktivní runy
+python -m qre.monitor calmar-btc                # filtr na konkrétní run
+python -m qre.monitor --interval 5              # refresh každých 5s
+python -m qre.monitor --results-dir results     # custom results dir
+```
+
+**Zobrazuje per symbol:**
+- Progress (completed / requested trials, trials/min, ETA)
+- Best trial (Log Calmar value, trial číslo)
+- Rozšířené metriky (Sharpe equity, max DD, P&L%, trades, trades/yr) — od runů s user_attrs
+- Optimální parametry (MACD/RSI/trend v kompaktním formátu)
+
+**Vlastnosti:**
+- Auto-detect aktivních runů (DB modified < 5 minut)
+- Multi-run podpora (BTC + SOL současně v separátních panelech)
+- Detekce nového best trialu (`NEW` marker)
+- Graceful degradation pro starší runy bez rozšířených metrik
+
+---
+
 ## Výstupy
 
 Každý run vytvoří složku `results/<timestamp>_<tag>/<SYMBOL>/`:
@@ -242,6 +268,7 @@ qre/
 │   ├── analyze.py
 │   ├── notify.py
 │   ├── report.py
+│   ├── monitor.py
 │   ├── io.py
 │   ├── core/
 │   │   ├── strategy.py
@@ -274,7 +301,8 @@ qre/
 - **ccxt** — Binance API
 - **Plotly** — HTML reporty (equity curve, drawdown, trade distribuce)
 - **requests** — Discord webhooky
-- **pytest** — 216+ unit a integračních testů
+- **Rich** — live monitor TUI
+- **pytest** — 180+ unit a integračních testů
 
 ---
 
