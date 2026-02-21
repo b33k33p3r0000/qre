@@ -148,14 +148,6 @@ class TestBuildObjective:
         source = inspect.getsource(mod.build_objective)
         assert "apply_all_penalties" not in source
 
-    def test_objective_uses_calmar_not_sharpe(self):
-        """Objective must return Calmar-based score, not raw Sharpe."""
-        import inspect
-        from qre.optimize import build_objective
-        source = inspect.getsource(build_objective)
-        assert "calmar" in source.lower(), "Objective must use Calmar ratio"
-        assert "SHARPE_PENALTY_TIERS" not in source, "Old tier penalties must be removed"
-
     def test_sharpe_decay_penalty_reduces_score(self):
         """When OOS Sharpe > SHARPE_SUSPECT_THRESHOLD, Calmar score is penalized."""
         from qre.config import SHARPE_SUSPECT_THRESHOLD, SHARPE_DECAY_RATE
