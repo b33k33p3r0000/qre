@@ -670,15 +670,13 @@ def _render_strategy_flow(params: Dict[str, Any], trades: List[Dict] | None = No
 def _render_strategy_params(params: Dict[str, Any]) -> str:
     """Render strategy parameters as bullet chart visualization."""
     numeric_params = [
-        ("macd_fast", "MACD fast", 2, 20),
+        ("macd_fast", "MACD fast", 1, 20),
         ("macd_slow", "MACD slow", 10, 45),
         ("macd_signal", "MACD signal", 2, 15),
-        ("rsi_period", "RSI period", 5, 30),
+        ("rsi_period", "RSI period", 3, 30),
         ("rsi_lower", "RSI lower", 20, 40),
         ("rsi_upper", "RSI upper", 60, 80),
         ("rsi_lookback", "RSI lookback", 4, 8),
-        ("trend_strict", "Trend strict", 0, 1),
-        ("allow_flip", "Allow flip", 0, 1),
     ]
     categorical_params = [
         ("trend_tf", "Trend TF", ["4h", "8h", "1d"]),
@@ -689,6 +687,7 @@ def _render_strategy_params(params: Dict[str, Any]) -> str:
         if key not in params:
             continue
         val = params[key]
+        display_val = f"{val:.1f}" if isinstance(val, float) else val
         if hi == lo:
             pct = 50
         else:
@@ -702,7 +701,7 @@ def _render_strategy_params(params: Dict[str, Any]) -> str:
                 <div class="param-bar-marker" style="left:{pct:.0f}%"></div>
             </div>
             <span class="param-range-hi">{hi}</span>
-            <span class="param-val">{val}</span>
+            <span class="param-val">{display_val}</span>
         </div>"""
 
     for key, label, options in categorical_params:
@@ -945,6 +944,13 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
     cat_stops = [t for t in trades if t.get("reason") == "catastrophic_stop"]
     cat_stop_count = len(cat_stops)
     cat_stop_active = cat_stop_count > 0
+
+    # Avg win / avg loss
+    wins = [t["pnl_abs"] for t in trades if t.get("pnl_abs", 0) > 0]
+    losses = [t["pnl_abs"] for t in trades if t.get("pnl_abs", 0) < 0]
+    avg_win = sum(wins) / len(wins) if wins else 0
+    avg_loss = abs(sum(losses) / len(losses)) if losses else 0
+    win_loss_ratio = avg_win / avg_loss if avg_loss > 0 else 0
 
     equity_curve = build_equity_curve(trades, start_equity)
     drawdown_curve = build_drawdown_curve(equity_curve)
@@ -1434,6 +1440,10 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
             <span class="detail-value {'positive' if params.get('win_rate', 0) > 0.5 else 'negative'}">{params.get('win_rate', 0) * 100:.1f}%</span>
         </div>
         <div class="detail-row">
+            <span class="detail-label">Profitable Months</span>
+            <span class="detail-value {'positive' if params.get('profitable_months_ratio', 0) > 0.6 else 'negative'}">{params.get('profitable_months_ratio', 0) * 100:.0f}%</span>
+        </div>
+        <div class="detail-row">
             <span class="detail-label">Trades</span>
             <span class="detail-value">{params.get('trades', 0)}</span>
         </div>
@@ -1450,6 +1460,10 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
             <span class="detail-value">{params.get('sortino', 0):.2f}</span>
         </div>
         <div class="detail-row">
+            <span class="detail-label">Log Calmar (objective)</span>
+            <span class="detail-value">{params.get('log_calmar', 0):.4f}</span>
+        </div>
+        <div class="detail-row">
             <span class="detail-label">Recovery Factor</span>
             <span class="detail-value">{params.get('recovery_factor', 0):.2f}</span>
         </div>
@@ -1460,6 +1474,10 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
         <div class="detail-row">
             <span class="detail-label">Expectancy</span>
             <span class="detail-value">${params.get('expectancy', 0):.2f}</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Avg Win / Avg Loss</span>
+            <span class="detail-value">${avg_win:,.0f} / ${avg_loss:,.0f} ({win_loss_ratio:.2f}x)</span>
         </div>
         <div class="detail-row">
             <span class="detail-label">Catastrophic Stops</span>

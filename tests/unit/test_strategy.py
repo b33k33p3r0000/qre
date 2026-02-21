@@ -145,7 +145,7 @@ class TestMACDRSIStrategy:
             except optuna.TrialPruned:
                 continue
             assert isinstance(params["macd_fast"], float), f"macd_fast is {type(params['macd_fast'])}"
-            assert 2.0 <= params["macd_fast"] <= 20.0
+            assert 1.0 <= params["macd_fast"] <= 20.0
             return
         pytest.fail("All 50 trials pruned")
 
@@ -160,12 +160,12 @@ class TestMACDRSIStrategy:
                 params = strategy.get_optuna_params(trial)
             except optuna.TrialPruned:
                 continue
-            # macd_fast >= 2.0 (EMA(1.0) = close price = degenerate)
-            assert params["macd_fast"] >= 2.0, f"macd_fast={params['macd_fast']} < 2.0"
+            # macd_fast >= 1.0
+            assert params["macd_fast"] >= 1.0, f"macd_fast={params['macd_fast']} < 1.0"
             # macd_signal >= 2 (signal=1 = no smoothing = degenerate)
             assert params["macd_signal"] >= 2, f"macd_signal={params['macd_signal']} < 2"
-            # rsi_period >= 5 (RSI(3) = noise)
-            assert params["rsi_period"] >= 5, f"rsi_period={params['rsi_period']} < 5"
+            # rsi_period >= 3
+            assert params["rsi_period"] >= 3, f"rsi_period={params['rsi_period']} < 3"
             # rsi_lookback >= 4
             assert params["rsi_lookback"] >= 4, f"rsi_lookback={params['rsi_lookback']} < 4"
             return

@@ -322,7 +322,7 @@ class TestStrategyParamsV4:
         html = generate_report(params, trades)
         assert "RSI lookback" in html or "rsi_lookback" in html
         assert "Trend TF" in html or "trend_tf" in html
-        assert "Trend strict" in html or "trend_strict" in html
+        assert "strict=" in html  # shown in strategy flow as strict=0/1
 
 
 class TestReportLayoutOrder:
