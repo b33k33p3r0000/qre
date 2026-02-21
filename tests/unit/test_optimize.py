@@ -8,6 +8,7 @@ import optuna
 
 from qre.optimize import (
     compute_awf_splits,
+    compute_objective_score,
     create_sampler,
     create_pruner,
     build_objective,
@@ -149,66 +150,43 @@ class TestBuildObjective:
         assert "apply_all_penalties" not in source
 
     def test_sharpe_decay_penalty_reduces_score(self):
-        """When OOS Sharpe > SHARPE_SUSPECT_THRESHOLD, Calmar score is penalized."""
-        from qre.config import SHARPE_SUSPECT_THRESHOLD, SHARPE_DECAY_RATE
-        sharpe = 8.0
-        raw_calmar = 5.0
-        penalty = 1.0 / (1.0 + SHARPE_DECAY_RATE * (sharpe - SHARPE_SUSPECT_THRESHOLD))
-        penalized = raw_calmar * penalty
-        assert penalized < raw_calmar
-        assert penalized > 0  # no hard cap
-        assert abs(penalty - 0.4) < 0.01  # 1/(1+0.3*5) = 0.4
+        """When Sharpe > threshold, compute_objective_score returns lower value."""
+        score_normal = compute_objective_score(raw_calmar=5.0, sharpe=2.0, trades_per_year=100.0)
+        score_high_sharpe = compute_objective_score(raw_calmar=5.0, sharpe=8.0, trades_per_year=100.0)
+        assert score_high_sharpe < score_normal
+        assert score_high_sharpe > 0  # no hard cap
 
     def test_sharpe_below_threshold_no_penalty(self):
         """Sharpe at or below threshold should not be penalized."""
-        from qre.config import SHARPE_SUSPECT_THRESHOLD, SHARPE_DECAY_RATE
-        # Test at exact boundary — strict > means no penalty at threshold
-        sharpe = SHARPE_SUSPECT_THRESHOLD  # exactly 3.0
-        raw_calmar = 5.0
-        # With strict >, sharpe == threshold should NOT trigger penalty
-        # Penalty only applies when sharpe > threshold
-        penalized = raw_calmar  # no penalty expected
-        assert penalized == raw_calmar
+        from qre.config import SHARPE_SUSPECT_THRESHOLD
+        score_at = compute_objective_score(raw_calmar=5.0, sharpe=SHARPE_SUSPECT_THRESHOLD, trades_per_year=100.0)
+        score_below = compute_objective_score(raw_calmar=5.0, sharpe=1.0, trades_per_year=100.0)
+        # At threshold, no penalty — score should equal below-threshold score
+        assert score_at == score_below
 
-        # Also verify: sharpe just above threshold DOES get penalized
-        sharpe_above = SHARPE_SUSPECT_THRESHOLD + 0.1
-        penalty = 1.0 / (1.0 + SHARPE_DECAY_RATE * (sharpe_above - SHARPE_SUSPECT_THRESHOLD))
-        penalized_above = raw_calmar * penalty
-        assert penalized_above < raw_calmar, "Sharpe above threshold must be penalized"
+        # Just above threshold DOES get penalized
+        score_above = compute_objective_score(raw_calmar=5.0, sharpe=SHARPE_SUSPECT_THRESHOLD + 0.1, trades_per_year=100.0)
+        assert score_above < score_at, "Sharpe above threshold must be penalized"
 
     def test_objective_uses_log_calmar(self):
-        """Objective must use log(1+calmar), not raw calmar."""
-        import inspect
-        from qre.optimize import build_objective
-        source = inspect.getsource(build_objective)
-        assert "math.log" in source or "log(" in source, "Objective must use log dampening"
-        assert "calmar" in source.lower(), "Objective must use Calmar ratio"
-        assert "SHARPE_PENALTY_TIERS" not in source, "Old tier penalties must be removed"
+        """Log dampening compresses extreme Calmar values."""
+        score_5 = compute_objective_score(raw_calmar=5.0, sharpe=1.0, trades_per_year=100.0)
+        score_90 = compute_objective_score(raw_calmar=90.0, sharpe=1.0, trades_per_year=100.0)
+        ratio = score_90 / score_5
+        assert ratio < 3.0, f"Log ratio {ratio} too high — dampening insufficient"
+        assert ratio > 1.5, f"Log ratio {ratio} too low — dampening too aggressive"
 
     def test_trade_ramp_reduces_score_for_low_trades(self):
         """Trade ramp penalizes strategies with fewer than TARGET_TRADES_YEAR."""
-        from qre.config import TARGET_TRADES_YEAR
-        # 50 trades/year out of 100 target = 0.5 multiplier
-        trades_per_year = 50.0
-        trade_mult = min(1.0, max(0.0, trades_per_year / TARGET_TRADES_YEAR))
-        assert abs(trade_mult - 0.5) < 0.01
+        score_full = compute_objective_score(raw_calmar=5.0, sharpe=1.0, trades_per_year=100.0)
+        score_half = compute_objective_score(raw_calmar=5.0, sharpe=1.0, trades_per_year=50.0)
+        score_zero = compute_objective_score(raw_calmar=5.0, sharpe=1.0, trades_per_year=0.0)
+        assert abs(score_half / score_full - 0.5) < 0.01
+        assert score_zero == 0.0
 
-        # At target = 1.0
-        trade_mult_full = min(1.0, max(0.0, TARGET_TRADES_YEAR / TARGET_TRADES_YEAR))
-        assert trade_mult_full == 1.0
-
-        # Above target = capped at 1.0
-        trade_mult_over = min(1.0, max(0.0, 200.0 / TARGET_TRADES_YEAR))
-        assert trade_mult_over == 1.0
-
-    def test_log_dampening_compresses_extreme_calmar(self):
-        """Log dampening: Calmar 90 should be only ~2x better than Calmar 5."""
-        import math
-        log_90 = math.log(1.0 + 90.0)
-        log_5 = math.log(1.0 + 5.0)
-        ratio = log_90 / log_5
-        assert ratio < 3.0, f"Log ratio {ratio} too high — dampening insufficient"
-        assert ratio > 1.5, f"Log ratio {ratio} too low — dampening too aggressive"
+        # Above target = capped at 1.0 (same as full)
+        score_over = compute_objective_score(raw_calmar=5.0, sharpe=1.0, trades_per_year=200.0)
+        assert score_over == score_full
 
 
 class TestNoLegacyImports:

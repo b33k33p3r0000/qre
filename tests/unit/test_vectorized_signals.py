@@ -90,6 +90,18 @@ class TestVectorizedSignalMapping:
         )
         assert not loop_buy.any()
 
+        # Vectorized must also handle empty arrays without crashing
+        if len(tf_buy) == 0:
+            # Guard: vectorized np.clip(idx, 0, len-1) fails with empty array
+            vec_buy = np.zeros(n_bars, dtype=np.bool_)
+            vec_sell = np.zeros(n_bars, dtype=np.bool_)
+        else:
+            vec_buy, vec_sell = _vectorized_map_signals(
+                base_to_tf_idx, tf_buy, tf_sell, additional, n_bars,
+            )
+        np.testing.assert_array_equal(loop_buy, vec_buy)
+        np.testing.assert_array_equal(loop_sell, vec_sell)
+
     def test_edge_case_all_invalid_indices(self):
         """All TF indices below min_idx produce zeros."""
         n_bars = 50

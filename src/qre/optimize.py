@@ -17,7 +17,7 @@ Only AWF mode. Only Quant Whale Strategy (MACD+RSI) strategy.
 import logging
 import math
 import signal
-import time
+
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -52,6 +52,7 @@ from qre.config import (
     TPE_N_EI_CANDIDATES,
 )
 from qre.core.backtest import simulate_trades_fast
+from qre.core.indicators import rsi as compute_rsi
 from qre.core.metrics import aggregate_mc_results, calculate_metrics, monte_carlo_validation
 from qre.core.strategy import MACDRSIStrategy
 from qre.data.fetch import load_all_data
@@ -125,6 +126,38 @@ def create_pruner(n_trials: int) -> optuna.pruners.BasePruner:
     )
 
 
+def compute_objective_score(
+    raw_calmar: float,
+    sharpe: float,
+    trades_per_year: float,
+) -> float:
+    """Compute Log Calmar objective score with trade ramp and Sharpe decay.
+
+    This is the core scoring function used by the Optuna objective.
+    Extracted for testability.
+
+    Args:
+        raw_calmar: Raw Calmar ratio (annual_return / max_dd), already floored and clamped >= 0.
+        sharpe: Equity-based Sharpe ratio (clamped >= 0).
+        trades_per_year: Number of trades per year.
+
+    Returns:
+        Objective score (higher is better).
+    """
+    # Log dampening — compress extreme Calmar values
+    log_calmar = math.log(1.0 + raw_calmar)
+
+    # Trade count ramp — penalize low frequency
+    trade_mult = min(1.0, max(0.0, trades_per_year / TARGET_TRADES_YEAR))
+
+    # Smooth Sharpe decay — penalize suspiciously high Sharpe
+    if sharpe > SHARPE_SUSPECT_THRESHOLD:
+        penalty = 1.0 / (1.0 + SHARPE_DECAY_RATE * (sharpe - SHARPE_SUSPECT_THRESHOLD))
+        log_calmar *= penalty
+
+    return log_calmar * trade_mult
+
+
 def build_objective(
     symbol: str,
     data: Dict[str, pd.DataFrame],
@@ -140,8 +173,6 @@ def build_objective(
     total_bars = len(base_df)
 
     # Pre-compute RSI for all possible Optuna periods (5-30)
-    from qre.core.indicators import rsi as compute_rsi
-
     precomputed_cache = {"rsi": {}}
     for period in range(5, 31):
         precomputed_cache["rsi"][period] = compute_rsi(
@@ -211,18 +242,10 @@ def build_objective(
             raw_calmar = annual_return / max(max_dd, MIN_DRAWDOWN_FLOOR)
             raw_calmar = max(0.0, raw_calmar)
 
-            # Log dampening — compress extreme Calmar values
-            log_calmar = math.log(1.0 + raw_calmar)
-
-            # Trade count ramp — penalize low frequency
             trades_per_year = len(test_result.trades) / (test_result.backtest_days / 365.25)
-            trade_mult = min(1.0, max(0.0, trades_per_year / TARGET_TRADES_YEAR))
-
-            # Smooth Sharpe decay — penalize suspiciously high Sharpe
             sharpe = max(0.0, test_metrics.sharpe_ratio_equity_based)
-            if sharpe > SHARPE_SUSPECT_THRESHOLD:
-                penalty = 1.0 / (1.0 + SHARPE_DECAY_RATE * (sharpe - SHARPE_SUSPECT_THRESHOLD))
-                log_calmar *= penalty
+
+            score = compute_objective_score(raw_calmar, sharpe, trades_per_year)
 
             _sharpes.append(test_metrics.sharpe_ratio_equity_based)
             _drawdowns.append(test_metrics.max_drawdown)
@@ -230,7 +253,7 @@ def build_objective(
             _trade_counts.append(len(test_result.trades))
             _tpy.append(trades_per_year)
 
-            split_scores.append(log_calmar * trade_mult)
+            split_scores.append(score)
 
         if not split_scores or all(s == 0 for s in split_scores):
             return 0.0
@@ -355,8 +378,12 @@ def run_optimization(
 
     signal.signal(signal.SIGTERM, prev_handler)
 
-    best_params = study.best_trial.params
     completed_trials = len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE])
+    if completed_trials == 0:
+        raise RuntimeError(f"No completed trials for {symbol}. Check data quality and constraints.")
+    if study.best_value == 0.0:
+        logger.warning(f"All trials scored 0.0 for {symbol} — degenerate result")
+    best_params = study.best_trial.params
     if completed_trials < n_trials:
         logger.info(f"Optimization stopped early: {completed_trials}/{n_trials} trials completed")
     strategy = MACDRSIStrategy()

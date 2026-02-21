@@ -2,7 +2,7 @@
 Integration test: Full QRE pipeline without live API.
 
 Uses synthetic data to verify all modules work together:
-data -> strategy -> backtest -> metrics -> penalties -> results.
+data -> strategy -> backtest -> metrics -> results.
 """
 
 import json
@@ -12,13 +12,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from qre.config import MIN_WARMUP_BARS, STARTING_EQUITY
+from qre.config import MIN_TRADES_YEAR_HARD, MIN_WARMUP_BARS, STARTING_EQUITY
 from qre.core.backtest import simulate_trades_fast
 from qre.core.metrics import aggregate_mc_results, calculate_metrics, monte_carlo_validation
 from qre.core.strategy import MACDRSIStrategy
 from qre.io import save_json, save_trades_csv
 from qre.optimize import build_objective, compute_awf_splits
-from qre.penalties import check_hard_constraints
 from qre.report import build_equity_curve, build_drawdown_curve, generate_report, save_report
 
 
@@ -80,8 +79,9 @@ class TestFullPipeline:
         """Hard constraints pass for valid backtest output."""
         _, _, _, _, result = _run_pipeline(data)
         metrics = calculate_metrics(result.trades, result.backtest_days, start_equity=STARTING_EQUITY)
-        passed, reason = check_hard_constraints(metrics.trades_per_year)
-        assert passed, f"Hard constraint failed: {reason}"
+        assert metrics.trades_per_year >= MIN_TRADES_YEAR_HARD, (
+            f"trades_per_year {metrics.trades_per_year:.0f} < {MIN_TRADES_YEAR_HARD}"
+        )
 
     def test_io_save_and_load(self, data, tmp_path):
         """Results can be saved and loaded correctly."""

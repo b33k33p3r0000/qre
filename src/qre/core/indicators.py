@@ -28,8 +28,10 @@ def rsi(series: pd.Series, length: int = RSI_LENGTH) -> pd.Series:
     gain = np.where(delta > 0, delta, 0.0)
     loss = np.where(delta < 0, -delta, 0.0)
 
-    avg_gain = pd.Series(gain, index=series.index).rolling(length).mean()
-    avg_loss = pd.Series(loss, index=series.index).rolling(length).mean()
+    # SMA-based RSI (not Wilder's EMA). Verified identical to EE implementation
+    # on VPS (ee/data/indicators.py) — 2026-02-21.
+    avg_gain = pd.Series(gain, index=series.index).rolling(length, min_periods=length).mean()
+    avg_loss = pd.Series(loss, index=series.index).rolling(length, min_periods=length).mean()
 
     rs = avg_gain / (avg_loss.replace(0, np.nan))
 

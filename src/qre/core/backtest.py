@@ -92,6 +92,7 @@ def trading_loop_numba(
     catastrophic_stop_pct: float,
     long_only: bool,
     allow_flip: bool,
+    starting_equity: float,
 ) -> Tuple[float, np.ndarray, int]:
     """
     Numba trading loop with Long+Short support.
@@ -103,14 +104,14 @@ def trading_loop_numba(
         exit_reason: 0=signal, 1=catastrophic_stop, 2=force_close
         direction: +1=long, -1=short
     """
-    cash = STARTING_EQUITY
+    cash = starting_equity
     position = 0  # 0=flat, 1=long, -1=short
     position_size = 0.0
     entry_bar_idx = 0
     entry_price = 0.0
     capital_at_entry = 0.0
 
-    max_trades = (end_idx - start_idx) // 2 + 1
+    max_trades = (end_idx - start_idx) + 1
     trades = np.zeros((max_trades, 10), dtype=np.float64)
     n_trades = 0
 
@@ -367,6 +368,7 @@ def simulate_trades_fast(
         catastrophic_stop_pct=CATASTROPHIC_STOP_PCT,
         long_only=long_only,
         allow_flip=allow_flip,
+        starting_equity=float(STARTING_EQUITY),
     )
 
     reason_map = {0: "signal", 1: "catastrophic_stop", 2: "force_close"}

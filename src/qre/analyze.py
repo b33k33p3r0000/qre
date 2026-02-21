@@ -64,7 +64,7 @@ def health_check(params: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
     # Max Drawdown (percentage, e.g. -1.43 = -1.43%)
     # green: > -5%, yellow: -5% to -10%, red: < -10%
-    dd = params["max_drawdown"]
+    dd = params.get("max_drawdown", 0.0)
     if dd > -5.0:
         dd_status = "green"
     elif dd >= -10.0:
@@ -74,14 +74,14 @@ def health_check(params: dict[str, Any]) -> dict[str, dict[str, Any]]:
     result["max_drawdown"] = {"status": dd_status, "value": dd}
 
     # Trades per year: green 30–500, yellow 30–800, red outside
-    tpy = params["trades_per_year"]
+    tpy = params.get("trades_per_year", 0.0)
     result["trades_per_year"] = {
         "status": _classify(tpy, (30, 500), (30, 800)),
         "value": tpy,
     }
 
     # Win rate: green >= 0.50, yellow 0.40–0.50, red < 0.40
-    wr = params["win_rate"]
+    wr = params.get("win_rate", 0.0)
     if wr >= 0.50:
         wr_status = "green"
     elif wr >= 0.40:
@@ -91,7 +91,7 @@ def health_check(params: dict[str, Any]) -> dict[str, dict[str, Any]]:
     result["win_rate"] = {"status": wr_status, "value": wr}
 
     # Profit factor: green >= 1.5, yellow 1.0–1.5, red < 1.0
-    pf = params["profit_factor"]
+    pf = params.get("profit_factor", 0.0)
     if pf >= 1.5:
         pf_status = "green"
     elif pf >= 1.0:
@@ -101,7 +101,7 @@ def health_check(params: dict[str, Any]) -> dict[str, dict[str, Any]]:
     result["profit_factor"] = {"status": pf_status, "value": pf}
 
     # Expectancy: green >= 100, yellow 0–100, red < 0
-    exp = params["expectancy"]
+    exp = params.get("expectancy", 0.0)
     if exp >= 100.0:
         exp_status = "green"
     elif exp >= 0.0:
@@ -258,8 +258,8 @@ def analyze_thresholds(params: dict[str, Any]) -> dict[str, Any]:
         macd_spread_status, rsi_period, rsi_lower, rsi_upper,
         rsi_zone_width, rsi_zone_status.
     """
-    macd_fast = params["macd_fast"]
-    macd_slow = params["macd_slow"]
+    macd_fast = params.get("macd_fast", 12)
+    macd_slow = params.get("macd_slow", 26)
     macd_signal = params.get("macd_signal", 9)
     macd_spread = macd_slow - macd_fast
 
@@ -757,12 +757,12 @@ def analyze_run(run_dir: str | Path) -> dict[str, Any]:
     log.info("analyze_run: saved analysis.json → %s", symbol_dir / "analysis.json")
 
     # 10. Discord notification
-    webhook_url = os.environ.get("DISCORD_WEBHOOK_RUNS", "")
-    if webhook_url:
-        from qre.notify import discord_notify
+    from qre.config import DISCORD_WEBHOOK_RUNS
+    from qre.notify import discord_notify
 
+    if DISCORD_WEBHOOK_RUNS:
         embed = build_discord_embed(analysis)
-        discord_notify(embed, webhook_url)
+        discord_notify(embed, DISCORD_WEBHOOK_RUNS)
         log.info("analyze_run: sent Discord embed")
 
     log.info("analyze_run: done — verdict=%s", verdict)
