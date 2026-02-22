@@ -32,6 +32,8 @@ from qre.config import (
     ANCHORED_WF_SPLITS,
     ANCHORED_WF_SPLITS_SHORT,
     BASE_TF,
+    CATASTROPHIC_STOP_PCT,
+    CATASTROPHIC_STOP_PCT_DEFAULT,
     DEFAULT_TRIALS,
     ENABLE_PRUNING,
     MIN_DRAWDOWN_FLOOR,
@@ -187,7 +189,8 @@ def build_objective(
         )
 
         allow_flip = bool(params.get("allow_flip", 1))
-        catastrophic_stop_pct = params.get("catastrophic_stop_pct")
+        symbol_key = symbol.split("/")[0]
+        catastrophic_stop_pct = CATASTROPHIC_STOP_PCT.get(symbol_key, CATASTROPHIC_STOP_PCT_DEFAULT)
 
         split_scores = []
         _sharpes = []
@@ -403,7 +406,9 @@ def run_optimization(
     })
 
     allow_flip_final = bool(best_params.get("allow_flip", 1))
-    catastrophic_stop_pct_final = best_params.get("catastrophic_stop_pct")
+    symbol_key = symbol.split("/")[0]
+    catastrophic_stop_pct_final = CATASTROPHIC_STOP_PCT.get(symbol_key, CATASTROPHIC_STOP_PCT_DEFAULT)
+    best_params["catastrophic_stop_pct"] = catastrophic_stop_pct_final
     buy_s, sell_s = strategy.precompute_signals(data, best_params)
     full_result = simulate_trades_fast(symbol, data, buy_s, sell_s, allow_flip=allow_flip_final, catastrophic_stop_pct=catastrophic_stop_pct_final)
     full_metrics = calculate_metrics(
