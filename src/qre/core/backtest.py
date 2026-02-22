@@ -309,6 +309,7 @@ def simulate_trades_fast(
     end_idx: Optional[int] = None,
     long_only: Optional[bool] = None,
     allow_flip: Optional[bool] = None,
+    catastrophic_stop_pct: Optional[float] = None,
 ) -> BacktestResult:
     """
     Backtest with 1D buy/sell signals. Supports Long+Short.
@@ -365,7 +366,7 @@ def simulate_trades_fast(
         fee=FEE,
         start_idx=actual_start,
         end_idx=actual_end,
-        catastrophic_stop_pct=CATASTROPHIC_STOP_PCT,
+        catastrophic_stop_pct=catastrophic_stop_pct if catastrophic_stop_pct is not None else CATASTROPHIC_STOP_PCT,
         long_only=long_only,
         allow_flip=allow_flip,
         starting_equity=float(STARTING_EQUITY),

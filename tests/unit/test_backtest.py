@@ -130,6 +130,28 @@ class TestSimulateTradesFast:
         assert len(result.trades) >= 1
         assert any(t["reason"] == "catastrophic_stop" for t in result.trades)
 
+    def test_catastrophic_stop_custom_pct(self):
+        """Custom catastrophic_stop_pct is used when provided."""
+        n = 500
+        dates = pd.date_range("2025-01-01", periods=n, freq="1h")
+        close = np.full(n, 100.0)
+        close[260:] = 92.0  # 8% drop — triggers 5% stop but NOT 10%
+        high = close + 1.0
+        low = close - 1.0
+        data = {"1h": pd.DataFrame(
+            {"open": close.copy(), "high": high, "low": low, "close": close},
+            index=dates,
+        )}
+        buy, sell = _make_signals(n, buy_bars=[250])
+
+        # With default (10%) — no catastrophic stop
+        result_default = simulate_trades_fast("BTC/USDC", data, buy, sell)
+        assert not any(t["reason"] == "catastrophic_stop" for t in result_default.trades)
+
+        # With custom 5% — should trigger catastrophic stop
+        result_custom = simulate_trades_fast("BTC/USDC", data, buy, sell, catastrophic_stop_pct=0.05)
+        assert any(t["reason"] == "catastrophic_stop" for t in result_custom.trades)
+
     def test_force_close_at_end(self):
         """Open position is closed at end of data."""
         data = _make_1h_data()
