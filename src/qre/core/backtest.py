@@ -41,7 +41,7 @@ except ImportError:
 from qre.config import (
     BACKTEST_POSITION_PCT,
     BASE_TF,
-    CATASTROPHIC_STOP_PCT,
+    CATASTROPHIC_STOP_PCT_DEFAULT,
     FEE,
     LONG_ONLY,
     MIN_HOLD_HOURS,
@@ -329,7 +329,7 @@ def simulate_trades_fast(
             If False, exit closes to flat; new entry needs fresh signal.
             Default: True (backward compat with v4.0).
         catastrophic_stop_pct: Override catastrophic stop percentage.
-            If None, falls back to CATASTROPHIC_STOP_PCT config constant (0.10).
+            If None, falls back to CATASTROPHIC_STOP_PCT_DEFAULT config constant (0.10).
 
     Returns:
         BacktestResult with equity, trades list, and backtest_days.
@@ -371,7 +371,7 @@ def simulate_trades_fast(
         fee=FEE,
         start_idx=actual_start,
         end_idx=actual_end,
-        catastrophic_stop_pct=catastrophic_stop_pct if catastrophic_stop_pct is not None else CATASTROPHIC_STOP_PCT,
+        catastrophic_stop_pct=catastrophic_stop_pct if catastrophic_stop_pct is not None else CATASTROPHIC_STOP_PCT_DEFAULT,
         long_only=long_only,
         allow_flip=allow_flip,
         starting_equity=float(STARTING_EQUITY),
