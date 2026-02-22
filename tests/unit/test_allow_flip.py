@@ -55,15 +55,15 @@ class TestAllowFlipParam:
         params = strategy.get_default_params()
         assert params["allow_flip"] == 1
 
-    def test_param_count_is_11(self, strategy):
-        """v4.2.0 has 11 Optuna params (9 original + allow_flip + catastrophic_stop_pct)."""
+    def test_param_count_is_10(self, strategy):
+        """v4.2.1 has 10 Optuna params (9 original + allow_flip)."""
         import optuna
         study = optuna.create_study()
         expected_keys = {
             "macd_fast", "macd_slow", "macd_signal",
             "rsi_period", "rsi_lower", "rsi_upper",
             "rsi_lookback", "trend_tf", "trend_strict",
-            "allow_flip", "catastrophic_stop_pct",
+            "allow_flip",
         }
         for _ in range(50):
             trial = study.ask()
