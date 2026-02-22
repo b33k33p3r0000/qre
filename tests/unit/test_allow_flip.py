@@ -51,9 +51,9 @@ class TestAllowFlipParam:
         pytest.fail("All 50 trials pruned")
 
     def test_allow_flip_in_default_params(self, strategy):
-        """Default allow_flip is 1 (backward compat with v4.0)."""
+        """Default allow_flip is 0 (selective mode, v4.2.1+)."""
         params = strategy.get_default_params()
-        assert params["allow_flip"] == 1
+        assert params["allow_flip"] == 0
 
     def test_param_count_is_10(self, strategy):
         """v4.2.1 has 10 Optuna params (9 original + allow_flip)."""

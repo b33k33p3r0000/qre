@@ -42,6 +42,8 @@ Options:
   --skip-recent N      Skip most recent N hours from training data
   --tag NAME           Run tag (e.g. 'test-v1')
   --full               Full data, no skip (--hours 8760 --skip-recent 0)
+  --allow-flip N       0=selective (default), 1=always-in
+  --always-in          Shortcut for --allow-flip 1
   --fg                 Run in foreground (default: background)
 
 Examples:
@@ -70,6 +72,7 @@ PAIRS="both"
 TAG=""
 PRESET=""
 SKIP_RECENT=1080
+ALLOW_FLIP=0
 FOREGROUND=false
 LOG_DIR="$SCRIPT_DIR/logs"
 mkdir -p "$LOG_DIR"
@@ -93,6 +96,8 @@ while [[ $# -gt 0 ]]; do
         --tag) TAG="$2"; shift ;;
         --skip-recent) SKIP_RECENT="$2"; shift ;;
         --full) HOURS=8760; SKIP_RECENT=0 ;;
+        --allow-flip) ALLOW_FLIP="$2"; shift ;;
+        --always-in) ALLOW_FLIP=1 ;;
         --bg) FOREGROUND=false ;;  # already default, kept for explicitness
         --fg) FOREGROUND=true ;;
         attach)
@@ -285,6 +290,7 @@ build_cmd() {
     if [ "$SKIP_RECENT" -gt 0 ] 2>/dev/null; then
         cmd="$cmd --skip-recent $SKIP_RECENT"
     fi
+    cmd="$cmd --allow-flip $ALLOW_FLIP"
     echo "$cmd"
 }
 
@@ -305,6 +311,7 @@ echo "  Hours:   $HOURS (~$((HOURS / 24)) days)"
 [ -n "$SPLITS" ] && echo "  Splits:  $SPLITS"
 [ -n "$TAG" ] && echo "  Tag:     $TAG"
 echo "  Pairs:   $PAIRS"
+echo "  Flip:    $( [ "$ALLOW_FLIP" = "1" ] && echo "always-in" || echo "selective" )"
 echo "  Mode:    $MODE_LABEL"
 echo "═══════════════════════════════════════════"
 echo ""

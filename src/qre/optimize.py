@@ -164,6 +164,7 @@ def build_objective(
     symbol: str,
     data: Dict[str, pd.DataFrame],
     splits: List[Dict[str, float]],
+    allow_flip_setting: int = 1,
 ) -> callable:
     """Build Optuna objective function for AWF optimization.
 
@@ -182,7 +183,7 @@ def build_objective(
         ).values.astype(np.float64)
 
     def objective(trial: optuna.trial.Trial) -> float:
-        params = strategy.get_optuna_params(trial, symbol)
+        params = strategy.get_optuna_params(trial, symbol, allow_flip_override=allow_flip_setting)
 
         buy_signal, sell_signal = strategy.precompute_signals(
             data, params, precomputed_cache=precomputed_cache,
@@ -288,6 +289,7 @@ def run_optimization(
     run_tag: Optional[str] = None,
     skip_recent_hours: int = 0,
     test_size: float = 0.20,
+    allow_flip: int = 0,
 ) -> Dict[str, Any]:
     """
     Run full AWF optimization pipeline for a single symbol.
@@ -342,7 +344,7 @@ def run_optimization(
     # 3. Run Optuna
     sampler = create_sampler(seed, n_trials)
     pruner = create_pruner(n_trials)
-    objective = build_objective(symbol, data, splits)
+    objective = build_objective(symbol, data, splits, allow_flip_setting=allow_flip)
 
     base = symbol.split("/")[0]
     results_base = Path(results_dir)
@@ -583,6 +585,8 @@ def main():
     parser.add_argument("--results-dir", type=str, default="results")
     parser.add_argument("--test-size", type=float, default=0.20,
                         help="Test window size as fraction (default: 0.20 = 20%%)")
+    parser.add_argument("--allow-flip", type=int, default=0, choices=[0, 1],
+                        help="Allow position flipping: 1=always-in, 0=selective (default: 0)")
 
     args = parser.parse_args()
 
@@ -600,6 +604,7 @@ def main():
         run_tag=args.tag,
         skip_recent_hours=args.skip_recent,
         test_size=args.test_size,
+        allow_flip=args.allow_flip,
     )
 
     print(f"\nResult: {result['symbol']}")

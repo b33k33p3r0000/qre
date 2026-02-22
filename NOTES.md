@@ -1,5 +1,21 @@
 # Session Notes
 
+## 2026-02-22 (2) — Always-in vs Selective Mode
+
+### Uděláno
+- Analýza whipsaw flipů z existujících trade dat: BTC 99% flipů, SOL 91%, krátké flipy (≤12h) konzistentně ztrátové
+- A/B empirický test: dva paralelní optimizer runy per symbol (flip-on vs flip-off), identická data
+- BTC 20k trials: flip-OFF lepší (+29.7% vs +21.9% P&L, Sharpe(eq) 3.11 vs 2.39, split std 0.26 vs 0.66)
+- SOL 35k trials: P&L flip-ON vyšší (+51.7% vs +40.4%), ale Sharpe identický (2.23 vs 2.22), flip-OFF konzistentnější (split std 0.14 vs 0.35)
+- Default přepnut na selective (`allow_flip=0`) pro oba symboly — priorita konzistence nad raw P&L
+- `run.sh`: přidány `--allow-flip N` a `--always-in` flagy
+
+### Poznatky
+- Bimodální search space: Optuna najde dramaticky odlišné params pro flip-on vs flip-off (BTC macd_fast 9.72 vs 1.34)
+- Potvrzeno že allow_flip 0-1 jako Optuna param v jednom runu nefunguje (divergentní regiony, TPE nekonverguje)
+
+---
+
 ## 2026-02-22
 
 ### Uděláno

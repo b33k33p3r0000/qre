@@ -67,7 +67,12 @@ class MACDRSIStrategy(BaseStrategy):
     version = "4.2.1"
     description = "Quant Whale Strategy: MACD crossover + RSI extreme zones"
 
-    def get_optuna_params(self, trial: optuna.trial.Trial, symbol: str | None = None) -> dict[str, Any]:
+    def get_optuna_params(
+        self,
+        trial: optuna.trial.Trial,
+        symbol: str | None = None,
+        allow_flip_override: int | None = None,
+    ) -> dict[str, Any]:
         """10 Optuna parameters: 6 original + rsi_lookback + trend_tf + trend_strict + allow_flip."""
         params = {}
 
@@ -85,7 +90,9 @@ class MACDRSIStrategy(BaseStrategy):
         params["rsi_lookback"] = trial.suggest_int("rsi_lookback", 4, 8)
         params["trend_tf"] = trial.suggest_categorical("trend_tf", ["4h", "8h", "1d"])
         params["trend_strict"] = trial.suggest_int("trend_strict", 1, 1)
-        params["allow_flip"] = trial.suggest_int("allow_flip", 1, 1)
+
+        flip_val = allow_flip_override if allow_flip_override is not None else 0
+        params["allow_flip"] = trial.suggest_int("allow_flip", flip_val, flip_val)
 
         return params
 
@@ -209,5 +216,5 @@ class MACDRSIStrategy(BaseStrategy):
             "rsi_lookback": 6,
             "trend_tf": "8h",
             "trend_strict": 0,
-            "allow_flip": 1,  # backward compat: flip enabled by default
+            "allow_flip": 0,  # selective mode: no position flipping
         }
