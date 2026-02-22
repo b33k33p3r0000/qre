@@ -8,6 +8,8 @@ Cíl: najít robustní parametry pro live trading přes [EE (Execution Engine)](
 
 ## Strategie — Quant Whale Strategy v4.2.0
 
+> Quant Whale is a systematic long/short crypto strategy trading BTC and SOL on 1-hour bars. Entries require three-layer confirmation: a MACD crossover as the trigger, RSI within a lookback window confirming momentum exhaustion, and a higher-timeframe trend filter for directional alignment. The system operates in always-in mode — every exit is simultaneously an entry in the opposite direction — with a per-symbol catastrophic stop as an emergency circuit breaker. All 11 strategy parameters are optimized per-symbol using Optuna with a Log Calmar objective designed to resist overfitting.
+
 Založena na studii Chio (2022) — MACD+RSI dosáhlo 78–86% win rate na US equities.
 
 **Entry logika (3 vrstvy):**
