@@ -187,6 +187,7 @@ def build_objective(
         )
 
         allow_flip = bool(params.get("allow_flip", 1))
+        catastrophic_stop_pct = params.get("catastrophic_stop_pct")
 
         split_scores = []
         _sharpes = []
@@ -204,6 +205,7 @@ def build_objective(
                 symbol, data, buy_signal, sell_signal,
                 start_idx=MIN_WARMUP_BARS, end_idx=train_end,
                 allow_flip=allow_flip,
+                catastrophic_stop_pct=catastrophic_stop_pct,
             )
             if not train_result.trades:
                 split_scores.append(0.0)
@@ -224,6 +226,7 @@ def build_objective(
                 symbol, data, buy_signal, sell_signal,
                 start_idx=test_start, end_idx=test_end,
                 allow_flip=allow_flip,
+                catastrophic_stop_pct=catastrophic_stop_pct,
             )
 
             # Hard constraint: minimum test trades
@@ -400,8 +403,9 @@ def run_optimization(
     })
 
     allow_flip_final = bool(best_params.get("allow_flip", 1))
+    catastrophic_stop_pct_final = best_params.get("catastrophic_stop_pct")
     buy_s, sell_s = strategy.precompute_signals(data, best_params)
-    full_result = simulate_trades_fast(symbol, data, buy_s, sell_s, allow_flip=allow_flip_final)
+    full_result = simulate_trades_fast(symbol, data, buy_s, sell_s, allow_flip=allow_flip_final, catastrophic_stop_pct=catastrophic_stop_pct_final)
     full_metrics = calculate_metrics(
         full_result.trades, full_result.backtest_days,
         start_equity=STARTING_EQUITY,
@@ -423,6 +427,7 @@ def run_optimization(
                 symbol, data, buy_s, sell_s,
                 start_idx=MIN_WARMUP_BARS, end_idx=train_end,
                 allow_flip=allow_flip_final,
+                catastrophic_stop_pct=catastrophic_stop_pct_final,
             )
             if tr.trades:
                 last_train_metrics = calculate_metrics(
@@ -434,6 +439,7 @@ def run_optimization(
             symbol, data, buy_s, sell_s,
             start_idx=test_start, end_idx=test_end,
             allow_flip=allow_flip_final,
+            catastrophic_stop_pct=catastrophic_stop_pct_final,
         )
         if te_r.trades:
             tm = calculate_metrics(
