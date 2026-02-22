@@ -700,7 +700,6 @@ def _render_strategy_params(params: Dict[str, Any]) -> str:
         ("rsi_lower", "RSI lower", 20, 40),
         ("rsi_upper", "RSI upper", 60, 80),
         ("rsi_lookback", "RSI lookback", 4, 8),
-        ("catastrophic_stop_pct", "Cat. Stop %", 0.05, 0.15),
     ]
     categorical_params = [
         ("trend_tf", "Trend TF", ["4h", "8h", "1d"]),
