@@ -13,6 +13,8 @@
 ### Poznatky
 - Bimodální search space: Optuna najde dramaticky odlišné params pro flip-on vs flip-off (BTC macd_fast 9.72 vs 1.34)
 - Potvrzeno že allow_flip 0-1 jako Optuna param v jednom runu nefunguje (divergentní regiony, TPE nekonverguje)
+- MC INSUFFICIENT_DATA pro BTC: splity měly 20-28 trades, threshold byl 30 → snížen `MONTE_CARLO_MIN_TRADES` na 20
+- Oba flip-off runy konvergují macd_fast k ~1.0 (edge) — strukturální vzorec, ne overfit
 
 ---
 

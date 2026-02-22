@@ -87,7 +87,7 @@ ENABLE_PRUNING = True
 
 # Monte Carlo
 MONTE_CARLO_SIMULATIONS = 1000
-MONTE_CARLO_MIN_TRADES = 30
+MONTE_CARLO_MIN_TRADES = 20
 
 # =============================================================================
 # ANCHORED WALK-FORWARD
