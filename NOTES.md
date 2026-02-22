@@ -1,0 +1,257 @@
+# Session Notes
+
+## 2026-02-22
+
+### Uděláno
+- Analýza catastrophic stop na existujících runech (`scripts/compare_stops.py`) — BTC optimum ~7%, SOL ~12%
+- `catastrophic_stop_pct` jako 11. Optuna parametr (range 5-15%, step 0.01)
+- Pipeline threading: strategy → optimize → backtest (6 commitů, 184 testů pass)
+- Report: dynamický label + bullet chart, fix rsi_period range (5→3), fix default 0.15→0.10
+- Strategy version bump 4.1.0 → 4.2.0, pushnuto na GitHub
+
+### TODO / Rozděláno
+- Spustit novou optimalizaci s `catastrophic_stop_pct` parametrem (BTC + SOL)
+- Porovnat výsledky s předchozími runy (validovat joint optimization efekt)
+- SOL 3yr-v2 run zastaven (43k/50k trials) — starý kód bez stop parametru
+
+---
+
+## 2026-02-21 - QRE Code Review & Fixes (Phase 1 + Phase 2)
+
+**Uděláno:**
+- Kompletní code review celého qre/ (40 nálezů: 9 critical, 18 warning, 13 info)
+- Design doc: `docs/plans/2026-02-21-qre-review-fixes-design.md`
+- Phase 1: Opraveno 9 critical nálezů (RSI verifikace, penalties.py smazán, study.best_trial guard, starting_equity do Numba, trades buffer, .get() defaults, webhook unifikace, scoring extrakce, vectorized edge test)
+- Phase 2: Opraveno 8 warning nálezů (mrtvé config konstanty, np.random.seed fix, SQLite leak, ETA fix, bullet chart ranges, Discord truncation, dead code, shared conftest.py)
+- 195 testů PASS, 6 skipped, 0 failed
+
+**Commity (QRE):** c59c219 (Phase 1), 445e58f (Phase 2)
+
+**TODO:**
+- Phase 3 (deferred): I1 magic number 13140, I9 rolling().max() docstring, I10 noqa komentáře
+- W17: Testy pro analyze.py (větší scope, samostatná session)
+
+---
+
+## 2026-02-21 - Live Optimizer Monitor
+
+**Uděláno:**
+- Brainstorming: live TUI dashboard pro sledování běžících optimizer runů
+- Design doc: `docs/plans/2026-02-21-live-monitor-design.md`
+- Implementation plan: `docs/plans/2026-02-21-live-monitor-plan.md` (5 tasků)
+- Subagent-driven development: 5/5 tasků, 181 testů PASS (11 nových)
+
+**Změny:**
+- `monitor.py`: **NOVÝ** modul (~300 řádků) — `find_active_runs()`, `query_db_stats()`, Rich TUI rendering, auto-refresh smyčka
+- `optimize.py`: +12 řádků — `trial.set_user_attr()` pro Sharpe/DD/P&L/trades, `study.set_user_attr()` pro n_trials_requested/symbol
+- `pyproject.toml`: +2 řádky (rich dep, `qre-monitor` entry point)
+- `tests/unit/test_monitor.py`: **NOVÝ** — 11 testů (find_active_runs + query_db_stats)
+- `tests/unit/test_optimize.py`: +3 testy pro user_attrs
+
+**Commity (QRE):** a582acc, fa02cd9, 3f71db2, abd3c98
+
+---
+
+## 2026-02-21 - Log Calmar Objective + Anti-Gaming Guards
+
+**Uděláno:**
+- Analýza `calmar-v11` runu: raw Calmar objective gamovatelný přes DD minimalizaci (Calmar 90, DD -2.2%, WR 81%, PF 13)
+- Brainstorming + design: 3 přístupy → vybrán Log Calmar + DD floor + trade ramp
+- Design doc: `docs/plans/2026-02-21-log-calmar-design.md`
+- Implementation plan: `docs/plans/2026-02-21-log-calmar-implementation.md` (5 tasků)
+- Subagent-driven development: 5/5 tasků, 189 testů PASS
+- Validace na runu `calmar-big-v1` — dramatické zlepšení
+
+**Commity (QRE):** f6b0449, 1aa28a4, 489f200, d623dd3
+
+---
+
+## 2026-02-20 - Calmar Objective + Overfitting Fixes
+
+**Uděláno:**
+- Analýza výsledků: Optuna konverguje na degenerované params (macd_fast≈1.0, rsi_period=3), Sharpe 14
+- Brainstorming + design: `docs/plans/2026-02-20-calmar-objective-design.md`
+- Subagent-driven development: 7/7 tasků
+- Objective: Sharpe → Calmar ratio + smooth Sharpe decay penalty
+- Search space: macd_fast≥2.0, rsi_period≥5, rsi_lookback 4-8, macd_signal≥2
+- Purge gap: 50 barů mezi train/test splity (eliminace indicator leakage)
+
+**Commity (QRE):** 26ee0d5, e8c0ad2, 458240e, d2f1c4d, e21fdec, bf3c5b4
+
+---
+
+## 2026-02-17 - /diagnose skill redesign pro v4.0
+
+**Uděláno:**
+- Brainstorming + design: audit /diagnose skillu, rebalancování 3 agentů
+- Nový Agent 2 "Strategy & Params" — sloučení starého Signal System + param boundary/importance z Agent 3
+- 3 nové SQL queries: RSI lookback korelace, trend filter impact, trend TF comparison
+- Subagent-driven development: 6/6 tasků
+- Design doc: `docs/plans/2026-02-17-diagnose-redesign-design.md`
+
+---
+
+## 2026-02-17 - v4.0 Tuning: RSI/MACD ranges + Sharpe capping + time-in-market
+
+**Uděláno:**
+- `/diagnose` na dvou v4.0 runech (BTC v2-1, SOL v2-2) — oba REVIEW
+- Zjištěno: Optuna obchází RSI filtr (rsi_lower=51-55, lookback=23 → triviálně true)
+- RSI ranges zúženy na [25-35]/[65-75], MACD dolní hranice rozšířeny
+- Nová metrika `time_in_market`, Sharpe capping v report.py
+- 231 testů PASS
+
+---
+
+## 2026-02-17 - Quant Whale Strategy v4.0 implementace
+
+**Uděláno:**
+- `/diagnose` na dvou runech — oba FAIL (overfit, málo trades, závislost na mega-trades)
+- Design doc: `docs/plans/2026-02-17-chio-extreme-v4-design.md` — RSI lookback + multi-TF trend filter
+- Subagent-driven development: 8/8 tasků, merge do main, 216 testů
+- Přejmenování "Chio Extreme" → "Quant Whale Strategy"
+
+**Klíčové změny v4.0:**
+- RSI lookback window, Multi-TF trend filter, Data pipeline 1H + 4H/8H/1D
+- 9 Optuna parametrů (6 original + rsi_lookback + trend_tf + trend_strict)
+
+---
+
+## 2026-02-16 - Strategy Redesign brainstorming
+
+**Uděláno:**
+- Kompletní audit QRE kódu (strategy, indicators, backtest, metrics, penalties, config, optimize)
+- Revize všech 50+ parametrů — rozhodnutí keep/remove/defer
+- Design doc: `docs/plans/2026-02-16-strategy-redesign-design.md`
+
+---
+
+## 2026-02-15 - Run Analysis notifikace redesign
+
+**Uděláno:**
+- Redesign `build_discord_embed()` — code block formát s `[ok]/[!!]/[XX]` tagy
+- Sloučení kanálů: všechny notifikace do `#qre-runs`
+- Design doc: `docs/plans/2026-02-15-run-analysis-notification-design.md`
+
+---
+
+## 2026-02-15 - AWF test_size parametr + preset update
+
+**Uděláno:**
+- test_size hardcoded na 10% = ~10 trades per test split (statisticky bezcenné)
+- feat(optimize): parametr `--test-size` (default 0.15)
+- run.sh: Deep + Über presety sníženy z 4 na 3 splity
+
+---
+
+## 2026-02-15 - BTC Market Analysis + Training Data Strategy
+
+**Uděláno:**
+- BTC 4Y drawdown analýza: 3 major propady (-65.4%, -20.5%, -47.6%)
+- Rozhodnutí: 2yr training window (Jan 2024 - Dec 2025) + skip-recent 1080h
+- Death Cross Guard (EE) pokrývá major crash (>25%)
+
+---
+
+## 2026-02-14 - MASTER PLAN finalizace + plány audit
+
+**Uděláno:**
+- MASTER PLAN označen jako COMPLETED (všech 6 fází done)
+- 8 sub-plánů aktualizováno se statusy (COMPLETED / SUPERSEDED / PARTIAL)
+
+---
+
+## 2026-02-13 - EE Bugfix: MT5 symbol mapping + retry limit + ACCOUNT_SIZE
+
+**Uděláno:**
+- Fix MT5 symbol mapping: `BTCUSD` → `BTC/USD` (broker BrightFunded používá lomítko)
+- Fix retry loop: `MAX_CONSECUTIVE_ERRORS = 3`
+- Fix ACCOUNT_SIZE: revert 100k → 10k
+
+---
+
+## 2026-02-12 - Death Cross Guard + Phase 5 Finalizace
+
+**Uděláno:**
+- Death Cross Guard v EE: `guard/detector.py` (SMA 50/200) + `guard/actions.py`
+- VPS cleanup: smazán `TradingBot-SignalServer` service, staré Scheduled Tasks
+- MASTER-PLAN: EE DoD komplet
+
+---
+
+## 2026-02-12 - Phase 5 Cleanup
+
+**Uděláno:**
+- Archivace `C:\trading\trading-bot\` → `trading-bot-ARCHIVED` na VPS
+- Fix EE failing test, přepis `vps-status.sh` pro EE
+- MASTER-PLAN: Phase 5 DONE
+
+---
+
+## 2026-02-12 - Discord Control Bot (WHAL3 CONTROL)
+
+**Uděláno:**
+- EE Discord Bot: 5 slash commands (`/ee status`, `/ee pnl`, `/ee pause`, `/ee resume`, `/ee kill`)
+- Flag-based IPC: PAUSE/STOP flag soubory v `state/`
+- DNS fix: odinstalace `aiodns` (IPv6 DNS na VPS nefunkční)
+
+---
+
+## 2026-02-11 - INBOX fixy: run.sh časy, Sharpe bugfix, MASTER PLAN formát
+
+**Uděláno:**
+- run.sh: preset časy aktualizovány
+- fix(metrics): MC annualizace sqrt(252) → sqrt(trades_per_year)
+- fix(optimize): reporting přepnuto na time-based Sharpe
+
+---
+
+## 2026-02-11 - Phase 5: EE (Execution Engine) na VPS
+
+**Uděláno:**
+- EE repo na VPS, 12 modulů, 147 testů, GitHub `b33k33p3r0000/ee`
+- Cutover: Task Scheduler (ONLOGON), BTC+SOL live na BrightFunded
+
+---
+
+## 2026-02-11 - QRE Phase 4: Stabilizace + v0.4.0
+
+**Uděláno:**
+- Signal comparison: BTC i SOL PASS (100% identické vs legacy optimizer)
+- Config fix: MIN_TRADES_TEST_HARD 15→8, p_buy ranges zúženy
+
+---
+
+## 2026-02-11 - QRE Phase 3: Reporting
+
+**Uděláno:**
+- report.py: Self-contained HTML report s Plotly, 12 testů
+- notify.py: Discord notifikace, 10 testů
+- run.sh: CLI skript se 4 presety
+
+---
+
+## 2026-02-11 - QRE Phase 2: Orchestrace
+
+**Uděláno:**
+- optimize.py: AWF orchestrátor (~300 řádků rewrite z 2633-řádkového optimizeru)
+- penalties.py, data/fetch.py, io.py, hooks — celkem 93 testů
+
+---
+
+## 2026-02-10 - QRE Phase 0+1: Repo + Core Audit
+
+**Uděláno:**
+- Vytvořeno QRE git repo + GitHub remote (private)
+- Přeneseny 4 core moduly s auditem, 37 testů
+- Golden baseline validace: identické výsledky s optimizerem
+
+---
+
+## 2026-02-10 - QUANT WHAL3 2.0 Master Plan + Drawdown Bug
+
+**Uděláno:**
+- Diagnostika max drawdown bugu, brainstorming QUANT WHAL3 2.0
+- Master Plan vytvořen: `docs/plans/2026-02-10-quant-whale-2.0-MASTER-PLAN.md`
+- Rozhodnutí: QRE first, EE later, sentinel vypnout
+
+---
