@@ -1,5 +1,21 @@
 # Session Notes
 
+## 2026-02-23 — /data-art Skill + 8 Vizualizačních Variant
+
+### Uděláno
+- Nový Claude Code skill `/data-art` — data-driven algoritmické umění z optimizer dat (optuna.db, trades CSV, best_params.json)
+- Data pipeline: `data_extractor.py` → `art_data.json` → p5.js HTML (self-contained, inline data)
+- 8 vizualizačních variant: Search Topology, Trade Waveform, Convergence Cosmos, Trial Flow Field, Time Iris, Trial Network, Trade Chords, Run Portrait
+- Všech 8 vygenerováno pro flip-on-sol/SOL run jako demo
+- Generator skripty v `scripts/gen_art_*.py` pro 3 komplexnější varianty
+
+### Poznatky
+- Skill v `~/.claude/skills/data-art/` (4 soubory: SKILL.md, data_extractor.py, viewer.html, visualization_variants.md)
+- Art HTML v results/ (gitignored) — velké soubory s embedded daty (50KB-1.1MB)
+- Slider UX: min=0 jako "OFF" pro každou vizuální vrstvu funguje dobře
+
+---
+
 ## 2026-02-22 (2) — Always-in vs Selective Mode
 
 ### Uděláno
