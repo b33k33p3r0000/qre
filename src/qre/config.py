@@ -138,7 +138,8 @@ BACKTEST_POSITION_PCT = 0.25  # Statických 25% pro všechny backtesty i EE
 # CATASTROPHIC STOP
 # =============================================================================
 
-CATASTROPHIC_STOP_PCT = 0.10  # -10% emergency exit (Quant Whale Strategy spec)
+CATASTROPHIC_STOP_PCT = {"BTC": 0.08, "SOL": 0.12}  # per-symbol emergency exit
+CATASTROPHIC_STOP_PCT_DEFAULT = 0.10  # fallback for unknown symbols
 
 # =============================================================================
 # STRATEGY

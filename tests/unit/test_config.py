@@ -45,10 +45,13 @@ def test_min_hold_constant():
     assert MIN_HOLD_HOURS >= 1
 
 
-def test_catastrophic_stop_default():
-    """Catastrophic stop default is 10% (0.10) — used as fallback when not in Optuna params."""
-    from qre.config import CATASTROPHIC_STOP_PCT
-    assert CATASTROPHIC_STOP_PCT == 0.10
+def test_catastrophic_stop_per_symbol():
+    """Catastrophic stop is per-symbol dict with scalar default fallback."""
+    from qre.config import CATASTROPHIC_STOP_PCT, CATASTROPHIC_STOP_PCT_DEFAULT
+    assert isinstance(CATASTROPHIC_STOP_PCT, dict)
+    assert CATASTROPHIC_STOP_PCT["BTC"] == 0.08
+    assert CATASTROPHIC_STOP_PCT["SOL"] == 0.12
+    assert CATASTROPHIC_STOP_PCT_DEFAULT == 0.10
 
 
 def test_trend_tfs_constant():
