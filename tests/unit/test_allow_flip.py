@@ -1,4 +1,4 @@
-"""Tests for allow_flip parameter (v4.1.0)."""
+"""Tests for allow_flip parameter (v4.2.0)."""
 
 import numpy as np
 import pandas as pd

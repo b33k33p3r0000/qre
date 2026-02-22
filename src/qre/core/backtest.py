@@ -11,6 +11,9 @@ v3.0: Simplified for Quant Whale Strategy strategy.
 v4.1: Added allow_flip parameter.
 - allow_flip=True: position flip on signal exit (always-in behavior, v4.0 default)
 - allow_flip=False: exit to flat, new entry requires fresh signal on next bar
+
+v4.2: Added catastrophic_stop_pct as optional kwarg.
+- Overrides the config constant per-trial for symbol-specific optimization.
 """
 
 import logging
@@ -325,6 +328,8 @@ def simulate_trades_fast(
         allow_flip: If True, exit signal opens opposite position (always-in).
             If False, exit closes to flat; new entry needs fresh signal.
             Default: True (backward compat with v4.0).
+        catastrophic_stop_pct: Override catastrophic stop percentage.
+            If None, falls back to CATASTROPHIC_STOP_PCT config constant (0.10).
 
     Returns:
         BacktestResult with equity, trades list, and backtest_days.

@@ -557,7 +557,7 @@ def _render_strategy_flow(params: Dict[str, Any], trades: List[Dict] | None = No
     min_hold = params.get("min_hold", "?")
     long_only = params.get("long_only", False)
     position_pct = params.get("position_pct", 0.25)
-    catastrophic_stop_pct = params.get("catastrophic_stop_pct", 0.15)
+    catastrophic_stop_pct = params.get("catastrophic_stop_pct", 0.10)
     rsi_lookback = params.get("rsi_lookback", 0)
     trend_tf = params.get("trend_tf", "?")
     trend_strict = params.get("trend_strict", 0)
@@ -696,7 +696,7 @@ def _render_strategy_params(params: Dict[str, Any]) -> str:
         ("macd_fast", "MACD fast", 1, 20),
         ("macd_slow", "MACD slow", 10, 45),
         ("macd_signal", "MACD signal", 2, 15),
-        ("rsi_period", "RSI period", 5, 30),
+        ("rsi_period", "RSI period", 3, 30),
         ("rsi_lower", "RSI lower", 20, 40),
         ("rsi_upper", "RSI upper", 60, 80),
         ("rsi_lookback", "RSI lookback", 4, 8),
