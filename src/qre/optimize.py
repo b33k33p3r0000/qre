@@ -18,6 +18,7 @@ import logging
 import math
 import signal
 
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -165,7 +166,7 @@ def build_objective(
     data: Dict[str, pd.DataFrame],
     splits: List[Dict[str, float]],
     allow_flip_setting: int = 1,
-) -> callable:
+) -> Callable:
     """Build Optuna objective function for AWF optimization.
 
     Returns log(1+Calmar) with trade count ramp and smooth Sharpe decay penalty.
