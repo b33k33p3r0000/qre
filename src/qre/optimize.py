@@ -175,9 +175,9 @@ def build_objective(
     base_df = data[BASE_TF]
     total_bars = len(base_df)
 
-    # Pre-compute RSI for all possible Optuna periods (5-30)
+    # Pre-compute RSI for all possible Optuna periods (3-30)
     precomputed_cache = {"rsi": {}}
-    for period in range(5, 31):
+    for period in range(3, 31):
         precomputed_cache["rsi"][period] = compute_rsi(
             base_df["close"], period
         ).values.astype(np.float64)
