@@ -520,3 +520,33 @@ class TestRenderYearlyPerformance:
                  "win_rate": 100.0, "max_dd": 0.0, "partial": False, "partial_label": ""}]
         html = _render_yearly_performance(data)
         assert "Yearly Performance" in html
+
+
+class TestYearlyPerformanceIntegration:
+    def test_yearly_performance_in_report(self):
+        trades = [
+            _make_trade(200, entry_ts="2024-06-01T00:00:00", exit_ts="2024-06-10T00:00:00"),
+            _make_trade(-100, entry_ts="2024-11-01T00:00:00", exit_ts="2024-11-10T00:00:00"),
+            _make_trade(300, entry_ts="2025-03-01T00:00:00", exit_ts="2025-03-10T00:00:00"),
+        ]
+        html = generate_report(SAMPLE_PARAMS, trades)
+        assert "Yearly Performance" in html
+        # Should appear between Risk & Returns and Trade Statistics
+        yearly_pos = html.index("Yearly Performance")
+        risk_pos = html.index("Risk &amp; Returns")
+        trade_stats_pos = html.index("Trade Statistics")
+        assert risk_pos < yearly_pos < trade_stats_pos
+
+    def test_yearly_shows_partial_year_marker(self):
+        trades = [
+            _make_trade(100, entry_ts="2024-06-15T00:00:00", exit_ts="2024-06-20T00:00:00"),
+            _make_trade(200, entry_ts="2025-01-01T00:00:00", exit_ts="2025-12-20T00:00:00"),
+        ]
+        html = generate_report(SAMPLE_PARAMS, trades)
+        assert "2024*" in html
+        assert "Partial year" in html or "partial" in html.lower()
+
+    def test_yearly_with_no_trades(self):
+        html = generate_report(SAMPLE_PARAMS, [])
+        # Should NOT show yearly section if no trades
+        assert "Yearly Performance" not in html
