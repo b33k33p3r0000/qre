@@ -123,7 +123,6 @@ def test_kept_constants():
     assert hasattr(config, "STARTING_EQUITY")
     assert hasattr(config, "CATASTROPHIC_STOP_PCT")
     assert hasattr(config, "BACKTEST_POSITION_PCT")
-    assert hasattr(config, "RSI_LENGTH")
     assert hasattr(config, "MIN_WARMUP_BARS")
     assert hasattr(config, "MIN_TRADES_YEAR_HARD")
     assert hasattr(config, "SHARPE_SUSPECT_THRESHOLD")

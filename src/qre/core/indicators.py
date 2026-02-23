@@ -9,10 +9,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from qre.config import RSI_LENGTH
 
-
-def rsi(series: pd.Series, length: int = RSI_LENGTH) -> pd.Series:
+def rsi(series: pd.Series, length: int = 14) -> pd.Series:
     """
     RSI (Relative Strength Index).
 
