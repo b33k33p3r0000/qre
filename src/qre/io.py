@@ -6,16 +6,18 @@ Saving optimization results (JSON, CSV).
 HTML report is in Phase 3 (report.py).
 """
 
+from __future__ import annotations
+
 import csv
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 logger = logging.getLogger("qre.io")
 
 
-def save_json(path: Path, obj: Dict[str, Any]) -> None:
+def save_json(path: Path, obj: dict[str, Any]) -> None:
     """Save dict as JSON."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
@@ -23,7 +25,7 @@ def save_json(path: Path, obj: Dict[str, Any]) -> None:
     logger.debug("Saved JSON: %s", path)
 
 
-def save_trades_csv(path: Path, trades: List[Dict[str, Any]]) -> None:
+def save_trades_csv(path: Path, trades: list[dict[str, Any]]) -> None:
     """Save trades to CSV."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", newline="", encoding="utf-8") as f:

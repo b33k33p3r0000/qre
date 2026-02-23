@@ -12,6 +12,8 @@ Evidence:
 10 Optuna parameters. Base TF 1H + trend filter from 4H/8H/1D.
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from typing import Any
 

@@ -5,10 +5,11 @@ Data Fetching
 Stahování OHLCV dat z Binance API. Vždy fresh data, žádný disk cache.
 """
 
+from __future__ import annotations
+
 import logging
 import time
 from datetime import datetime, timezone
-from typing import Dict, List
 
 import pandas as pd
 
@@ -46,7 +47,7 @@ def fetch_ohlcv_paginated(
     Returns:
         DataFrame s OHLCV daty
     """
-    all_rows: List[list] = []
+    all_rows: list[list] = []
     tf_ms = TF_MS[tf]
     cursor = since_ms
     retry_count = 0
@@ -103,7 +104,7 @@ def fetch_ohlcv_paginated(
     return df
 
 
-def load_all_data(exchange, symbol: str, hours_1h: int) -> Dict[str, pd.DataFrame]:
+def load_all_data(exchange, symbol: str, hours_1h: int) -> dict[str, pd.DataFrame]:
     """
     Načte fresh data z Binance pro base TF + trend TFs.
 
@@ -118,7 +119,7 @@ def load_all_data(exchange, symbol: str, hours_1h: int) -> Dict[str, pd.DataFram
     now_ms = utcnow_ms()
     since_1h = now_ms - hours_1h * TF_MS["1h"]
 
-    data: Dict[str, pd.DataFrame] = {}
+    data: dict[str, pd.DataFrame] = {}
 
     # Base timeframe
     data[BASE_TF] = fetch_ohlcv_paginated(exchange, symbol, BASE_TF, since_1h, now_ms)

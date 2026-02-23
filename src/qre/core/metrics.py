@@ -12,10 +12,12 @@ v4.0 NEW:
 - Profit per Bar
 """
 
+from __future__ import annotations
+
 import math
 import warnings
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -103,13 +105,13 @@ class MetricsResult:
 
     # Monthly
     profitable_months_ratio: float  # v4.0 NEW
-    monthly_returns: List[float]  # v4.0 NEW
+    monthly_returns: list[float]  # v4.0 NEW
 
     # Time-in-market
     time_in_market: float  # v4.1 NEW: podíl hodin v pozici (0.0-1.0)
 
 
-def calculate_annualized_trades(trades: List[Dict], backtest_days: int) -> float:
+def calculate_annualized_trades(trades: list[dict], backtest_days: int) -> float:
     """Spočítá průměrný počet obchodů za rok."""
     if not trades or backtest_days < 1:
         return 0.0
@@ -117,7 +119,7 @@ def calculate_annualized_trades(trades: List[Dict], backtest_days: int) -> float
     return len(trades) / years if years > 0 else 0.0
 
 
-def calculate_short_hold_ratio(trades: List[Dict], min_hold: int = MIN_HOLD_HOURS) -> float:
+def calculate_short_hold_ratio(trades: list[dict], min_hold: int = MIN_HOLD_HOURS) -> float:
     """Spočítá poměr obchodů s krátkým držením."""
     if not trades:
         return 0.0
@@ -125,7 +127,7 @@ def calculate_short_hold_ratio(trades: List[Dict], min_hold: int = MIN_HOLD_HOUR
     return short_trades / len(trades)
 
 
-def calculate_streaks(trades: List[Dict]) -> tuple:
+def calculate_streaks(trades: list[dict]) -> tuple:
     """
     v4.0 NEW: Spočítá max win/loss streak.
 
@@ -153,7 +155,7 @@ def calculate_streaks(trades: List[Dict]) -> tuple:
     return max_win, max_loss
 
 
-def calculate_monthly_returns(trades: List[Dict]) -> List[float]:
+def calculate_monthly_returns(trades: list[dict]) -> list[float]:
     """
     v4.0 NEW: Spočítá měsíční výnosy.
     """
@@ -172,11 +174,11 @@ def calculate_monthly_returns(trades: List[Dict]) -> List[float]:
 
 
 def calculate_time_based_sharpe(
-    trades: List[Dict],
+    trades: list[dict],
     price_data: pd.DataFrame,
     start_equity: float,
     start_idx: int = 0,
-    end_idx: Optional[int] = None,
+    end_idx: int | None = None,
 ) -> float:
     """
     v12.0 NEW: Time-based Sharpe Ratio - počítá z hodinových výnosů včetně idle periods.
@@ -285,7 +287,7 @@ def calculate_time_based_sharpe(
 
 
 def calculate_equity_based_sharpe(
-    trades: List[Dict],
+    trades: list[dict],
     start_equity: float,
     backtest_days: int,
 ) -> float:
@@ -378,12 +380,12 @@ def calculate_recovery_factor(total_pnl: float, max_drawdown: float, start_equit
 
 
 def calculate_metrics(
-    trades: List[Dict[str, Any]],
+    trades: list[dict[str, Any]],
     backtest_days: int,
     start_equity: float = STARTING_EQUITY,
-    price_data: Optional[pd.DataFrame] = None,
+    price_data: pd.DataFrame | None = None,
     start_idx: int = 0,
-    end_idx: Optional[int] = None,
+    end_idx: int | None = None,
 ) -> MetricsResult:
     """
     Spočítá kompletní metriky z obchodů.
@@ -557,7 +559,7 @@ def calculate_metrics(
 
 
 def monte_carlo_validation(
-    trades: List[Dict[str, Any]],
+    trades: list[dict[str, Any]],
     n_simulations: int = 1000,
     start_equity: float = STARTING_EQUITY,
     seed: int = 42,
@@ -732,7 +734,7 @@ def monte_carlo_validation(
     )
 
 
-def aggregate_mc_results(results: List[MonteCarloResult]) -> MonteCarloResult:
+def aggregate_mc_results(results: list[MonteCarloResult]) -> MonteCarloResult:
     """Aggregate per-split OOS Monte Carlo results (conservative estimate).
 
     Uses worst-case across splits: min sharpe CI low, min robustness,

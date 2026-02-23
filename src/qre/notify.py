@@ -9,8 +9,10 @@ Channels:
   #qre-runs   — start, complete, run analysis (all in one channel)
 """
 
+from __future__ import annotations
+
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 import requests
 
@@ -40,7 +42,7 @@ def format_start_message(
     n_trials: int,
     hours: int,
     n_splits: int,
-    run_tag: Optional[str] = None,
+    run_tag: str | None = None,
 ) -> str:
     """Format optimization start notification."""
     tag_line = f"Tag:      {run_tag}\n" if run_tag else ""
@@ -59,7 +61,7 @@ def format_start_message(
     )
 
 
-def format_complete_message(params: Dict[str, Any]) -> str:
+def format_complete_message(params: dict[str, Any]) -> str:
     """Format optimization completion notification."""
     symbol = params.get("symbol", "?")
     equity = params.get("equity", 0)
@@ -105,7 +107,7 @@ def notify_start(**kwargs) -> bool:
     return discord_notify(msg, DISCORD_WEBHOOK_RUNS)
 
 
-def notify_complete(params: Dict[str, Any]) -> bool:
+def notify_complete(params: dict[str, Any]) -> bool:
     """Send completion notification to #qre-runs."""
     msg = format_complete_message(params)
     return discord_notify(msg, DISCORD_WEBHOOK_RUNS)

@@ -14,6 +14,8 @@ Single entry point: run_optimization(symbol, hours, n_trials, ...)
 Only AWF mode. Only Quant Whale Strategy (MACD+RSI) strategy.
 """
 
+from __future__ import annotations
+
 import logging
 import math
 import signal
@@ -21,7 +23,7 @@ import signal
 from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 import optuna
@@ -67,8 +69,8 @@ logger = logging.getLogger("qre.optimize")
 
 
 def compute_awf_splits(
-    total_hours: int, n_splits: Optional[int] = None, test_size: float = 0.20
-) -> Optional[List[Dict[str, float]]]:
+    total_hours: int, n_splits: int | None = None, test_size: float = 0.20
+) -> list[dict[str, float]] | None:
     """Compute Anchored Walk-Forward splits based on data length."""
     if total_hours < ANCHORED_WF_MIN_DATA_HOURS:
         return None
@@ -163,8 +165,8 @@ def compute_objective_score(
 
 def build_objective(
     symbol: str,
-    data: Dict[str, pd.DataFrame],
-    splits: List[Dict[str, float]],
+    data: dict[str, pd.DataFrame],
+    splits: list[dict[str, float]],
     allow_flip_setting: int = 1,
 ) -> Callable:
     """Build Optuna objective function for AWF optimization.
@@ -283,15 +285,15 @@ def run_optimization(
     symbol: str,
     hours: int = 8760,
     n_trials: int = DEFAULT_TRIALS,
-    n_splits: Optional[int] = None,
+    n_splits: int | None = None,
     seed: int = 42,
     timeout: int = 0,
     results_dir: str = "results",
-    run_tag: Optional[str] = None,
+    run_tag: str | None = None,
     skip_recent_hours: int = 0,
     test_size: float = 0.20,
     allow_flip: int = 0,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Run full AWF optimization pipeline for a single symbol.
 

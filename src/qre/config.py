@@ -5,9 +5,10 @@ Centralized config for Quantitative Research Engine.
 Only BTC/USDC and SOL/USDC. Only MACD+RSI strategy.
 """
 
+from __future__ import annotations
+
 import os
 from pathlib import Path
-from typing import Dict
 
 from dotenv import load_dotenv
 
@@ -22,7 +23,7 @@ SYMBOLS = ["BTC/USDC", "SOL/USDC"]
 TREND_TFS = ["4h", "8h", "1d"]
 BASE_TF = "1h"
 
-TF_MS: Dict[str, int] = {
+TF_MS: dict[str, int] = {
     "1h": 60 * 60 * 1000,
     "2h": 2 * 60 * 60 * 1000,
     "4h": 4 * 60 * 60 * 1000,
@@ -38,7 +39,7 @@ TF_MS: Dict[str, int] = {
 
 FEE = float(os.environ.get("FEE", "0.00075"))
 
-SLIPPAGE_MAP: Dict[str, float] = {
+SLIPPAGE_MAP: dict[str, float] = {
     "BTC/USDC": 0.0008,
     "SOL/USDC": 0.0018,
 }

@@ -16,9 +16,11 @@ v4.2: Added catastrophic_stop_pct as optional kwarg.
 - Overrides the config constant per-trial for symbol-specific optimization.
 """
 
+from __future__ import annotations
+
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -58,7 +60,7 @@ class BacktestResult:
     """Backtest result."""
 
     equity: float
-    trades: List[Dict[str, Any]]
+    trades: list[dict[str, Any]]
     backtest_days: int
 
 
@@ -96,7 +98,7 @@ def trading_loop_numba(
     long_only: bool,
     allow_flip: bool,
     starting_equity: float,
-) -> Tuple[float, np.ndarray, int]:
+) -> tuple[float, np.ndarray, int]:
     """
     Numba trading loop with Long+Short support.
 
@@ -305,14 +307,14 @@ def trading_loop_numba(
 
 def simulate_trades_fast(
     symbol: str,
-    data: Dict[str, pd.DataFrame],
+    data: dict[str, pd.DataFrame],
     buy_signal: np.ndarray,
     sell_signal: np.ndarray,
-    start_idx: Optional[int] = None,
-    end_idx: Optional[int] = None,
-    long_only: Optional[bool] = None,
-    allow_flip: Optional[bool] = None,
-    catastrophic_stop_pct: Optional[float] = None,
+    start_idx: int | None = None,
+    end_idx: int | None = None,
+    long_only: bool | None = None,
+    allow_flip: bool | None = None,
+    catastrophic_stop_pct: float | None = None,
 ) -> BacktestResult:
     """
     Backtest with 1D buy/sell signals. Supports Long+Short.

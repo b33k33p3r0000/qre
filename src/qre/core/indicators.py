@@ -4,7 +4,7 @@ Technical Indicators
 RSI, MACD — core indicators for Quant Whale Strategy (MACD crossover + RSI extreme zones).
 """
 
-from typing import Tuple
+from __future__ import annotations
 
 import numpy as np
 import pandas as pd
@@ -40,7 +40,7 @@ def rsi(series: pd.Series, length: int = RSI_LENGTH) -> pd.Series:
 
 def macd(
     series: pd.Series, fast_period: int | float = 12, slow_period: int = 26, signal_period: int = 9
-) -> Tuple[pd.Series, pd.Series, pd.Series]:
+) -> tuple[pd.Series, pd.Series, pd.Series]:
     """
     MACD (Moving Average Convergence Divergence).
 
