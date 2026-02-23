@@ -51,7 +51,7 @@ def fetch_ohlcv_paginated(
     cursor = since_ms
     retry_count = 0
 
-    logger.info(f"Fetching {symbol} {tf} from {datetime.fromtimestamp(since_ms / 1000, tz=timezone.utc)}")
+    logger.info("Fetching %s %s from %s", symbol, tf, datetime.fromtimestamp(since_ms / 1000, tz=timezone.utc))
 
     while True:
         try:
@@ -60,10 +60,10 @@ def fetch_ohlcv_paginated(
 
         except Exception as e:
             retry_count += 1
-            logger.warning(f"Fetch error {symbol} {tf} (attempt {retry_count}/{MAX_API_RETRIES}): {e}")
+            logger.warning("Fetch error %s %s (attempt %d/%d): %s", symbol, tf, retry_count, MAX_API_RETRIES, e)
 
             if retry_count >= MAX_API_RETRIES:
-                logger.error(f"Max retries reached for {symbol} {tf}")
+                logger.error("Max retries reached for %s %s", symbol, tf)
                 break
 
             time.sleep(exchange.rateLimit / 1000.0 + 1.0)
@@ -86,7 +86,7 @@ def fetch_ohlcv_paginated(
         time.sleep(exchange.rateLimit / 1000.0)
 
         if len(all_rows) > SAFETY_MAX_ROWS:
-            logger.warning(f"Safety limit reached for {symbol} {tf}")
+            logger.warning("Safety limit reached for %s %s", symbol, tf)
             break
 
     if not all_rows:
@@ -98,7 +98,7 @@ def fetch_ohlcv_paginated(
     df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
     df.set_index("timestamp", inplace=True)
 
-    logger.info(f"Fetched {len(df)} rows for {symbol} {tf}")
+    logger.info("Fetched %d rows for %s %s", len(df), symbol, tf)
 
     return df
 

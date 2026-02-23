@@ -31,7 +31,7 @@ def discord_notify(msg: str, webhook_url: str, timeout: int = 8) -> bool:
         )
         return response.status_code < 300
     except Exception as e:
-        logger.warning(f"Discord notify failed: {e}")
+        logger.warning("Discord notify failed: %s", e)
         return False
 
 

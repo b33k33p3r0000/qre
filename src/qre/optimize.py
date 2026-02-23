@@ -310,7 +310,7 @@ def run_optimization(
     exchange = ccxt.binance({"enableRateLimit": True})
 
     # 1. Fetch fresh data
-    logger.info(f"Loading {symbol} data ({hours}h history)...")
+    logger.info("Loading %s data (%dh history)...", symbol, hours)
     data = load_all_data(exchange, symbol, hours)
 
     # Trim recent data if requested
@@ -324,22 +324,22 @@ def run_optimization(
                 tf_bars_to_skip = max(1, skip_recent_hours // tf_hours)
                 if tf_bars_to_skip < len(data[tf]):
                     data[tf] = data[tf].iloc[:-tf_bars_to_skip]
-        logger.info(f"Trimmed {skip_recent_hours}h of recent data")
+        logger.info("Trimmed %dh of recent data", skip_recent_hours)
 
     total_bars = len(data[BASE_TF])
-    logger.info(f"Loaded {total_bars} bars for {symbol}")
+    logger.info("Loaded %d bars for %s", total_bars, symbol)
 
     # 2. Compute splits
     splits = compute_awf_splits(total_bars, n_splits, test_size=test_size)
     if splits is None:
         raise ValueError(f"Data too short for AWF: {total_bars} bars < {ANCHORED_WF_MIN_DATA_HOURS}")
 
-    logger.info(f"AWF: {len(splits)} splits, {total_bars} total bars")
+    logger.info("AWF: %d splits, %d total bars", len(splits), total_bars)
     for i, s in enumerate(splits):
         te = int(total_bars * s["train_end"])
         ts = int(total_bars * s.get("test_start", s["train_end"]))
         tse = int(total_bars * s["test_end"])
-        logger.info(f"  Split {i+1}: Train 0-{te}, Purge {te}-{ts}, Test {ts}-{tse}")
+        logger.info("  Split %d: Train 0-%d, Purge %d-%d, Test %d-%d", i+1, te, te, ts, ts, tse)
 
     # 3. Run Optuna
     sampler = create_sampler(seed, n_trials)
@@ -375,7 +375,7 @@ def run_optimization(
 
     prev_handler = signal.signal(signal.SIGTERM, _graceful_stop)
 
-    logger.info(f"Starting AWF optimization: {n_trials} trials")
+    logger.info("Starting AWF optimization: %d trials", n_trials)
     study.optimize(
         objective,
         n_trials=n_trials,
@@ -390,10 +390,10 @@ def run_optimization(
     if completed_trials == 0:
         raise RuntimeError(f"No completed trials for {symbol}. Check data quality and constraints.")
     if study.best_value == 0.0:
-        logger.warning(f"All trials scored 0.0 for {symbol} — degenerate result")
+        logger.warning("All trials scored 0.0 for %s — degenerate result", symbol)
     best_params = study.best_trial.params
     if completed_trials < n_trials:
-        logger.info(f"Optimization stopped early: {completed_trials}/{n_trials} trials completed")
+        logger.info("Optimization stopped early: %d/%d trials completed", completed_trials, n_trials)
     strategy = MACDRSIStrategy()
 
     # 4. Final evaluation
@@ -526,8 +526,8 @@ def run_optimization(
     # 5. Monte Carlo (OOS — aggregated from per-split test trades)
     mc = aggregate_mc_results(split_mc_results)
     logger.info(
-        f"OOS Monte Carlo: {len(split_mc_results)}/{len(splits)} splits evaluated, "
-        f"confidence={mc.confidence_level}"
+        "OOS Monte Carlo: %d/%d splits evaluated, confidence=%s",
+        len(split_mc_results), len(splits), mc.confidence_level,
     )
     best_params.update({
         "mc_sharpe_mean": mc.sharpe_mean,
@@ -555,10 +555,13 @@ def run_optimization(
             optuna_history.append({"number": trial.number, "value": trial.value})
     save_report(outdir / f"report_{base}.html", best_params, trades_dicts, optuna_history=optuna_history)
 
-    logger.info(f"Done {symbol}: Equity=${full_metrics.equity:,.2f}, "
-                f"Sharpe(time)={full_metrics.sharpe_ratio_time_based:.2f}, "
-                f"Sharpe(equity)={full_metrics.sharpe_ratio_equity_based:.2f}, "
-                f"Trades={full_metrics.trades}")
+    logger.info(
+        "Done %s: Equity=$%s, Sharpe(time)=%.2f, Sharpe(equity)=%.2f, Trades=%d",
+        symbol, f"{full_metrics.equity:,.2f}",
+        full_metrics.sharpe_ratio_time_based,
+        full_metrics.sharpe_ratio_equity_based,
+        full_metrics.trades,
+    )
 
     # 8. Notifications
     notify_complete(best_params)

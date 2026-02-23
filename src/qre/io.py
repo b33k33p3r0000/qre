@@ -20,7 +20,7 @@ def save_json(path: Path, obj: Dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(obj, f, ensure_ascii=False, indent=2)
-    logger.debug(f"Saved JSON: {path}")
+    logger.debug("Saved JSON: %s", path)
 
 
 def save_trades_csv(path: Path, trades: List[Dict[str, Any]]) -> None:
@@ -48,4 +48,4 @@ def save_trades_csv(path: Path, trades: List[Dict[str, Any]]) -> None:
                 trade.get("reason", ""),
                 trade.get("direction", ""),
             ])
-    logger.debug(f"Saved trades CSV: {path}")
+    logger.debug("Saved trades CSV: %s", path)
