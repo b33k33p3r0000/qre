@@ -9,7 +9,7 @@ import pytest
 from qre.report import (
     generate_report, build_equity_curve, build_drawdown_curve,
     _compute_direction_stats, _render_long_short_metrics,
-    _compute_yearly_breakdown,
+    _compute_yearly_breakdown, _render_yearly_performance,
 )
 
 
@@ -478,3 +478,45 @@ class TestComputeYearlyBreakdown:
     def test_empty_trades(self):
         result = _compute_yearly_breakdown([], start_equity=50000.0)
         assert result == []
+
+
+class TestRenderYearlyPerformance:
+    def test_empty_data_returns_empty(self):
+        html = _render_yearly_performance([])
+        assert html == ""
+
+    def test_contains_year_label(self):
+        data = [{"year": 2025, "pnl_dollar": 1000, "pnl_pct": 2.0,
+                 "gross_profit": 1500, "gross_loss": -500, "trade_count": 10,
+                 "win_rate": 60.0, "max_dd": -3.5, "partial": False, "partial_label": ""}]
+        html = _render_yearly_performance(data)
+        assert "2025" in html
+
+    def test_partial_year_has_asterisk(self):
+        data = [{"year": 2024, "pnl_dollar": 500, "pnl_pct": 1.0,
+                 "gross_profit": 800, "gross_loss": -300, "trade_count": 5,
+                 "win_rate": 60.0, "max_dd": -2.0, "partial": True, "partial_label": "Jun\u2013Dec"}]
+        html = _render_yearly_performance(data)
+        assert "2024*" in html
+        assert "Jun" in html
+
+    def test_pnl_positive_has_positive_class(self):
+        data = [{"year": 2025, "pnl_dollar": 1000, "pnl_pct": 2.0,
+                 "gross_profit": 1500, "gross_loss": -500, "trade_count": 10,
+                 "win_rate": 60.0, "max_dd": -3.5, "partial": False, "partial_label": ""}]
+        html = _render_yearly_performance(data)
+        assert "positive" in html
+
+    def test_pnl_negative_has_negative_class(self):
+        data = [{"year": 2025, "pnl_dollar": -500, "pnl_pct": -1.0,
+                 "gross_profit": 200, "gross_loss": -700, "trade_count": 10,
+                 "win_rate": 30.0, "max_dd": -5.0, "partial": False, "partial_label": ""}]
+        html = _render_yearly_performance(data)
+        assert "negative" in html
+
+    def test_section_title_present(self):
+        data = [{"year": 2025, "pnl_dollar": 100, "pnl_pct": 0.2,
+                 "gross_profit": 100, "gross_loss": 0, "trade_count": 1,
+                 "win_rate": 100.0, "max_dd": 0.0, "partial": False, "partial_label": ""}]
+        html = _render_yearly_performance(data)
+        assert "Yearly Performance" in html

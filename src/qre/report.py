@@ -251,6 +251,61 @@ def _compute_yearly_breakdown(
     return results
 
 
+def _render_yearly_performance(yearly_data: List[Dict[str, Any]]) -> str:
+    """Render per-year performance breakdown table."""
+    if not yearly_data:
+        return ""
+
+    rows = ""
+    has_partial = False
+    for yd in yearly_data:
+        year_label = f"{yd['year']}*" if yd["partial"] else str(yd["year"])
+        if yd["partial"]:
+            has_partial = True
+        pnl_css = "positive" if yd["pnl_dollar"] >= 0 else "negative"
+        dd_css = "negative" if yd["max_dd"] < 0 else ""
+        rows += (
+            f'<tr>'
+            f'<td>{year_label}</td>'
+            f'<td class="{pnl_css}">{_fmt_usd(yd["pnl_dollar"])}</td>'
+            f'<td class="{pnl_css}">{yd["pnl_pct"]:+.1f}%</td>'
+            f'<td class="positive">{_fmt_usd(yd["gross_profit"])}</td>'
+            f'<td class="negative">{_fmt_usd(yd["gross_loss"])}</td>'
+            f'<td>{yd["trade_count"]}</td>'
+            f'<td>{yd["win_rate"]:.1f}%</td>'
+            f'<td class="{dd_css}">{yd["max_dd"]:.1f}%</td>'
+            f'</tr>\n'
+        )
+
+    footnote = ""
+    if has_partial:
+        partial_notes = [
+            f'{yd["year"]} ({yd["partial_label"]})'
+            for yd in yearly_data if yd["partial"]
+        ]
+        footnote = (
+            f'<div style="color: var(--text-secondary); font-size: 10px; '
+            f'margin-top: 6px;">* Partial year: {", ".join(partial_notes)}</div>'
+        )
+
+    return f"""
+    <div class="detail-group">
+        <h3 class="detail-group-title">Yearly Performance</h3>
+        <div class="chart-container">
+            <table class="params-table">
+                <tr>
+                    <th>Year</th><th>P&amp;L ($)</th><th>P&amp;L (%)</th>
+                    <th>Gross Profit</th><th>Gross Loss</th>
+                    <th>Trades</th><th>Win Rate</th><th>Max DD</th>
+                </tr>
+                {rows}
+            </table>
+            {footnote}
+        </div>
+    </div>
+    """
+
+
 def _fmt_usd(value: float) -> str:
     """Format dollar value with sign before $: -$50.00 instead of $-50.00."""
     if value < 0:
@@ -1051,6 +1106,8 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
     exit_reasons_html = _render_exit_reason_breakdown(trades)
     ls_html = _render_long_short_metrics(trades)
     monthly_html, monthly_js = _render_monthly_returns(trades)
+    yearly_data = _compute_yearly_breakdown(trades, start_equity)
+    yearly_html = _render_yearly_performance(yearly_data)
     trade_charts_html, trade_charts_js = _render_trade_charts(trades)
     hold_dur_html, hold_dur_js = _render_hold_duration_chart(trades)
     rolling_html, rolling_js = _render_rolling_metrics(trades)
@@ -1554,6 +1611,8 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
             </div>
         </div>
     </div>
+
+    {yearly_html}
 
     <div class="detail-group">
         <h3 class="detail-group-title">Trade Statistics</h3>
