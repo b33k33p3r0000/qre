@@ -116,6 +116,8 @@ def trading_loop_numba(
     entry_price = 0.0
     capital_at_entry = 0.0
 
+    # Numba requires fixed-size pre-allocation (cannot grow arrays dynamically).
+    # Actual trades << max_trades; trimmed via [:n_trades] on return.
     max_trades = (end_idx - start_idx) + 1
     trades = np.zeros((max_trades, 10), dtype=np.float64)
     n_trades = 0
