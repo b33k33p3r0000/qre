@@ -395,6 +395,7 @@ def run_optimization(
     if study.best_value == 0.0:
         logger.warning("All trials scored 0.0 for %s — degenerate result", symbol)
     best_params = study.best_trial.params
+    strategy_param_keys = list(best_params.keys())
     if completed_trials < n_trials:
         logger.info("Optimization stopped early: %d/%d trials completed", completed_trials, n_trials)
     strategy = MACDRSIStrategy()
@@ -544,6 +545,7 @@ def run_optimization(
         "mc_source": "oos_per_split",
         "mc_splits_evaluated": len(split_mc_results),
     })
+    best_params["strategy_param_keys"] = strategy_param_keys
 
     # 6. Save results
     outdir.mkdir(parents=True, exist_ok=True)
