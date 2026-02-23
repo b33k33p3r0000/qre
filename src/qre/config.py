@@ -47,9 +47,7 @@ DEFAULT_SLIPPAGE = float(os.environ.get("SLIPPAGE", "0.0015"))
 
 
 def get_slippage(symbol: str) -> float:
-    env_slippage = os.environ.get("SLIPPAGE")
-    if env_slippage:
-        return float(env_slippage)
+    """Get slippage for symbol. Falls back to SLIPPAGE env var or 0.0015."""
     return SLIPPAGE_MAP.get(symbol, DEFAULT_SLIPPAGE)
 
 
