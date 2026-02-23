@@ -1,5 +1,21 @@
 # Session Notes
 
+## 2026-02-23 (2) — Post-Run Analýza + Search Space Tuning
+
+### Uděláno
+- `/analyze-run` na new-final BTC+SOL runech — oba RE-RUN (params z old search space)
+- Search space tuning: `macd_signal` 2-15 → **3-15**, `rsi_lookback` 4-8 → **1-4**
+- run.sh presety: BTC Main 20k/5 → 25k/3, SOL Main 40k/5 → 25k/3
+- Skill reference docs aktualizovány (Sharpe equity = primary, intentional floors, 3 splits default)
+
+### Poznatky
+- rsi_lookback=8 = 9h paměť RSI podmínky — příliš volné, Optuna gamuje trade count přes lookback
+- macd_signal=2 = de facto nefiltrovaný MACD — noise
+- rsi_period=3 a macd_signal=3 na minimech = **záměrné hard floors**, ne edge param concern
+- Sharpe (time) nespolehlivý výpočet → sekundární safety metrika, Sharpe (equity) = primary
+
+---
+
 ## 2026-02-23 — /data-art Skill + 8 Vizualizačních Variant
 
 ### Uděláno
