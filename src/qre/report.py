@@ -695,11 +695,11 @@ def _render_strategy_params(params: Dict[str, Any]) -> str:
     numeric_params = [
         ("macd_fast", "MACD fast", 1, 20),
         ("macd_slow", "MACD slow", 10, 45),
-        ("macd_signal", "MACD signal", 2, 15),
+        ("macd_signal", "MACD signal", 3, 15),
         ("rsi_period", "RSI period", 3, 30),
         ("rsi_lower", "RSI lower", 20, 40),
         ("rsi_upper", "RSI upper", 60, 80),
-        ("rsi_lookback", "RSI lookback", 4, 8),
+        ("rsi_lookback", "RSI lookback", 1, 4),
     ]
     categorical_params = [
         ("trend_tf", "Trend TF", ["4h", "8h", "1d"]),

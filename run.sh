@@ -22,8 +22,8 @@ QRE Optimizer — MACD+RSI AWF
 
 Presets:
   1) Test        —  5k trials, ~2yr, 3 splits, BTC+SOL  (~15 min)
-  2) BTC Main    — 20k trials, ~2yr, 5 splits, BTC only (~60 min)
-  3) SOL Main    — 40k trials, ~2yr, 5 splits, SOL only (~180 min)
+  2) BTC Main    — 25k trials, ~2yr, 3 splits, BTC only (~60 min)
+  3) SOL Main    — 25k trials, ~2yr, 3 splits, SOL only (~90 min)
   4) Custom      — You choose everything
 
 All presets use --hours 18600 --skip-recent 1080 by default
@@ -231,8 +231,8 @@ done
 
 case "$PRESET" in
     test)       TRIALS=5000;  SPLITS=3 ;;
-    btc-main)   TRIALS=20000; SPLITS=5; PAIRS="btc" ;;
-    sol-main)   TRIALS=40000; SPLITS=5; PAIRS="sol" ;;
+    btc-main)   TRIALS=25000; SPLITS=3; PAIRS="btc" ;;
+    sol-main)   TRIALS=25000; SPLITS=3; PAIRS="sol" ;;
     custom)     ;; # Use --trials, --hours, --splits from args
     "")
         # Interactive mode
@@ -241,12 +241,12 @@ case "$PRESET" in
         read -p "Select preset (1-4): " choice
         case "$choice" in
             1) TRIALS=5000;  SPLITS=3 ;;
-            2) TRIALS=20000; SPLITS=5; PAIRS="btc" ;;
-            3) TRIALS=40000; SPLITS=5; PAIRS="sol" ;;
+            2) TRIALS=25000; SPLITS=3; PAIRS="btc" ;;
+            3) TRIALS=25000; SPLITS=3; PAIRS="sol" ;;
             4)
                 read -p "Trials [15000]: " TRIALS; TRIALS="${TRIALS:-15000}"
                 read -p "Hours [18600]: " HOURS; HOURS="${HOURS:-18600}"
-                read -p "Splits [5]: " SPLITS; SPLITS="${SPLITS:-5}"
+                read -p "Splits [3]: " SPLITS; SPLITS="${SPLITS:-3}"
                 read -p "Skip recent hours [1080]: " SKIP_RECENT; SKIP_RECENT="${SKIP_RECENT:-1080}"
                 echo ""
                 read -p "Pairs — (1) BTC only, (2) SOL only, (3) Both [3]: " pair_choice

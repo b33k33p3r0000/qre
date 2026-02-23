@@ -126,12 +126,12 @@ class TestMACDRSIStrategy:
                 continue
             # macd_fast >= 1.0
             assert params["macd_fast"] >= 1.0, f"macd_fast={params['macd_fast']} < 1.0"
-            # macd_signal >= 2 (signal=1 = no smoothing = degenerate)
-            assert params["macd_signal"] >= 2, f"macd_signal={params['macd_signal']} < 2"
+            # macd_signal >= 3 (signal=2 = ultra-reactive noise)
+            assert params["macd_signal"] >= 3, f"macd_signal={params['macd_signal']} < 3"
             # rsi_period >= 3
             assert params["rsi_period"] >= 3, f"rsi_period={params['rsi_period']} < 3"
-            # rsi_lookback >= 4
-            assert params["rsi_lookback"] >= 4, f"rsi_lookback={params['rsi_lookback']} < 4"
+            # rsi_lookback >= 1
+            assert params["rsi_lookback"] >= 1, f"rsi_lookback={params['rsi_lookback']} < 1"
             return
         pytest.fail("All 100 trials pruned")
 
@@ -185,7 +185,7 @@ class TestRSILookback:
         assert sell_6.sum() >= sell_0.sum()
 
     def test_lookback_in_optuna_params(self, strategy):
-        """rsi_lookback is in Optuna search space (4-8)."""
+        """rsi_lookback is in Optuna search space (1-4)."""
         import optuna
         study = optuna.create_study()
         for _ in range(50):
@@ -195,15 +195,15 @@ class TestRSILookback:
             except optuna.TrialPruned:
                 continue
             assert "rsi_lookback" in params
-            assert 4 <= params["rsi_lookback"] <= 8
+            assert 1 <= params["rsi_lookback"] <= 4
             return
         pytest.fail("All 50 trials pruned")
 
     def test_lookback_in_default_params(self, strategy):
-        """Default rsi_lookback is midpoint of range (6)."""
+        """Default rsi_lookback is midpoint of range (3)."""
         params = strategy.get_default_params()
         assert "rsi_lookback" in params
-        assert params["rsi_lookback"] == 6
+        assert params["rsi_lookback"] == 3
 
 
 class TestTrendFilter:
