@@ -660,9 +660,9 @@ def generate_html(data_path: str, output_path: str) -> None:
 
 
 if __name__ == "__main__":
-    data_path = "/tmp/art_data_embed.json"
-    output_path = (
-        "/Users/davidxbinko/projects/qre/results/"
-        "2026-02-22_17-58-58_flip-on-sol/SOL/art_trial_flow_field.html"
-    )
-    generate_html(data_path, output_path)
+    import argparse
+    parser = argparse.ArgumentParser(description="Generate Trial Flow Field data art")
+    parser.add_argument("data_path", type=str, help="Path to art data JSON")
+    parser.add_argument("output_path", type=str, help="Output HTML path")
+    args = parser.parse_args()
+    generate_html(args.data_path, args.output_path)

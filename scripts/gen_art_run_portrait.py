@@ -1,18 +1,25 @@
 #!/usr/bin/env python3
 """Generate Run Portrait — 5-layer radial data art visualization of a QRE optimizer run."""
 
+import argparse
 import json
 import sys
 from pathlib import Path
 
-DATA_PATH = Path("/tmp/art_data_embed.json")
-OUTPUT_DIR = Path.home() / "projects/qre/results/2026-02-22_17-58-58_flip-on-sol/SOL"
-OUTPUT_FILE = OUTPUT_DIR / "art_run_portrait.html"
-
 
 def main():
+    parser = argparse.ArgumentParser(description="Generate Run Portrait data art")
+    parser.add_argument("data_path", type=Path, help="Path to art_data_embed.json")
+    parser.add_argument("--output-dir", type=Path, default=None,
+                        help="Output directory (default: same as data_path parent)")
+    args = parser.parse_args()
+
+    data_path = args.data_path
+    output_dir = args.output_dir or data_path.parent
+    output_file = output_dir / "art_run_portrait.html"
+
     # Load data
-    with open(DATA_PATH) as f:
+    with open(data_path) as f:
         data = json.load(f)
 
     symbol = data["symbol"]
@@ -625,10 +632,10 @@ new p5(sketch);
 </html>"""
 
     # Write output
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    OUTPUT_FILE.write_text(html, encoding="utf-8")
-    print(f"Generated: {OUTPUT_FILE}")
-    print(f"Size: {OUTPUT_FILE.stat().st_size / 1024:.1f} KB")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_file.write_text(html, encoding="utf-8")
+    print(f"Generated: {output_file}")
+    print(f"Size: {output_file.stat().st_size / 1024:.1f} KB")
 
 
 if __name__ == "__main__":
