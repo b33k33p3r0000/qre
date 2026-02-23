@@ -1,5 +1,23 @@
 # Session Notes
 
+## 2026-02-23 (3) — Code Review Fixes (11 nálezů)
+
+### Uděláno
+- Kompletní `/review` celého QRE + parent repo → 26 nálezů (4C, 11W, 6I, 5 QRE-specific)
+- Implementováno 11 oprav: C1-C4 (critical), W1-W4 (warning), I2-I6 (info), W6
+- Design doc: `docs/plans/2026-02-23-qre-review-fixes.md`
+- 11 commitů, 204 testů green, 0 regresí
+
+### Klíčové opravy
+- **C1-C3**: Smazán `compare_signals.py` (5 crash pointů, kompletně rozbitý)
+- **C4**: RSI cache range 5-30 → 3-30 (performance fix, rsi_period=3 je intentional hard floor)
+- **W1**: `get_slippage()` env var override odstraněn (per-symbol mapa vždy respektována)
+- **W4**: `from __future__ import annotations` ve všech 9 src souborech
+- **I3**: `strategy_param_keys` v output pro oddělení Optuna params od metadat
+- **I4**: MC win rate loop optimalizace (1000 iterací pro nulový informační zisk)
+
+---
+
 ## 2026-02-23 (2) — Post-Run Analýza + Search Space Tuning
 
 ### Uděláno
