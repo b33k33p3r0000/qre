@@ -148,6 +148,109 @@ def _compute_direction_stats(trades: List[Dict]) -> Dict[str, Any]:
     return {"long": _stats(longs), "short": _stats(shorts)}
 
 
+def _compute_yearly_breakdown(
+    trades: List[Dict], start_equity: float
+) -> List[Dict[str, Any]]:
+    """Compute per-calendar-year metrics from trades.
+
+    Groups trades by exit_ts year. For each year computes:
+    PnL ($), PnL (%), gross profit, gross loss, trade count,
+    win rate, max drawdown, and partial year info.
+    """
+    if not trades:
+        return []
+
+    # Group trades by year (using exit_ts)
+    yearly_trades: Dict[int, List[Dict]] = {}
+    for t in trades:
+        exit_ts = t.get("exit_ts", "")
+        if not exit_ts:
+            continue
+        year = int(exit_ts[:4])
+        yearly_trades.setdefault(year, []).append(t)
+
+    if not yearly_trades:
+        return []
+
+    # Detect first entry and last exit for partial year detection
+    all_entry_months: Dict[int, List[int]] = {}
+    all_exit_months: Dict[int, List[int]] = {}
+    for t in trades:
+        entry_ts = t.get("entry_ts", "")
+        exit_ts = t.get("exit_ts", "")
+        if entry_ts:
+            yr = int(entry_ts[:4])
+            mo = int(entry_ts[5:7])
+            all_entry_months.setdefault(yr, []).append(mo)
+        if exit_ts:
+            yr = int(exit_ts[:4])
+            mo = int(exit_ts[5:7])
+            all_exit_months.setdefault(yr, []).append(mo)
+
+    month_names = [
+        "", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ]
+
+    results = []
+    running_equity = start_equity
+
+    for year in sorted(yearly_trades.keys()):
+        year_trades = yearly_trades[year]
+        year_start_equity = running_equity
+
+        # PnL
+        pnl_dollar = sum(t.get("pnl_abs", 0) for t in year_trades)
+        pnl_pct = (pnl_dollar / year_start_equity * 100) if year_start_equity > 0 else 0.0
+
+        # Gross profit / loss
+        gross_profit = sum(t.get("pnl_abs", 0) for t in year_trades if t.get("pnl_abs", 0) > 0)
+        gross_loss = sum(t.get("pnl_abs", 0) for t in year_trades if t.get("pnl_abs", 0) <= 0)
+
+        # Trade count and win rate
+        trade_count = len(year_trades)
+        winners = sum(1 for t in year_trades if t.get("pnl_abs", 0) > 0)
+        win_rate = (winners / trade_count * 100) if trade_count > 0 else 0.0
+
+        # Max drawdown for this year (from equity curve within the year)
+        equity = year_start_equity
+        peak = equity
+        max_dd = 0.0
+        for t in year_trades:
+            equity += t.get("pnl_abs", 0)
+            peak = max(peak, equity)
+            dd = (equity - peak) / peak * 100 if peak > 0 else 0.0
+            max_dd = min(max_dd, dd)
+
+        # Partial year detection
+        entry_months = all_entry_months.get(year, [])
+        exit_months = all_exit_months.get(year, [])
+        all_months = sorted(set(entry_months + exit_months))
+        first_month = min(all_months) if all_months else 1
+        last_month = max(all_months) if all_months else 12
+        partial = first_month > 1 or last_month < 12
+        partial_label = ""
+        if partial:
+            partial_label = f"{month_names[first_month]}\u2013{month_names[last_month]}"
+
+        results.append({
+            "year": year,
+            "pnl_dollar": pnl_dollar,
+            "pnl_pct": pnl_pct,
+            "gross_profit": gross_profit,
+            "gross_loss": gross_loss,
+            "trade_count": trade_count,
+            "win_rate": win_rate,
+            "max_dd": max_dd,
+            "partial": partial,
+            "partial_label": partial_label,
+        })
+
+        running_equity += pnl_dollar
+
+    return results
+
+
 def _fmt_usd(value: float) -> str:
     """Format dollar value with sign before $: -$50.00 instead of $-50.00."""
     if value < 0:
