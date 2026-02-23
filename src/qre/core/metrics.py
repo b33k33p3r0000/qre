@@ -609,7 +609,9 @@ def monte_carlo_validation(
     # Storage for simulation results
     sharpes = []
     max_dds = []
-    win_rates = []
+
+    # Win rate is invariant to shuffle order — calculate once
+    win_rate_fixed = float(np.sum(pnl_values > 0) / n_trades * 100)
 
     for _ in range(n_simulations):
         # Shuffle trade order
@@ -636,14 +638,9 @@ def monte_carlo_validation(
             sharpe = 0.0
         sharpes.append(sharpe)
 
-        # Win rate (same for all shuffles, but calculate anyway)
-        win_rate = float(np.sum(shuffled_pnl > 0) / n_trades * 100)
-        win_rates.append(win_rate)
-
     # Convert to arrays for percentile calculation
     sharpes = np.array(sharpes)
     max_dds = np.array(max_dds)
-    win_rates = np.array(win_rates)
 
     # Calculate statistics
     sharpe_mean = float(np.mean(sharpes))
@@ -656,9 +653,9 @@ def monte_carlo_validation(
     max_dd_ci_low = float(np.percentile(max_dds, 2.5))  # Best case (least negative)
     max_dd_ci_high = float(np.percentile(max_dds, 97.5))  # Worst case (most negative)
 
-    win_rate_mean = float(np.mean(win_rates))
-    win_rate_ci_low = float(np.percentile(win_rates, 2.5))
-    win_rate_ci_high = float(np.percentile(win_rates, 97.5))
+    win_rate_mean = win_rate_fixed
+    win_rate_ci_low = win_rate_fixed
+    win_rate_ci_high = win_rate_fixed
 
     # Calculate robustness score (0-1)
     # Based on: narrow CI, consistent positive Sharpe, acceptable DD variance
