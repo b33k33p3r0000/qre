@@ -1,5 +1,33 @@
 # Session Notes
 
+## 2026-02-23 (4) — MAIN Run Analýza + Metriky Audit
+
+### Uděláno
+- `/analyze-run` na MAIN runech (BTC 25k trials, SOL 25k trials)
+- BTC: DEPLOY S VÝHRADOU (Sharpe 2.57, DD -4.92%, 116 trades/yr)
+- SOL: REJECT (DD -16.5% > 15% threshold, funded account risk)
+- Strategie v4.2.1 běží s `allow_flip=0` (selective mode) — potvrzeno jako stabilnější na základě flip-on vs flip-off A/B testů z 22.2.
+
+### Metriky Audit — Nalezené Bugy
+- **Calmar Ratio (metrics.py):** NEní annualizovaný — používá total return místo annual return. Fakticky počítá Recovery Factor, ne Calmar.
+- **Sortino Ratio (metrics.py):** Annualizace sqrt(252) na per-trade returnech. Měl by sqrt(trades_per_year) nebo přepis na daily returns.
+- **Sharpe Time (metrics.py):** Fees/slippage nejsou v hourly returnech, overwrite místo accumulate pro overlapping trades, np.std vs pandas .std inkonsistence. Nespolehlivý — zůstává secondary-only.
+- **Catastrophic stop vs DD:** NENÍ bug — stop limituje per-trade ztrátu, DD je kumulativní přes equity curve. S position_pct=0.25 je max ztráta per trade ~3% equity (SOL: 12% × 25% = 3%). DD 16.5% = ~6 consecutive losing trades.
+- **Reference docs (strategy_knowledge.md):** Zastaralé ranges vs aktuální kód (macd_slow 45 vs 50, rsi_lower 20-40 vs 15-45, rsi_upper 60-80 vs 55-85)
+
+### Opraveno
+- [x] Fix Calmar: annualizovaný v `calculate_calmar_ratio()` (+ backward compat pro <365d)
+- [x] Aktualizovat strategy_knowledge.md (ranges, 10 params, catastrophic_stop info, metrics section)
+- [x] Aktualizovat metric_thresholds.md (Calmar/Sortino/Sharpe time poznámky, edge detection ranges)
+- [x] Aktualizovat MEMORY.md (10 Optuna params, metriky characteristics)
+
+### Rozhodnutí (nechat jak je)
+- Catastrophic stop vs DD: NENÍ bug (kumulativní equity DD vs per-trade stop, position_pct=0.25)
+- Sortino nadhodnocený ~40-50%: known, not worth fixing — zdokumentováno v references
+- Sharpe Time: secondary-only, zdokumentované known issues, nechat
+
+---
+
 ## 2026-02-23 (3) — Code Review Fixes (11 nálezů)
 
 ### Uděláno

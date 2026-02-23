@@ -360,13 +360,22 @@ def calculate_sortino_ratio(returns: pd.Series) -> float:
     return float((mean_return / downside_std) * math.sqrt(252))
 
 
-def calculate_calmar_ratio(total_return: float, max_drawdown: float) -> float:
+def calculate_calmar_ratio(total_return: float, max_drawdown: float, backtest_days: int = 0) -> float:
     """
-    v4.0 NEW: Calmar Ratio = Annual Return / Max Drawdown
+    Calmar Ratio = Annualized Return / Max Drawdown.
+
+    Args:
+        total_return: Total return as percentage (e.g. 69.8 for +69.8%).
+        max_drawdown: Max drawdown as negative percentage (e.g. -4.92).
+        backtest_days: Length of backtest in days. If 0 or < 365, total_return
+            is treated as already annualized (backward compat).
     """
     if abs(max_drawdown) < 1e-12:
         return 0.0
-    return total_return / abs(max_drawdown)
+    annual_return = total_return
+    if backtest_days >= 365:
+        annual_return = total_return / (backtest_days / 365.25)
+    return annual_return / abs(max_drawdown)
 
 
 def calculate_recovery_factor(total_pnl: float, max_drawdown: float, start_equity: float) -> float:
@@ -502,8 +511,8 @@ def calculate_metrics(
 
     # === v4.0 NEW METRICS ===
 
-    # Calmar Ratio
-    calmar = calculate_calmar_ratio(total_pnl_pct, max_drawdown)
+    # Calmar Ratio (annualized)
+    calmar = calculate_calmar_ratio(total_pnl_pct, max_drawdown, backtest_days)
 
     # Recovery Factor
     recovery = calculate_recovery_factor(total_pnl, max_drawdown, start_equity)
