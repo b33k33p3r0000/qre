@@ -9,6 +9,7 @@ import pytest
 from qre.report import (
     generate_report, build_equity_curve, build_drawdown_curve,
     _compute_direction_stats, _render_long_short_metrics,
+    _compute_yearly_breakdown,
 )
 
 
@@ -390,3 +391,90 @@ class TestSectionDividers:
         assert ">ROBUSTNESS<" in html
         assert ">TRADE ANALYSIS<" in html
         assert ">STRATEGY<" in html
+
+
+class TestComputeYearlyBreakdown:
+    def test_single_year_returns_one_row(self):
+        trades = [
+            _make_trade(100, entry_ts="2025-01-01T00:00:00", exit_ts="2025-01-10T00:00:00"),
+            _make_trade(-50, entry_ts="2025-02-01T00:00:00", exit_ts="2025-02-10T00:00:00"),
+        ]
+        result = _compute_yearly_breakdown(trades, start_equity=50000.0)
+        assert len(result) == 1
+        assert result[0]["year"] == 2025
+
+    def test_multi_year_breakdown(self):
+        trades = [
+            _make_trade(200, entry_ts="2024-06-01T00:00:00", exit_ts="2024-06-10T00:00:00"),
+            _make_trade(-100, entry_ts="2024-11-01T00:00:00", exit_ts="2024-11-10T00:00:00"),
+            _make_trade(300, entry_ts="2025-03-01T00:00:00", exit_ts="2025-03-10T00:00:00"),
+        ]
+        result = _compute_yearly_breakdown(trades, start_equity=50000.0)
+        assert len(result) == 2
+        assert result[0]["year"] == 2024
+        assert result[1]["year"] == 2025
+
+    def test_pnl_dollar_computed(self):
+        trades = [
+            _make_trade(200, entry_ts="2025-01-01T00:00:00", exit_ts="2025-01-10T00:00:00"),
+            _make_trade(-50, entry_ts="2025-02-01T00:00:00", exit_ts="2025-02-10T00:00:00"),
+        ]
+        result = _compute_yearly_breakdown(trades, start_equity=50000.0)
+        assert result[0]["pnl_dollar"] == 150.0
+
+    def test_pnl_pct_uses_start_equity_for_year(self):
+        trades = [
+            _make_trade(5000, entry_ts="2024-06-01T00:00:00", exit_ts="2024-06-10T00:00:00"),
+            _make_trade(1000, entry_ts="2025-03-01T00:00:00", exit_ts="2025-03-10T00:00:00"),
+        ]
+        result = _compute_yearly_breakdown(trades, start_equity=50000.0)
+        assert abs(result[0]["pnl_pct"] - 10.0) < 0.01
+        assert abs(result[1]["pnl_pct"] - (1000 / 55000 * 100)) < 0.01
+
+    def test_gross_profit_and_loss(self):
+        trades = [
+            _make_trade(200, entry_ts="2025-01-01T00:00:00", exit_ts="2025-01-10T00:00:00"),
+            _make_trade(-80, entry_ts="2025-02-01T00:00:00", exit_ts="2025-02-10T00:00:00"),
+            _make_trade(150, entry_ts="2025-03-01T00:00:00", exit_ts="2025-03-10T00:00:00"),
+        ]
+        result = _compute_yearly_breakdown(trades, start_equity=50000.0)
+        assert result[0]["gross_profit"] == 350.0
+        assert result[0]["gross_loss"] == -80.0
+
+    def test_trade_count_and_win_rate(self):
+        trades = [
+            _make_trade(100, entry_ts="2025-01-01T00:00:00", exit_ts="2025-01-10T00:00:00"),
+            _make_trade(-50, entry_ts="2025-02-01T00:00:00", exit_ts="2025-02-10T00:00:00"),
+            _make_trade(80, entry_ts="2025-03-01T00:00:00", exit_ts="2025-03-10T00:00:00"),
+        ]
+        result = _compute_yearly_breakdown(trades, start_equity=50000.0)
+        assert result[0]["trade_count"] == 3
+        assert abs(result[0]["win_rate"] - 66.7) < 0.1
+
+    def test_max_drawdown_per_year(self):
+        trades = [
+            _make_trade(1000, entry_ts="2025-01-01T00:00:00", exit_ts="2025-01-10T00:00:00"),
+            _make_trade(-500, entry_ts="2025-02-01T00:00:00", exit_ts="2025-02-10T00:00:00"),
+        ]
+        result = _compute_yearly_breakdown(trades, start_equity=50000.0)
+        assert result[0]["max_dd"] < 0
+
+    def test_partial_year_detected(self):
+        trades = [
+            _make_trade(100, entry_ts="2024-06-15T00:00:00", exit_ts="2024-06-20T00:00:00"),
+        ]
+        result = _compute_yearly_breakdown(trades, start_equity=50000.0)
+        assert result[0]["partial"] is True
+        assert "Jun" in result[0]["partial_label"]
+
+    def test_full_year_not_partial(self):
+        trades = [
+            _make_trade(100, entry_ts="2025-01-05T00:00:00", exit_ts="2025-01-10T00:00:00"),
+            _make_trade(100, entry_ts="2025-12-20T00:00:00", exit_ts="2025-12-28T00:00:00"),
+        ]
+        result = _compute_yearly_breakdown(trades, start_equity=50000.0)
+        assert result[0]["partial"] is False
+
+    def test_empty_trades(self):
+        result = _compute_yearly_breakdown([], start_equity=50000.0)
+        assert result == []
