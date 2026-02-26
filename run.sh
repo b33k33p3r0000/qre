@@ -44,6 +44,7 @@ Options:
   --full               Full data (--hours 26280 --skip-recent 0)
   --allow-flip N       0=selective (default), 1=always-in
   --always-in          Shortcut for --allow-flip 1
+  --warm-start PATH    Path to best_params.json for warm-starting optimization
   --fg                 Run in foreground (default: background)
 
 Examples:
@@ -73,6 +74,7 @@ TAG=""
 PRESET=""
 SKIP_RECENT=0
 ALLOW_FLIP=0
+WARM_START=""
 FOREGROUND=false
 LOG_DIR="$SCRIPT_DIR/logs"
 mkdir -p "$LOG_DIR"
@@ -98,6 +100,7 @@ while [[ $# -gt 0 ]]; do
         --full) HOURS=26280; SKIP_RECENT=0 ;;
         --allow-flip) ALLOW_FLIP="$2"; shift ;;
         --always-in) ALLOW_FLIP=1 ;;
+        --warm-start) WARM_START="$2"; shift ;;
         --bg) FOREGROUND=false ;;  # already default, kept for explicitness
         --fg) FOREGROUND=true ;;
         attach)
@@ -248,6 +251,7 @@ case "$PRESET" in
                 read -p "Hours [26280]: " HOURS; HOURS="${HOURS:-26280}"
                 read -p "Splits [3]: " SPLITS; SPLITS="${SPLITS:-3}"
                 read -p "Skip recent hours [0]: " SKIP_RECENT; SKIP_RECENT="${SKIP_RECENT:-0}"
+                read -p "Warm-start (path to best_params.json, empty=none): " WARM_START
                 echo ""
                 read -p "Pairs — (1) BTC only, (2) SOL only, (3) Both [3]: " pair_choice
                 case "${pair_choice:-3}" in
@@ -291,6 +295,9 @@ build_cmd() {
         cmd="$cmd --skip-recent $SKIP_RECENT"
     fi
     cmd="$cmd --allow-flip $ALLOW_FLIP"
+    if [ -n "$WARM_START" ]; then
+        cmd="$cmd --warm-start $WARM_START"
+    fi
     echo "$cmd"
 }
 
@@ -312,6 +319,7 @@ echo "  Hours:   $HOURS (~$((HOURS / 24)) days)"
 [ -n "$TAG" ] && echo "  Tag:     $TAG"
 echo "  Pairs:   $PAIRS"
 echo "  Flip:    $( [ "$ALLOW_FLIP" = "1" ] && echo "always-in" || echo "selective" )"
+[ -n "$WARM_START" ] && echo "  Warm:    $WARM_START"
 echo "  Mode:    $MODE_LABEL"
 echo "═══════════════════════════════════════════"
 echo ""
