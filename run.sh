@@ -21,13 +21,13 @@ QRE Optimizer — MACD+RSI AWF
 =============================
 
 Presets:
-  1) Test        —  5k trials, ~2yr, 3 splits, BTC+SOL  (~15 min)
-  2) BTC Main    — 25k trials, ~2yr, 3 splits, BTC only (~60 min)
-  3) SOL Main    — 25k trials, ~2yr, 3 splits, SOL only (~90 min)
+  1) Test        —  5k trials, ~3yr, 3 splits, BTC+SOL
+  2) BTC Main    — 30k trials, ~3yr, 3 splits, BTC only
+  3) SOL Main    — 30k trials, ~3yr, 3 splits, SOL only
   4) Custom      — You choose everything
 
-All presets use --hours 18600 --skip-recent 1080 by default
-(~2yr data, skip last 45 days). Override with --full or manual flags.
+All presets use --hours 26280 --skip-recent 0 by default
+(~3yr data). Override with --full or manual flags.
 All runs start in background by default (use --fg for foreground).
 
 Pairs:
@@ -41,7 +41,7 @@ Options:
   --splits N           Override number of AWF splits
   --skip-recent N      Skip most recent N hours from training data
   --tag NAME           Run tag (e.g. 'test-v1')
-  --full               Full data, no skip (--hours 8760 --skip-recent 0)
+  --full               Full data (--hours 26280 --skip-recent 0)
   --allow-flip N       0=selective (default), 1=always-in
   --always-in          Shortcut for --allow-flip 1
   --fg                 Run in foreground (default: background)
@@ -62,16 +62,16 @@ EOF
 }
 
 # =============================================================================
-# DEFAULTS (~2yr window + skip recent 45 days)
+# DEFAULTS (~3yr window)
 # =============================================================================
 
 TRIALS=15000
-HOURS=18600
+HOURS=26280
 SPLITS=""
 PAIRS="both"
 TAG=""
 PRESET=""
-SKIP_RECENT=1080
+SKIP_RECENT=0
 ALLOW_FLIP=0
 FOREGROUND=false
 LOG_DIR="$SCRIPT_DIR/logs"
@@ -95,7 +95,7 @@ while [[ $# -gt 0 ]]; do
         --splits) SPLITS="$2"; shift ;;
         --tag) TAG="$2"; shift ;;
         --skip-recent) SKIP_RECENT="$2"; shift ;;
-        --full) HOURS=8760; SKIP_RECENT=0 ;;
+        --full) HOURS=26280; SKIP_RECENT=0 ;;
         --allow-flip) ALLOW_FLIP="$2"; shift ;;
         --always-in) ALLOW_FLIP=1 ;;
         --bg) FOREGROUND=false ;;  # already default, kept for explicitness
@@ -231,8 +231,8 @@ done
 
 case "$PRESET" in
     test)       TRIALS=5000;  SPLITS=3 ;;
-    btc-main)   TRIALS=25000; SPLITS=3; PAIRS="btc" ;;
-    sol-main)   TRIALS=25000; SPLITS=3; PAIRS="sol" ;;
+    btc-main)   TRIALS=30000; SPLITS=3; PAIRS="btc" ;;
+    sol-main)   TRIALS=30000; SPLITS=3; PAIRS="sol" ;;
     custom)     ;; # Use --trials, --hours, --splits from args
     "")
         # Interactive mode
@@ -241,13 +241,13 @@ case "$PRESET" in
         read -p "Select preset (1-4): " choice
         case "$choice" in
             1) TRIALS=5000;  SPLITS=3 ;;
-            2) TRIALS=25000; SPLITS=3; PAIRS="btc" ;;
-            3) TRIALS=25000; SPLITS=3; PAIRS="sol" ;;
+            2) TRIALS=30000; SPLITS=3; PAIRS="btc" ;;
+            3) TRIALS=30000; SPLITS=3; PAIRS="sol" ;;
             4)
                 read -p "Trials [15000]: " TRIALS; TRIALS="${TRIALS:-15000}"
-                read -p "Hours [18600]: " HOURS; HOURS="${HOURS:-18600}"
+                read -p "Hours [26280]: " HOURS; HOURS="${HOURS:-26280}"
                 read -p "Splits [3]: " SPLITS; SPLITS="${SPLITS:-3}"
-                read -p "Skip recent hours [1080]: " SKIP_RECENT; SKIP_RECENT="${SKIP_RECENT:-1080}"
+                read -p "Skip recent hours [0]: " SKIP_RECENT; SKIP_RECENT="${SKIP_RECENT:-0}"
                 echo ""
                 read -p "Pairs — (1) BTC only, (2) SOL only, (3) Both [3]: " pair_choice
                 case "${pair_choice:-3}" in
