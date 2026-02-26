@@ -76,7 +76,7 @@ def find_active_runs(
     return list(runs.values())
 
 
-def query_db_stats(db_path: Path) -> Optional[SymbolStats]:
+def query_db_stats(db_path: Path) -> SymbolStats | None:
     """Query Optuna SQLite DB for trial statistics.
 
     Opens DB in read-only mode to avoid interfering with running optimizer.
