@@ -251,7 +251,6 @@ case "$PRESET" in
                 read -p "Hours [26280]: " HOURS; HOURS="${HOURS:-26280}"
                 read -p "Splits [3]: " SPLITS; SPLITS="${SPLITS:-3}"
                 read -p "Skip recent hours [0]: " SKIP_RECENT; SKIP_RECENT="${SKIP_RECENT:-0}"
-                read -p "Warm-start (path to best_params.json, empty=none): " WARM_START
                 echo ""
                 read -p "Pairs — (1) BTC only, (2) SOL only, (3) Both [3]: " pair_choice
                 case "${pair_choice:-3}" in
@@ -259,6 +258,52 @@ case "$PRESET" in
                     2) PAIRS="sol" ;;
                     3) PAIRS="both" ;;
                 esac
+
+                # Warm-start picker: show recent runs as numbered table
+                echo ""
+                echo "Warm-start (enqueue known-good params as first trial):"
+                WS_TABLE=$(venv/bin/python -c "
+import json, sys
+from pathlib import Path
+
+runs = sorted(Path('results').rglob('best_params.json'), reverse=True)
+runs = [r for r in runs if 'checkpoints' not in str(r)]
+for i, r in enumerate(runs[:12]):
+    d = json.loads(r.read_text())
+    sym = d.get('symbol','?').split('/')[0]
+    run_dir = r.parts[-3] if r.parts[-2] in ('BTC','SOL') else r.parts[-2]
+    export = ' [LIVE]' if 'EXPORT' in str(r) else ''
+    sharpe = d.get('sharpe_equity', 0)
+    dd = d.get('max_drawdown', 0)
+    trials = d.get('n_trials', 0)
+    print(f'  {i+1:2d}) {sym:3s}  Sh={sharpe:.2f}  DD={dd:.1f}%  {trials//1000}k  {run_dir}{export}')
+" 2>/dev/null)
+                if [ -n "$WS_TABLE" ]; then
+                    echo "$WS_TABLE"
+                    echo "   0) Bez warm-start"
+                    echo ""
+                    read -p "Vyber run [0]: " ws_pick
+                    ws_pick="${ws_pick:-0}"
+                    if [ "$ws_pick" != "0" ]; then
+                        WARM_START=$(venv/bin/python -c "
+import sys
+from pathlib import Path
+runs = sorted(Path('results').rglob('best_params.json'), reverse=True)
+runs = [r for r in runs if 'checkpoints' not in str(r)]
+idx = int(sys.argv[1]) - 1
+if 0 <= idx < len(runs):
+    print(runs[idx])
+else:
+    sys.exit(1)
+" "$ws_pick" 2>/dev/null)
+                        if [ -z "$WARM_START" ]; then
+                            echo "Neplatná volba, pokračuji bez warm-start"
+                            WARM_START=""
+                        fi
+                    fi
+                else
+                    echo "  Žádné předchozí runy nenalezeny."
+                fi
                 ;;
             *) echo "Invalid choice"; exit 1 ;;
         esac
