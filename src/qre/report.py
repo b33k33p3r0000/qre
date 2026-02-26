@@ -363,6 +363,71 @@ def _render_exit_reason_breakdown(trades: list[dict]) -> str:
     """
 
 
+def _render_catastrophic_stop_detail(trades: list[dict]) -> str:
+    """Render detailed table of individual catastrophic stop events."""
+    stops = sorted(
+        [t for t in trades if t.get("reason") == "catastrophic_stop"],
+        key=lambda t: t.get("exit_ts", ""),
+    )
+
+    if not stops:
+        return """
+        <h3>Catastrophic Stop Events</h3>
+        <div class="chart-container">
+            <p style="color: var(--text-secondary); text-align: center;">
+                No catastrophic stops triggered
+            </p>
+        </div>
+        """
+
+    rows = ""
+    total_pnl = 0.0
+    for t in stops:
+        pnl = t.get("pnl_abs", 0)
+        total_pnl += pnl
+        pnl_pct = t.get("pnl_pct", 0) * 100
+        exit_date = t.get("exit_ts", "")[:10]
+        symbol = t.get("symbol", "")
+        direction = t.get("direction", "").capitalize()
+        entry_p = t.get("entry_price", 0)
+        exit_p = t.get("exit_price", 0)
+        hold = t.get("hold_bars", 0)
+        rows += (
+            f'<tr>'
+            f'<td>{exit_date}</td>'
+            f'<td>{symbol}</td>'
+            f'<td>{direction}</td>'
+            f'<td>{entry_p:,.2f}</td>'
+            f'<td>{exit_p:,.2f}</td>'
+            f'<td>{hold}</td>'
+            f'<td class="negative">{_fmt_usd(pnl)}</td>'
+            f'<td class="negative">{pnl_pct:+.2f}%</td>'
+            f'</tr>\n'
+        )
+
+    rows += (
+        f'<tr style="font-weight: bold; border-top: 2px solid var(--border);">'
+        f'<td colspan="6" style="text-align: right;">Total</td>'
+        f'<td class="negative">{_fmt_usd(total_pnl)}</td>'
+        f'<td></td>'
+        f'</tr>\n'
+    )
+
+    return f"""
+    <h3>Catastrophic Stop Events</h3>
+    <div class="chart-container">
+        <table class="params-table">
+            <tr>
+                <th>Date</th><th>Symbol</th><th>Direction</th>
+                <th>Entry Price</th><th>Exit Price</th><th>Hold (bars)</th>
+                <th>P&amp;L ($)</th><th>P&amp;L (%)</th>
+            </tr>
+            {rows}
+        </table>
+    </div>
+    """
+
+
 def _render_long_short_metrics(trades: list[dict]) -> str:
     """Render long/short breakdown section."""
     ds = _compute_direction_stats(trades)
@@ -1106,6 +1171,7 @@ def generate_report(params: dict[str, Any], trades: list[dict],
     flow_html = _render_strategy_flow(params, trades)
     strategy_html = _render_strategy_params(params)
     exit_reasons_html = _render_exit_reason_breakdown(trades)
+    cat_stop_html = _render_catastrophic_stop_detail(trades)
     ls_html = _render_long_short_metrics(trades)
     monthly_html, monthly_js = _render_monthly_returns(trades)
     yearly_data = _compute_yearly_breakdown(trades, start_equity)
@@ -1678,6 +1744,7 @@ def generate_report(params: dict[str, Any], trades: list[dict],
 
     {ls_html}
     {exit_reasons_html}
+    {cat_stop_html}
     {trade_charts_html}
     {rolling_html}
     {streak_html}

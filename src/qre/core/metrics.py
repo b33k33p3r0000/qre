@@ -343,21 +343,52 @@ def calculate_equity_based_sharpe(
     return float((daily_returns.mean() / daily_returns.std()) * math.sqrt(365))
 
 
-def calculate_sortino_ratio(returns: pd.Series) -> float:
+def calculate_sortino_ratio(
+    trades: list[dict],
+    start_equity: float,
+    backtest_days: int,
+) -> float:
     """
-    v4.0 NEW: Sortino Ratio - penalizuje pouze negativní volatilitu.
+    Sortino Ratio z denních equity returnů — penalizuje pouze downside volatilitu.
+
+    Konzistentní s equity-based Sharpe: denní returns + sqrt(365).
     """
-    if returns.empty:
+    if not trades or backtest_days < 30:
         return 0.0
 
-    mean_return = returns.mean()
-    negative_returns = returns[returns < 0]
+    df = pd.DataFrame(trades)
+    if df.empty or "exit_ts" not in df.columns or "pnl_abs" not in df.columns:
+        return 0.0
 
+    df["exit_ts"] = pd.to_datetime(df["exit_ts"])
+    df["date"] = df["exit_ts"].dt.date
+
+    daily_pnl = df.groupby("date")["pnl_abs"].sum()
+    if daily_pnl.empty:
+        return 0.0
+
+    all_dates = pd.date_range(
+        start=min(daily_pnl.index),
+        end=max(daily_pnl.index),
+        freq="D",
+    )
+    daily_pnl_full = pd.Series(0.0, index=all_dates)
+    for date in all_dates:
+        d = date.date()
+        if d in daily_pnl.index:
+            daily_pnl_full[date] = daily_pnl[d]
+
+    equity_curve = start_equity + daily_pnl_full.cumsum()
+    daily_returns = equity_curve.pct_change().dropna()
+
+    if daily_returns.empty:
+        return 0.0
+
+    negative_returns = daily_returns[daily_returns < 0]
     if len(negative_returns) == 0 or negative_returns.std() < 1e-12:
         return 0.0
 
-    downside_std = negative_returns.std()
-    return float((mean_return / downside_std) * math.sqrt(252))
+    return float((daily_returns.mean() / negative_returns.std()) * math.sqrt(365))
 
 
 def calculate_calmar_ratio(total_return: float, max_drawdown: float, backtest_days: int = 0) -> float:
@@ -480,8 +511,8 @@ def calculate_metrics(
     # v13.0 NEW: Equity-based Sharpe Ratio (daily returns)
     sharpe_equity_based = calculate_equity_based_sharpe(trades, start_equity, backtest_days)
 
-    # Sortino Ratio (v4.0 NEW)
-    sortino = calculate_sortino_ratio(returns)
+    # Sortino Ratio (daily returns + sqrt(365), konzistentní s equity-based Sharpe)
+    sortino = calculate_sortino_ratio(trades, start_equity, backtest_days)
 
     # === WIN/LOSS ANALYSIS ===
     winners = [t for t in trades if t.get("pnl_abs", 0) > 0]

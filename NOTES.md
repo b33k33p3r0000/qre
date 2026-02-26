@@ -1,5 +1,19 @@
 # Session Notes
 
+## 2026-02-26 — Report: Catastrophic Stop Detail + Sortino Fix
+
+### Uděláno
+- **report.py**: Nová sekce "Catastrophic Stop Events" pod Exit Reasons — tabulka per-event (Date, Symbol, Direction, Entry/Exit Price, Hold, P&L) + summary Total
+- **metrics.py**: Sortino Ratio přepsán z per-trade returns + sqrt(252) na **daily equity returns + sqrt(365)** — konzistentní s equity-based Sharpe, průmyslový standard
+- Regenerace všech 24 existujících reportů v results/
+- 218 testů PASS
+
+### Poznatky
+- Starý Sortino nadhodnocoval ~40-50% (sqrt(252) na ~130 tradech/rok místo 252)
+- Monte Carlo Sharpe to dělal správně (sqrt(trades_per_year)) — Sortino teď následuje lepší vzor (daily returns)
+
+---
+
 ## 2026-02-23 (4) — MAIN Run Analýza + Metriky Audit
 
 ### Uděláno
@@ -23,7 +37,7 @@
 
 ### Rozhodnutí (nechat jak je)
 - Catastrophic stop vs DD: NENÍ bug (kumulativní equity DD vs per-trade stop, position_pct=0.25)
-- Sortino nadhodnocený ~40-50%: known, not worth fixing — zdokumentováno v references
+- ~~Sortino nadhodnocený ~40-50%~~ — **OPRAVENO 2026-02-26** (daily returns + sqrt(365))
 - Sharpe Time: secondary-only, zdokumentované known issues, nechat
 
 ---
