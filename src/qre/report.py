@@ -8,10 +8,12 @@ IMPORTANT: Uses start_equity from params (account level $50k),
 NOT hardcoded $10k. This fixes the known drawdown bug.
 """
 
+from __future__ import annotations
+
 import json
 import logging
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any
 
 logger = logging.getLogger("qre.report")
 
@@ -34,7 +36,7 @@ def _sharpe_css(value: float) -> str:
     return "negative"
 
 
-def build_equity_curve(trades: List[Dict], start_equity: float) -> List[float]:
+def build_equity_curve(trades: list[dict], start_equity: float) -> list[float]:
     """Build equity curve from trades. Starts at start_equity."""
     curve = [start_equity]
     for t in trades:
@@ -42,7 +44,7 @@ def build_equity_curve(trades: List[Dict], start_equity: float) -> List[float]:
     return curve
 
 
-def build_drawdown_curve(equity_curve: List[float]) -> List[float]:
+def build_drawdown_curve(equity_curve: list[float]) -> list[float]:
     """Build drawdown curve (percentage) from equity curve."""
     peak = equity_curve[0]
     dd = []
@@ -52,7 +54,7 @@ def build_drawdown_curve(equity_curve: List[float]) -> List[float]:
     return dd
 
 
-def _render_split_results(params: Dict[str, Any]) -> str:
+def _render_split_results(params: dict[str, Any]) -> str:
     """Render AWF split results table if present."""
     splits = params.get("split_results")
     if not splits:
@@ -83,7 +85,7 @@ def _render_split_results(params: Dict[str, Any]) -> str:
     """
 
 
-def _render_mc_section(params: Dict[str, Any]) -> str:
+def _render_mc_section(params: dict[str, Any]) -> str:
     """Render Monte Carlo validation section if present."""
     mc_conf = params.get("mc_confidence")
     if not mc_conf:
@@ -121,12 +123,12 @@ def _render_mc_section(params: Dict[str, Any]) -> str:
     """
 
 
-def _compute_direction_stats(trades: List[Dict]) -> Dict[str, Any]:
+def _compute_direction_stats(trades: list[dict]) -> dict[str, Any]:
     """Compute per-direction (long/short) statistics from trades."""
     longs = [t for t in trades if t.get("direction") == "long"]
     shorts = [t for t in trades if t.get("direction") == "short"]
 
-    def _stats(subset: List[Dict]) -> Dict[str, Any]:
+    def _stats(subset: list[dict]) -> dict[str, Any]:
         if not subset:
             return {"count": 0, "pnl": 0.0, "win_rate": 0.0,
                     "avg_win": 0.0, "avg_loss": 0.0, "winners": 0, "losers": 0}
@@ -149,8 +151,8 @@ def _compute_direction_stats(trades: List[Dict]) -> Dict[str, Any]:
 
 
 def _compute_yearly_breakdown(
-    trades: List[Dict], start_equity: float
-) -> List[Dict[str, Any]]:
+    trades: list[dict], start_equity: float
+) -> list[dict[str, Any]]:
     """Compute per-calendar-year metrics from trades.
 
     Groups trades by exit_ts year. For each year computes:
@@ -161,7 +163,7 @@ def _compute_yearly_breakdown(
         return []
 
     # Group trades by year (using exit_ts)
-    yearly_trades: Dict[int, List[Dict]] = {}
+    yearly_trades: dict[int, list[dict]] = {}
     for t in trades:
         exit_ts = t.get("exit_ts", "")
         if not exit_ts:
@@ -173,8 +175,8 @@ def _compute_yearly_breakdown(
         return []
 
     # Detect first entry and last exit for partial year detection
-    all_entry_months: Dict[int, List[int]] = {}
-    all_exit_months: Dict[int, List[int]] = {}
+    all_entry_months: dict[int, list[int]] = {}
+    all_exit_months: dict[int, list[int]] = {}
     for t in trades:
         entry_ts = t.get("entry_ts", "")
         exit_ts = t.get("exit_ts", "")
@@ -251,7 +253,7 @@ def _compute_yearly_breakdown(
     return results
 
 
-def _render_yearly_performance(yearly_data: List[Dict[str, Any]]) -> str:
+def _render_yearly_performance(yearly_data: list[dict[str, Any]]) -> str:
     """Render per-year performance breakdown table."""
     if not yearly_data:
         return ""
@@ -313,7 +315,7 @@ def _fmt_usd(value: float) -> str:
     return f"${value:,.2f}"
 
 
-def _render_exit_reason_breakdown(trades: List[Dict]) -> str:
+def _render_exit_reason_breakdown(trades: list[dict]) -> str:
     """Render exit reason breakdown table (signal / catastrophic_stop / force_close)."""
     if not trades:
         return ""
@@ -361,13 +363,13 @@ def _render_exit_reason_breakdown(trades: List[Dict]) -> str:
     """
 
 
-def _render_long_short_metrics(trades: List[Dict]) -> str:
+def _render_long_short_metrics(trades: list[dict]) -> str:
     """Render long/short breakdown section."""
     ds = _compute_direction_stats(trades)
     lo, sh = ds["long"], ds["short"]
     total = len(trades) or 1
 
-    def _card(label: str, s: Dict[str, Any], css: str) -> str:
+    def _card(label: str, s: dict[str, Any], css: str) -> str:
         return f"""
         <div class="ls-card {css}">
             <div class="ls-header">{label}</div>
@@ -403,13 +405,13 @@ def _render_long_short_metrics(trades: List[Dict]) -> str:
     """
 
 
-def _build_performance_data(trades: List[Dict]) -> Dict[str, Any]:
+def _build_performance_data(trades: list[dict]) -> dict[str, Any]:
     """Extract data needed for performance charts from trades."""
     winners_pnl = [t.get("pnl_pct", 0) * 100 for t in trades if t.get("pnl_pct", 0) > 0]
     losers_pnl = [t.get("pnl_pct", 0) * 100 for t in trades if t.get("pnl_pct", 0) <= 0]
 
     # Monthly returns: group by YYYY-MM
-    monthly: Dict[str, float] = {}
+    monthly: dict[str, float] = {}
     for t in trades:
         exit_ts = t.get("exit_ts", "")
         if exit_ts:
@@ -436,7 +438,7 @@ def _build_performance_data(trades: List[Dict]) -> Dict[str, Any]:
     }
 
 
-def _render_monthly_returns(trades: List[Dict]) -> tuple[str, str]:
+def _render_monthly_returns(trades: list[dict]) -> tuple[str, str]:
     """Render monthly returns bar chart."""
     if not trades:
         return "", ""
@@ -480,7 +482,7 @@ def _render_monthly_returns(trades: List[Dict]) -> tuple[str, str]:
     return html, js
 
 
-def _render_trade_charts(trades: List[Dict]) -> tuple[str, str]:
+def _render_trade_charts(trades: list[dict]) -> tuple[str, str]:
     """Render P&L distribution and trade duration vs P&L scatter."""
     if not trades:
         return "", ""
@@ -552,7 +554,7 @@ def _render_trade_charts(trades: List[Dict]) -> tuple[str, str]:
     return html, js
 
 
-def _render_rolling_metrics(trades: List[Dict], window: int = 30) -> tuple[str, str]:
+def _render_rolling_metrics(trades: list[dict], window: int = 30) -> tuple[str, str]:
     """Render rolling win rate, avg P&L, and Sharpe over trade sequence."""
     if len(trades) < window:
         return "", ""
@@ -624,7 +626,7 @@ def _render_rolling_metrics(trades: List[Dict], window: int = 30) -> tuple[str, 
     return html, js
 
 
-def _render_streak_timeline(trades: List[Dict]) -> tuple[str, str]:
+def _render_streak_timeline(trades: list[dict]) -> tuple[str, str]:
     """Render win/loss streak timeline as horizontal bar chart."""
     if not trades:
         return "", ""
@@ -704,7 +706,7 @@ def _render_streak_timeline(trades: List[Dict]) -> tuple[str, str]:
     return html, js
 
 
-def _render_strategy_flow(params: Dict[str, Any], trades: List[Dict] | None = None) -> str:
+def _render_strategy_flow(params: dict[str, Any], trades: list[dict] | None = None) -> str:
     """Render Quant Whale Strategy v4.0 strategy flow with actual parameter values."""
     macd_fast = params.get("macd_fast", "?")
     macd_slow = params.get("macd_slow", "?")
@@ -847,7 +849,7 @@ def _render_strategy_flow(params: Dict[str, Any], trades: List[Dict] | None = No
     """
 
 
-def _render_strategy_params(params: Dict[str, Any]) -> str:
+def _render_strategy_params(params: dict[str, Any]) -> str:
     """Render strategy parameters as bullet chart visualization."""
     # Ranges aligned with Optuna search space in strategy.py
     numeric_params = [
@@ -912,7 +914,7 @@ def _render_strategy_params(params: Dict[str, Any]) -> str:
     """
 
 
-def _render_optuna_history(optuna_history: List[Dict]) -> tuple[str, str]:
+def _render_optuna_history(optuna_history: list[dict]) -> tuple[str, str]:
     """Render Optuna optimization history chart."""
     if not optuna_history:
         return "", ""
@@ -999,7 +1001,7 @@ def _render_optuna_history(optuna_history: List[Dict]) -> tuple[str, str]:
 
 
 
-def _render_hold_duration_chart(trades: List[Dict]) -> tuple[str, str]:
+def _render_hold_duration_chart(trades: list[dict]) -> tuple[str, str]:
     """Render hold duration histogram with hour-based bins."""
     if not trades:
         return "", ""
@@ -1050,8 +1052,8 @@ def _section_divider(title: str) -> str:
     return f'<div class="section-divider"><span>{title.upper()}</span></div>'
 
 
-def generate_report(params: Dict[str, Any], trades: List[Dict],
-                    optuna_history: List[Dict] | None = None) -> str:
+def generate_report(params: dict[str, Any], trades: list[dict],
+                    optuna_history: list[dict] | None = None) -> str:
     """
     Generate self-contained HTML report.
 
@@ -1082,7 +1084,7 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
         hwm.append(peak)
 
     # Build date labels for equity/drawdown X-axis
-    equity_dates: List[str] = []
+    equity_dates: list[str] = []
     if trades and trades[0].get("entry_ts"):
         equity_dates.append(trades[0]["entry_ts"][:10])  # start = first entry date
         for t in trades:
@@ -1776,8 +1778,8 @@ def generate_report(params: Dict[str, Any], trades: List[Dict],
     return html
 
 
-def save_report(path, params: Dict[str, Any], trades: List[Dict],
-                optuna_history: List[Dict] | None = None) -> None:
+def save_report(path, params: dict[str, Any], trades: list[dict],
+                optuna_history: list[dict] | None = None) -> None:
     """Generate and save HTML report to file."""
     from pathlib import Path
     path = Path(path)

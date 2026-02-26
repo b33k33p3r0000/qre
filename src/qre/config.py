@@ -73,7 +73,6 @@ TARGET_TRADES_YEAR = 100          # Trade count ramp: full score at 100+ trades/
 PURGE_GAP_BARS = 50              # Bars skipped between train end and test start
                                  # = max(macd_slow_max=45, rsi_period_max=30) + 5
 DEFAULT_TRIALS = 10000
-DEFAULT_TIMEOUT = 0  # 0 = no timeout
 
 # Sampler (TPE)
 MIN_STARTUP_TRIALS = 50
@@ -105,8 +104,6 @@ ANCHORED_WF_SPLITS_SHORT = [
     {"train_end": 0.70, "test_end": 0.85},
     {"train_end": 0.85, "test_end": 1.00},
 ]
-
-N_SPLITS_DEFAULT = 3
 
 # =============================================================================
 # DATA FETCHING

@@ -11,13 +11,14 @@ Usage:
 Reads Optuna SQLite checkpoint DBs in read-only mode.
 """
 
+from __future__ import annotations
+
 import json
 import sqlite3
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
 
 from rich.console import Console
 from rich.panel import Panel
@@ -32,21 +33,21 @@ class SymbolStats:
     completed: int = 0
     pruned: int = 0
     failed: int = 0
-    n_trials_requested: Optional[int] = None
-    best_value: Optional[float] = None
-    best_trial_number: Optional[int] = None
-    best_params: Dict = field(default_factory=dict)
-    user_attrs: Dict = field(default_factory=dict)
-    start_time: Optional[str] = None
-    trials_per_min: Optional[float] = None
-    eta_minutes: Optional[float] = None
+    n_trials_requested: int | None = None
+    best_value: float | None = None
+    best_trial_number: int | None = None
+    best_params: dict = field(default_factory=dict)
+    user_attrs: dict = field(default_factory=dict)
+    start_time: str | None = None
+    trials_per_min: float | None = None
+    eta_minutes: float | None = None
 
 
 def find_active_runs(
     results_dir: Path,
     max_age_seconds: int = ACTIVE_RUN_MAX_AGE,
-    name_filter: Optional[str] = None,
-) -> List[dict]:
+    name_filter: str | None = None,
+) -> list[dict]:
     """Find optimizer runs with recently modified checkpoint DBs.
 
     Returns list of dicts: {"run_name": str, "db_files": [Path, ...]}
@@ -176,7 +177,7 @@ def query_db_stats(db_path: Path) -> Optional[SymbolStats]:
         conn.close()
 
 
-def format_params(params: Dict) -> str:
+def format_params(params: dict) -> str:
     """Format strategy params into compact one-line string."""
     mf = params.get("macd_fast", "?")
     ms = params.get("macd_slow", "?")
@@ -194,7 +195,7 @@ def format_params(params: Dict) -> str:
         mf = str(int(mf)) if isinstance(mf, (int, float)) else str(mf)
 
     # trend_tf: Optuna stores categorical as index (0=4h, 1=8h, 2=1d)
-    tf_map = {0: "4h", 0.0: "4h", 1: "8h", 1.0: "8h", 2: "1d", 2.0: "1d"}
+    tf_map = {0: "4h", 1: "8h", 2: "1d"}
     if ttf in tf_map:
         ttf = tf_map[ttf]
 
@@ -208,7 +209,7 @@ def format_params(params: Dict) -> str:
     return f"macd: {mf}/{ms}/{msig}  rsi: {rp} [{rl}-{ru}] lb={rlb}  trend: {ttf}"
 
 
-def render_symbol_panel(stats: SymbolStats, prev_best: Optional[float] = None) -> Panel:
+def render_symbol_panel(stats: SymbolStats, prev_best: float | None = None) -> Panel:
     """Render a Rich Panel for one symbol's stats."""
     total = stats.completed + stats.pruned + stats.failed
     requested = stats.n_trials_requested or total
@@ -258,9 +259,9 @@ def render_symbol_panel(stats: SymbolStats, prev_best: Optional[float] = None) -
 
 def render_dashboard(
     console: Console,
-    all_runs: List[dict],
-    prev_bests: Dict[str, float],
-) -> Dict[str, float]:
+    all_runs: list[dict],
+    prev_bests: dict[str, float],
+) -> dict[str, float]:
     """Render the full dashboard. Returns updated prev_bests dict."""
     console.clear()
     new_bests = {}
@@ -308,7 +309,7 @@ def main():
 
     console = Console()
     results_dir = Path(args.results_dir)
-    prev_bests: Dict[str, float] = {}
+    prev_bests: dict[str, float] = {}
 
     console.print(f"[bold]QRE Live Monitor[/bold] — watching {results_dir.resolve()}")
     if args.filter:

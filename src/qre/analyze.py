@@ -15,9 +15,12 @@ from pathlib import Path
 from statistics import median
 from typing import Any
 
+from qre.config import DISCORD_WEBHOOK_RUNS
+from qre.notify import discord_notify
+
 log = logging.getLogger(__name__)
 
-# --- Thresholds aligned with /diagnose skill (Quant Whale Strategy v3.0) ---
+# --- Thresholds aligned with /diagnose skill (Quant Whale Strategy v4.2) ---
 # MACD spread: <8 yellow, 8-18 green, >18 yellow
 # RSI zone width: <30 red, 30-40 yellow, 40-55 green, >55 yellow
 
@@ -758,9 +761,6 @@ def analyze_run(run_dir: str | Path) -> dict[str, Any]:
     log.info("analyze_run: saved analysis.json → %s", symbol_dir / "analysis.json")
 
     # 10. Discord notification
-    from qre.config import DISCORD_WEBHOOK_RUNS
-    from qre.notify import discord_notify
-
     if DISCORD_WEBHOOK_RUNS:
         embed = build_discord_embed(analysis)
         discord_notify(embed, DISCORD_WEBHOOK_RUNS)
