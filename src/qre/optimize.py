@@ -16,6 +16,7 @@ Only AWF mode. Only Quant Whale Strategy (MACD+RSI) strategy.
 
 from __future__ import annotations
 
+import json
 import logging
 import math
 import signal
@@ -281,6 +282,35 @@ def build_objective(
     return objective
 
 
+WARM_START_KEYS = [
+    "macd_fast", "macd_slow", "macd_signal",
+    "rsi_period", "rsi_lower", "rsi_upper", "rsi_lookback",
+    "trend_tf", "trend_strict", "allow_flip",
+]
+
+
+def load_warm_start_params(path: str | Path) -> dict[str, Any]:
+    """Load and validate warm-start parameters from a best_params.json file.
+
+    Returns dict with only the 10 strategy param keys needed for enqueue_trial.
+    Raises ValueError if file is invalid or missing required keys.
+    """
+    path = Path(path)
+    if not path.exists():
+        raise ValueError(f"Warm-start file not found: {path}")
+
+    with open(path) as f:
+        raw = json.load(f)
+
+    missing = [k for k in WARM_START_KEYS if k not in raw]
+    if missing:
+        raise ValueError(f"Warm-start file missing keys: {missing}")
+
+    params = {k: raw[k] for k in WARM_START_KEYS}
+    logger.info("Warm-start params loaded from %s: %s", path.name, params)
+    return params
+
+
 def run_optimization(
     symbol: str,
     hours: int = 8760,
@@ -293,6 +323,7 @@ def run_optimization(
     skip_recent_hours: int = 0,
     test_size: float = 0.20,
     allow_flip: int = 0,
+    warm_start_path: str | None = None,
 ) -> dict[str, Any]:
     """
     Run full AWF optimization pipeline for a single symbol.
@@ -370,6 +401,12 @@ def run_optimization(
     )
     study.set_user_attr("n_trials_requested", n_trials)
     study.set_user_attr("symbol", symbol)
+
+    # Warm-start: enqueue known-good params as first trial
+    if warm_start_path:
+        ws_params = load_warm_start_params(warm_start_path)
+        study.enqueue_trial(ws_params)
+        logger.info("Warm-start trial enqueued (will be evaluated as trial #0)")
 
     # Graceful shutdown: SIGTERM → study.stop()
     def _graceful_stop(signum, frame):
@@ -595,6 +632,8 @@ def main():
                         help="Test window size as fraction (default: 0.20 = 20%%)")
     parser.add_argument("--allow-flip", type=int, default=0, choices=[0, 1],
                         help="Allow position flipping: 1=always-in, 0=selective (default: 0)")
+    parser.add_argument("--warm-start", type=str, default=None, metavar="PATH",
+                        help="Path to best_params.json for warm-starting (enqueues as first trial)")
 
     args = parser.parse_args()
 
@@ -613,6 +652,7 @@ def main():
         skip_recent_hours=args.skip_recent,
         test_size=args.test_size,
         allow_flip=args.allow_flip,
+        warm_start_path=args.warm_start,
     )
 
     print(f"\nResult: {result['symbol']}")
