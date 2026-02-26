@@ -406,6 +406,8 @@ def run_optimization(
     if warm_start_path:
         ws_params = load_warm_start_params(warm_start_path)
         study.enqueue_trial(ws_params)
+        ws_source = Path(warm_start_path).parent.parent.name
+        study.set_user_attr("warm_start_source", ws_source)
         logger.info("Warm-start trial enqueued (will be evaluated as trial #0)")
 
     # Graceful shutdown: SIGTERM → study.stop()

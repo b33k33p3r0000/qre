@@ -41,6 +41,7 @@ class SymbolStats:
     start_time: str | None = None
     trials_per_min: float | None = None
     eta_minutes: float | None = None
+    warm_start_source: str | None = None
 
 
 def find_active_runs(
@@ -118,6 +119,17 @@ def query_db_stats(db_path: Path) -> SymbolStats | None:
                     stats.n_trials_requested = int(val)
                 except (TypeError, ValueError):
                     pass
+
+        # Warm-start source from study user_attrs
+        cur.execute(
+            "SELECT value_json FROM study_user_attributes WHERE key = 'warm_start_source' LIMIT 1"
+        )
+        row = cur.fetchone()
+        if row:
+            try:
+                stats.warm_start_source = json.loads(row["value_json"])
+            except (json.JSONDecodeError, TypeError):
+                stats.warm_start_source = row["value_json"]
 
         # Best trial
         cur.execute("""
@@ -217,7 +229,8 @@ def render_symbol_panel(stats: SymbolStats, prev_best: float | None = None) -> P
     # Line 1: progress
     rate_str = f"{stats.trials_per_min} t/min" if stats.trials_per_min else "..."
     eta_str = f"ETA ~{int(stats.eta_minutes)}min" if stats.eta_minutes else ""
-    line1 = f"{stats.symbol}   {stats.completed:,} / {requested:,} trials   {rate_str}   {eta_str}"
+    warm_str = f"  [yellow]WARM: {stats.warm_start_source}[/yellow]" if stats.warm_start_source else ""
+    line1 = f"{stats.symbol}   {stats.completed:,} / {requested:,} trials   {rate_str}   {eta_str}{warm_str}"
 
     # Line 2: best value
     is_new = prev_best is not None and stats.best_value is not None and stats.best_value > prev_best
