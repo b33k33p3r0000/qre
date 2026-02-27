@@ -286,3 +286,11 @@ class TestTrialUserAttrs:
             except optuna.TrialPruned:
                 study.tell(trial, state=optuna.trial.TrialState.PRUNED)
         pytest.skip("No zero-value trial found in 30 attempts")
+
+
+def test_bnb_in_cli_choices():
+    """BNB/USDC is a valid --symbol choice."""
+    import inspect
+    from qre import optimize
+    source = inspect.getsource(optimize)
+    assert "BNB/USDC" in source, "BNB/USDC must be in optimizer CLI choices"
