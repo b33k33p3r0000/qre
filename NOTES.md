@@ -1,5 +1,21 @@
 # Session Notes
 
+## 2026-02-27 — Přidání BNB/USDC páru
+
+### Uděláno
+- **Brainstorming:** ETH (korelace ~0.9 s BTC, redundantní) vs BNB (korelace ~0.6-0.8, vlastní dynamika) → BNB vybrán pro lepší diversifikaci funded accountu
+- **config.py:** BNB/USDC v SYMBOLS, slippage 0.0012, catastrophic stop 10%
+- **optimize.py:** BNB/USDC v CLI `--symbol` choices
+- **run.sh:** BNB jako volba (4) v custom presetu, `--bnb` flag, `--both` teď zahrnuje všechny 3 páry
+- **_export_params.py:** BNB v export symbols listu
+- TOTAL_PAIRS zůstává 2 (alokace $50k/pár) — změna na 3 až při live nasazení BNB
+
+### Poznatky
+- Architektura QRE je dobře připravená na nové symboly — core moduly (strategy, backtest, metrics, monitor, analyze) nevyžadovaly žádné změny
+- 227 testů PASS, žádné regrese
+
+---
+
 ## 2026-02-26 — Report: Catastrophic Stop Detail + Sortino Fix
 
 ### Uděláno
