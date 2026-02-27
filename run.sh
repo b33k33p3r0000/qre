@@ -33,7 +33,8 @@ All runs start in background by default (use --fg for foreground).
 Pairs:
   --btc                BTC/USDC only
   --sol                SOL/USDC only
-  --both               Both pairs (default)
+  --bnb                BNB/USDC only
+  --both               All pairs (default)
 
 Options:
   --trials N           Override trial count
@@ -91,6 +92,7 @@ while [[ $# -gt 0 ]]; do
         4) PRESET="custom" ;;
         --btc) PAIRS="btc" ;;
         --sol) PAIRS="sol" ;;
+        --bnb) PAIRS="bnb" ;;
         --both) PAIRS="both" ;;
         --trials) TRIALS="$2"; shift ;;
         --hours) HOURS="$2"; shift ;;
@@ -252,11 +254,12 @@ case "$PRESET" in
                 read -p "Splits [3]: " SPLITS; SPLITS="${SPLITS:-3}"
                 read -p "Skip recent hours [0]: " SKIP_RECENT; SKIP_RECENT="${SKIP_RECENT:-0}"
                 echo ""
-                read -p "Pairs — (1) BTC only, (2) SOL only, (3) Both [3]: " pair_choice
+                read -p "Pairs — (1) BTC, (2) SOL, (3) Both, (4) BNB [3]: " pair_choice
                 case "${pair_choice:-3}" in
                     1) PAIRS="btc" ;;
                     2) PAIRS="sol" ;;
                     3) PAIRS="both" ;;
+                    4) PAIRS="bnb" ;;
                 esac
 
                 # Warm-start picker: show recent runs as numbered table
@@ -271,7 +274,7 @@ runs = [r for r in runs if 'checkpoints' not in str(r)]
 for i, r in enumerate(runs[:12]):
     d = json.loads(r.read_text())
     sym = d.get('symbol','?').split('/')[0]
-    run_dir = r.parts[-3] if r.parts[-2] in ('BTC','SOL') else r.parts[-2]
+    run_dir = r.parts[-3] if r.parts[-2] in ('BTC','SOL','BNB') else r.parts[-2]
     export = ' [LIVE]' if 'EXPORT' in str(r) else ''
     sharpe = d.get('sharpe_equity', 0)
     dd = d.get('max_drawdown', 0)
@@ -374,7 +377,8 @@ SYMBOLS=()
 case "$PAIRS" in
     btc)  SYMBOLS=("BTC/USDC") ;;
     sol)  SYMBOLS=("SOL/USDC") ;;
-    both) SYMBOLS=("BTC/USDC" "SOL/USDC") ;;
+    bnb)  SYMBOLS=("BNB/USDC") ;;
+    both) SYMBOLS=("BTC/USDC" "SOL/USDC" "BNB/USDC") ;;
 esac
 
 if $FOREGROUND; then
