@@ -6,44 +6,45 @@ Cíl: najít robustní parametry pro live trading přes [EE (Execution Engine)](
 
 ---
 
-## Strategie — Quant Whale Strategy v4.2.0
+## Strategie — Quant Whale Strategy v4.2.1
 
-> Quant Whale is a systematic long/short crypto strategy trading BTC and SOL on 1-hour bars. Entries require three-layer confirmation: a MACD crossover as the trigger, RSI within a lookback window confirming momentum exhaustion, and a higher-timeframe trend filter for directional alignment. The system operates in always-in mode — every exit is simultaneously an entry in the opposite direction — with a per-symbol catastrophic stop as an emergency circuit breaker. All 11 strategy parameters are optimized per-symbol using Optuna with a Log Calmar objective designed to resist overfitting.
+> Quant Whale is a systematic long/short crypto strategy trading BTC and SOL on 1-hour bars. Entries require three-layer confirmation: a MACD crossover as the trigger, RSI within a lookback window confirming momentum exhaustion, and a higher-timeframe trend filter for directional alignment. The system operates in selective mode — signal exit closes to flat, then waits for a fresh 3-layer entry — with a per-symbol fixed catastrophic stop as an emergency circuit breaker. All 10 strategy parameters are optimized per-symbol using Optuna with a Log Calmar objective designed to resist overfitting.
 
 Založena na studii Chio (2022) — MACD+RSI dosáhlo 78–86% win rate na US equities.
 
 **Entry logika (3 vrstvy):**
 - **Layer 1 — MACD crossover (trigger):** MACD protne signal line na 1H baru
-- **Layer 2 — RSI lookback:** RSI bylo v extrémní zóně během posledních `rsi_lookback` barů (4–8h)
+- **Layer 2 — RSI lookback:** RSI bylo v extrémní zóně během posledních `rsi_lookback` barů (1–4h)
 - **Layer 3 — Trend filtr:** MACD trend na vyšším TF (4h/8h/1d) souhlasí se směrem
 - **LONG:** MACD bull cross AND RSI oversold (lookback) AND higher-TF bullish
 - **SHORT:** MACD bear cross AND RSI overbought (lookback) AND higher-TF bearish
 
 **Exit logika:**
-- Opačný signál (symetrický flip) — long se zavře a otevře short na sell signálu a naopak
-- Catastrophic stop: 5–15% emergency exit (optimalizováno Optunou per-symbol)
+- Opačný signál → close to flat → čeká na nový entry (selective mode, `allow_flip=0`)
+- Catastrophic stop: fixní per-symbol (BTC 8%, SOL 12%)
 
-**11 Optuna parametrů:**
+**10 Optuna parametrů:**
 
 | Parametr | Rozsah | Popis |
 |----------|--------|-------|
 | `macd_fast` | 1.0–20.0 (float) | Rychlá EMA perioda |
 | `macd_slow` | 10–45 | Pomalá EMA perioda |
-| `macd_signal` | 2–15 | Signal line perioda |
+| `macd_signal` | 3–15 | Signal line perioda |
 | `rsi_period` | 3–30 | RSI výpočetní perioda |
 | `rsi_lower` | 20–40 | Práh pro oversold zónu |
 | `rsi_upper` | 60–80 | Práh pro overbought zónu |
-| `rsi_lookback` | 4–8 | RSI lookback window (bary) |
+| `rsi_lookback` | 1–4 | RSI lookback window (bary) |
 | `trend_tf` | 4h/8h/1d | Vyšší TF pro trend filtr |
 | `trend_strict` | 1 (fixní) | Trend filtr vždy zapnutý |
-| `allow_flip` | 1 (fixní) | Position flip vždy zapnutý |
-| `catastrophic_stop_pct` | 0.05–0.15 (step 0.01) | Emergency exit level |
+| `allow_flip` | 0 (fixní) | 0=selective (default), 1=always-in |
 
 Constraints: `macd_slow - macd_fast >= 5` (minimální MACD spread, jinak trial pruned).
 
+**Catastrophic stop (fixní v config.py):** BTC 8%, SOL 12% — per-symbol emergency exit, není Optuna param.
+
 **Vlastnosti:**
 - Base TF: 1H + trend filtr z vyššího TF (4H/8H/1D)
-- Long + Short s position flipping
+- Long + Short, selective mode (flat between trades)
 - Min hold: 2 bary před exit signálem
 - Position size: 25% kapitálu na trade
 
@@ -53,10 +54,10 @@ Constraints: `macd_slow - macd_fast >= 5` (minimální MACD spread, jinak trial 
 
 ```
 run.sh (presets)
-  └→ python -m qre.optimize --symbol BTC/USDC --trials 20000 ...
+  └→ python -m qre.optimize --symbol BTC/USDC --trials 30000 ...
        ├→ data/fetch.py       — stáhne OHLCV z Binance (1H + 4H/8H/1D)
        ├→ optimize.py         — Optuna AWF studie (TPE + SHA pruner)
-       │    ├→ strategy.py    — generuje buy/sell signály (11 params)
+       │    ├→ strategy.py    — generuje buy/sell signály (10 params)
        │    ├→ backtest.py    — Numba trading loop
        │    └→ metrics.py     — Sharpe, drawdown, win rate, ...
        ├→ report.py           — HTML report (Plotly grafy)
@@ -71,7 +72,7 @@ run.sh (presets)
 | Modul | Popis |
 |-------|-------|
 | `optimize.py` | AWF orchestrátor — Optuna TPE + SHA pruner, RSI cache, hard constraints inline |
-| `core/strategy.py` | Quant Whale Strategy v4.2.0 — MACD crossover + RSI lookback + trend filter |
+| `core/strategy.py` | Quant Whale Strategy v4.2.1 — MACD crossover + RSI lookback + trend filter |
 | `core/backtest.py` | Numba JIT trading loop — Long+Short, position flipping, per-trial catastrophic stop |
 | `core/indicators.py` | RSI (SMA-based) a MACD výpočty |
 | `core/metrics.py` | Sharpe, Sortino, Calmar, drawdown, win rate, Monte Carlo |
@@ -93,11 +94,9 @@ Anchored Walk-Forward = trénink na rostoucím okně, test na dalším bloku.
 Split 1:  [====== train 60% ======][= test =]
 Split 2:  [========= train 70% =========][= test =]
 Split 3:  [============ train 80% ============][= test =]
-Split 4:  [=============== train 85% ==============][= test =]
-Split 5:  [================== train 90% ================][= test =]
 ```
 
-- Default: 5 splitů, test window 20%
+- Default: 3 splity (≥1.5 roku dat)
 - Krátká data (<1.5 roku): 2 splity (70%/85% train)
 - Optuna TPE sampler s SuccessiveHalving prunerem
 - RSI pre-computed cache: 28 period (3–30) místo počítání per-trial
@@ -119,9 +118,9 @@ score = log(1 + calmar) × trade_ramp × sharpe_penalty
 
 Numba `@njit` compiled trading loop:
 
-- **Pozice:** flat → long → short → flat (s flippingem)
+- **Pozice:** flat → long/short → flat (selective mode, default)
 - **Priority:** catastrophic stop > signal exit > new position
-- **Catastrophic stop:** per-trial level (5–15%, Optuna optimized) → emergency exit
+- **Catastrophic stop:** per-symbol fixní (BTC 8%, SOL 12%) → emergency exit
 - **Force close:** otevřená pozice na konci dat se zavře
 - **Směry:** Long (+1) a Short (-1) s korektním PnL modelem
 - **Short PnL:** `pnl = size * entry * (1-fee) - size * exit * (1+fee)`
@@ -133,19 +132,19 @@ Numba `@njit` compiled trading loop:
 ```bash
 cd ~/projects/qre
 ./run.sh 1               # Test: 5k trials, BTC+SOL, ~15 min
-./run.sh 2               # BTC Main: 20k trials, 5 splits, ~60 min
-./run.sh 3               # SOL Main: 40k trials, 5 splits, ~180 min
+./run.sh 2               # BTC Main: 30k trials, 3 splits
+./run.sh 3               # SOL Main: 30k trials, 3 splits
 ./run.sh 4               # Custom: interaktivní volba
 ```
 
-| Preset | Trials | Splity | Symboly | Doba |
-|--------|--------|--------|---------|------|
-| 1 Test | 5,000 | 3 | BTC+SOL | ~15 min |
-| 2 BTC Main | 20,000 | 5 | BTC | ~60 min |
-| 3 SOL Main | 40,000 | 5 | SOL | ~180 min |
-| 4 Custom | volba | volba | volba | — |
+| Preset | Trials | Splity | Symboly |
+|--------|--------|--------|---------|
+| 1 Test | 5,000 | 3 | BTC+SOL |
+| 2 BTC Main | 30,000 | 3 | BTC |
+| 3 SOL Main | 30,000 | 3 | SOL |
+| 4 Custom | volba | volba | volba |
 
-Výchozí: `--hours 18600` (~2 roky), `--skip-recent 1080` (skip posledních 45 dní).
+Výchozí: `--hours 26280` (~3 roky), `--skip-recent 0`.
 
 **Process management:**
 ```bash
@@ -212,7 +211,7 @@ Klíčové konstanty v `config.py`:
 | `BASE_TF` | 1h | Base timeframe (+ trend filtr z 4h/8h/1d) |
 | `STARTING_EQUITY` | $50,000 | Per-pair alokace ($100k / 2) |
 | `BACKTEST_POSITION_PCT` | 0.25 | 25% kapitálu na trade |
-| `CATASTROPHIC_STOP_PCT` | 0.10 | Fallback default (Optuna override 5–15%) |
+| `CATASTROPHIC_STOP_PCT` | BTC 0.08, SOL 0.12 | Per-symbol fixní (fallback 0.10) |
 | `LONG_ONLY` | False | Long + Short povoleno |
 | `MIN_HOLD_HOURS` | 2 | Min bary před exit signálem |
 | `FEE` | 0.075% | Trading fee |
@@ -222,7 +221,7 @@ Klíčové konstanty v `config.py`:
 | `TARGET_TRADES_YEAR` | 100 | Trade ramp target (plný score od 100/rok) |
 | `SHARPE_SUSPECT_THRESHOLD` | 3.0 | Sharpe decay práh |
 | `PURGE_GAP_BARS` | 50 | Purge gap mezi train/test splity |
-| `N_SPLITS_DEFAULT` | 3 | Default pro krátká data (run.sh presety používají 5) |
+| `N_SPLITS_DEFAULT` | 3 | Default (≥1.5yr dat), 2 pro krátká data |
 
 Trading costs (slippage): BTC 0.08%, SOL 0.18%.
 
@@ -275,7 +274,7 @@ qre/
 │   └── data/
 │       └── fetch.py
 ├── tests/
-│   ├── unit/          # 209 testů
+│   ├── unit/          # 222 testů
 │   ├── integration/
 │   └── conftest.py
 ├── scripts/           # Analytické skripty (compare_stops.py, ...)
@@ -298,4 +297,4 @@ qre/
 - **Plotly** — HTML reporty (equity curve, drawdown, trade distribuce)
 - **requests** — Discord webhooky
 - **Rich** — live monitor TUI
-- **pytest** — 209 unit a integračních testů
+- **pytest** — 222 unit a integračních testů
