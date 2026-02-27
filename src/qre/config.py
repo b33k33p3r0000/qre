@@ -125,7 +125,7 @@ MIN_WARMUP_BARS = 200
 # =============================================================================
 
 ACCOUNT_SIZE = 100_000.0
-TOTAL_PAIRS = 2  # QRE: only BTC + SOL
+TOTAL_PAIRS = 2  # Allocation pairs (BNB supported but not yet in live allocation)
 PAIR_ALLOCATION = ACCOUNT_SIZE / TOTAL_PAIRS  # $50,000 per pair
 STARTING_EQUITY = PAIR_ALLOCATION
 BACKTEST_POSITION_PCT = 0.25  # Statických 25% pro všechny backtesty i EE
