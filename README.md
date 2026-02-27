@@ -6,6 +6,24 @@ Cíl: najít robustní parametry pro live trading přes [EE (Execution Engine)](
 
 ---
 
+## Performance Summary (BTC, 5-year backtest)
+
+> Run `2026-02-27_06-23-48_5years-test-btc` — 40k trials, 5 AWF splits, Quant Whale v4.2.1
+
+| Metrika | Hodnota |
+|---------|---------|
+| **Calmar** | 8.94 |
+| **Sharpe (OOS equity)** | 2.15 |
+| **Max Drawdown** | -6.35% |
+| **Total PnL** | +282.55% |
+| **Trades** | 604 (121/yr) |
+| **Win Rate** | 44.0% |
+| **Profit Factor** | 1.99 |
+| **AWF Splits** | **5/5 profitable**, all HIGH MC confidence |
+| **MC Sharpe CI** | 2.45 – 3.31 |
+
+---
+
 ## Strategie — Quant Whale Strategy v4.2.1
 
 > Quant Whale is a systematic long/short crypto strategy trading BTC and SOL on 1-hour bars. Entries require three-layer confirmation: a MACD crossover as the trigger, RSI within a lookback window confirming momentum exhaustion, and a higher-timeframe trend filter for directional alignment. The system operates in selective mode — signal exit closes to flat, then waits for a fresh 3-layer entry — with a per-symbol fixed catastrophic stop as an emergency circuit breaker. All 10 strategy parameters are optimized per-symbol using Optuna with a Log Calmar objective designed to resist overfitting.
