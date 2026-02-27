@@ -196,6 +196,80 @@ class TestFormatParams:
         assert "?" in result["macd"]
 
 
+class TestRenderSymbolPanel:
+    """Test Rich Panel rendering for a symbol."""
+
+    def test_renders_without_error(self):
+        """Panel renders successfully with full stats."""
+        from qre.monitor import render_symbol_panel, SymbolStats
+
+        stats = SymbolStats(
+            symbol="BTC",
+            completed=1250,
+            pruned=100,
+            failed=5,
+            n_trials_requested=5000,
+            best_value=1.2345,
+            best_trial_number=847,
+            best_params={
+                "macd_fast": 2.5, "macd_slow": 25.0, "macd_signal": 5.0,
+                "rsi_period": 14.0, "rsi_lower": 30.0, "rsi_upper": 70.0,
+                "rsi_lookback": 4.0, "trend_tf": 0,
+            },
+            user_attrs={
+                "sharpe_equity": 1.85, "max_drawdown": 12.3,
+                "total_pnl_pct": 142.5, "trades": 186, "trades_per_year": 93.0,
+            },
+            trials_per_min=4.2,
+            eta_minutes=15.0,
+        )
+        panel = render_symbol_panel(stats)
+        assert panel is not None
+
+    def test_renders_with_new_best(self):
+        """Panel shows NEW marker when best improves."""
+        from rich.console import Console
+        from io import StringIO
+        from qre.monitor import render_symbol_panel, SymbolStats
+
+        stats = SymbolStats(
+            symbol="BTC", completed=100, best_value=2.0, best_trial_number=50,
+            best_params={"macd_fast": 2.5}, user_attrs={"sharpe_equity": 1.5},
+        )
+        console = Console(file=StringIO(), force_terminal=True)
+        panel = render_symbol_panel(stats, prev_best=1.0)
+        console.print(panel)
+        output = console.file.getvalue()
+        assert "NEW" in output
+
+    def test_renders_without_metrics(self):
+        """Panel renders gracefully when user_attrs is empty (legacy run)."""
+        from qre.monitor import render_symbol_panel, SymbolStats
+
+        stats = SymbolStats(
+            symbol="SOL", completed=50, best_value=1.0, best_trial_number=10,
+            best_params={"macd_fast": 3.0},
+        )
+        panel = render_symbol_panel(stats)
+        assert panel is not None
+
+    def test_renders_with_warm_start(self):
+        """Panel shows warm start source when present."""
+        from rich.console import Console
+        from io import StringIO
+        from qre.monitor import render_symbol_panel, SymbolStats
+
+        stats = SymbolStats(
+            symbol="BTC", completed=100, best_value=2.0, best_trial_number=50,
+            best_params={"macd_fast": 2.5}, warm_start_source="calmar-btc-v2",
+        )
+        console = Console(file=StringIO(), force_terminal=True)
+        panel = render_symbol_panel(stats)
+        console.print(panel)
+        output = console.file.getvalue()
+        assert "calmar-btc-v2" in output
+
+
 def _create_mock_optuna_db(path: Path, n_trials: int, best_value: float):
     """Create a minimal Optuna-compatible SQLite DB for testing."""
     conn = sqlite3.connect(str(path))

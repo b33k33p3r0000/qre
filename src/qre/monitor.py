@@ -230,24 +230,40 @@ def format_params(params: dict) -> dict[str, str]:
 
 
 def render_symbol_panel(stats: SymbolStats, prev_best: float | None = None) -> Panel:
-    """Render a Rich Panel for one symbol's stats."""
+    """Render a Rich Panel for one symbol's stats.
+
+    Uses a borderless Rich Table for aligned label-value layout.
+    """
     total = stats.completed + stats.pruned + stats.failed
     requested = stats.n_trials_requested or total
 
-    # Line 1: progress
-    rate_str = f"{stats.trials_per_min} t/min" if stats.trials_per_min else "..."
-    eta_str = f"ETA ~{int(stats.eta_minutes)}min" if stats.eta_minutes else ""
-    warm_str = f"  [yellow]WARM: {stats.warm_start_source}[/yellow]" if stats.warm_start_source else ""
-    line1 = f"{stats.symbol}   {stats.completed:,} / {requested:,} trials   {rate_str}   {eta_str}{warm_str}"
+    table = Table(show_header=False, show_edge=False, box=None, padding=(0, 1))
+    table.add_column("label", style="dim", justify="right", min_width=12)
+    table.add_column("value", justify="left")
 
-    # Line 2: best value
+    # — Progress section —
+    table.add_row("Progress", f"{stats.completed:,} / {requested:,}")
+    rate_str = f"{stats.trials_per_min} t/min" if stats.trials_per_min else "..."
+    table.add_row("Speed", rate_str)
+    if stats.eta_minutes:
+        table.add_row("ETA", f"~{int(stats.eta_minutes)} min")
+    if stats.warm_start_source:
+        table.add_row("Warm start", f"[yellow]{stats.warm_start_source}[/yellow]")
+
+    table.add_row("", "")  # section separator
+
+    # — Best trial section —
+    trial_num = f"#{stats.best_trial_number:,}" if stats.best_trial_number is not None else "?"
+    table.add_row("Best trial", trial_num)
+
     is_new = prev_best is not None and stats.best_value is not None and stats.best_value > prev_best
     new_marker = "  [bold green]NEW[/bold green]" if is_new else ""
-    trial_num = f"#{stats.best_trial_number:,}" if stats.best_trial_number is not None else "?"
     val = f"{stats.best_value:.4f}" if stats.best_value is not None else "—"
-    line2 = f"Best trial {trial_num}          Log Calmar: {val}{new_marker}"
+    table.add_row("Log Calmar", f"{val}{new_marker}")
 
-    # Line 3: extended metrics (from user_attrs, if available)
+    table.add_row("", "")  # section separator
+
+    # — Metrics section —
     ua = stats.user_attrs
     if ua:
         sharpe = ua.get("sharpe_equity", "—")
@@ -258,28 +274,28 @@ def render_symbol_panel(stats: SymbolStats, prev_best: float | None = None) -> P
 
         sharpe_str = f"{sharpe:.2f}" if isinstance(sharpe, (int, float)) else str(sharpe)
         dd_str = f"{dd:.1f}%" if isinstance(dd, (int, float)) else str(dd)
-        pnl_str = f"+{pnl:.1f}%" if isinstance(pnl, (int, float)) and pnl > 0 else f"{pnl:.1f}%" if isinstance(pnl, (int, float)) else str(pnl)
+        if isinstance(pnl, (int, float)):
+            pnl_str = f"+{pnl:.1f}%" if pnl > 0 else f"{pnl:.1f}%"
+        else:
+            pnl_str = str(pnl)
 
-        line3 = f"Sharpe(eq): {sharpe_str}   DD: {dd_str}   P&L: {pnl_str}"
-        line4 = f"Trades: {trades}   Trades/yr: {tpy}"
+        table.add_row("Sharpe (eq)", sharpe_str)
+        table.add_row("Max DD", dd_str)
+        table.add_row("P&L", pnl_str)
+        table.add_row("Trades", str(trades))
+        table.add_row("Trades/yr", str(tpy))
     else:
-        line3 = "[dim](extended metrics unavailable — legacy run)[/dim]"
-        line4 = None
+        table.add_row("", "[dim](no metrics)[/dim]")
 
-    # Line 5: params
+    # — Params section —
     if stats.best_params:
-        fp = format_params(stats.best_params)
-        line5 = f"macd: {fp['macd']}  rsi: {fp['rsi']}  trend: {fp['trend']}"
-    else:
-        line5 = ""
+        table.add_row("", "")  # section separator
+        p = format_params(stats.best_params)
+        table.add_row("MACD", p["macd"])
+        table.add_row("RSI", p["rsi"])
+        table.add_row("Trend", p["trend"])
 
-    lines = [line1, "", line2, line3]
-    if line4:
-        lines.append(line4)
-    lines.extend(["", line5])
-
-    content = "\n".join(lines)
-    return Panel(content, title=f"[bold]{stats.symbol}[/bold]", border_style="cyan")
+    return Panel(table, title=f"[bold]{stats.symbol}[/bold]", border_style="cyan")
 
 
 def render_dashboard(
