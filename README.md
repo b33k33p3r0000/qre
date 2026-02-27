@@ -1,8 +1,28 @@
-# QRE — Quantitative Research Engine
+# Quantitative Research Engine (QRE)
 
-Offline optimizer pro MACD+RSI strategii "Quant Whale Strategy". Hledá optimální parametry pro BTC/USDC a SOL/USDC pomocí Optuna (Anchored Walk-Forward), backtestuje s Numba a výsledky posílá na Discord.
+Systematic algo trading research engine — Anchored Walk-Forward · Bayesian optimisation · Monte Carlo validation
 
-Cíl: najít robustní parametry pro live trading přes [EE (Execution Engine)](https://github.com/b33k33p3r0000/ee) na BrightFunded účtu.
+## Live Performance — BTC/USDC (QWS v4.2.1)
+| Metric | Value |
+|--------|-------|
+| Calmar (OOS) | 8.94 |
+| Sharpe (equity, OOS) | 2.15 |
+| Sortino | 3.06 |
+| Max Drawdown | ~6% |
+| Profit Factor | 1.99 |
+| Trades / year | 121 |
+| MC Confidence | HIGH |
+| Sharpe 95% CI | [2.45 – 3.31] |
+| OOS splits profitable | 5 / 5 |
+
+> Results from 5 independent Anchored Walk-Forward splits, 2021–2025.
+> 38,000+ Optuna trials. +282% total return on $50k starting equity.
+
+## Architecture
+- **3-layer signal:** MACD crossover · RSI lookback filter · Multi-TF trend guard
+- **Validation:** Anchored Walk-Forward with purge gaps · Monte Carlo 1,000 shuffles
+- **Optimisation:** Optuna TPE + SuccessiveHalving · Log Calmar objective with anti-gaming guards
+- **Execution:** MetaTrader 5 IPC bridge · Windows Server VPS · Discord bot monitoring
 
 ---
 
