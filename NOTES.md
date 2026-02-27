@@ -1,5 +1,19 @@
 # Session Notes
 
+## 2026-02-28 — 5years runy analýza + EE death cross guard
+
+### Uděláno
+- **Analýza:** 5years-btc-v1 + 5years-sol-v1 — oba 5/5 HIGH OOS, MC robustnost BTC 0.925 / SOL 0.80, Test Sharpe > Train Sharpe (anti-overfit)
+- **EE death cross guard:** Změněn z PAUSE (blokoval entry) na info-only (Discord notifikace, trading pokračuje) — strategie profituje z bear markets, death cross pause byl kontraproduktivní
+- **Rozhodnutí:** Tyto best_params schváleny pro live deployment (nejrobustnější runy dosud — 5 let dat, 57k+ trials)
+- **MEMORY.md:** Doplněn insight o DD vs funded limit (per-symbol DD ≠ account DD, 25% position sizing z 50% alokace)
+
+### Poznatky
+- 5/10 params identických mezi BTC a SOL (signal=7, period=3, lookback=3, trend_tf=8h, allow_flip=0) — silný důkaz univerzálního market pattern
+- SOL rsi_lower=40 na boundary search space — při re-optimalizaci zvážit rozšíření na 20-50
+
+---
+
 ## 2026-02-27 — Přidání BNB/USDC páru
 
 ### Uděláno
