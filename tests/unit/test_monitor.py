@@ -146,6 +146,56 @@ class TestQueryDbStats:
         assert stats.symbol == "SOL"
 
 
+class TestFormatParams:
+    """Test param formatting for display."""
+
+    def test_returns_dict_with_three_keys(self):
+        """format_params returns dict with macd, rsi, trend keys."""
+        from qre.monitor import format_params
+
+        params = {
+            "macd_fast": 2.5, "macd_slow": 25.0, "macd_signal": 5.0,
+            "rsi_period": 14.0, "rsi_lower": 30.0, "rsi_upper": 70.0,
+            "rsi_lookback": 4.0, "trend_tf": 0,
+        }
+        result = format_params(params)
+        assert isinstance(result, dict)
+        assert "macd" in result
+        assert "rsi" in result
+        assert "trend" in result
+
+    def test_macd_fast_float_formatting(self):
+        """macd_fast float is formatted to 1 decimal."""
+        from qre.monitor import format_params
+
+        params = {
+            "macd_fast": 2.5, "macd_slow": 25.0, "macd_signal": 5.0,
+            "rsi_period": 14.0, "rsi_lower": 30.0, "rsi_upper": 70.0,
+            "rsi_lookback": 4.0, "trend_tf": 0,
+        }
+        result = format_params(params)
+        assert "2.5" in result["macd"]
+
+    def test_trend_tf_maps_index_to_label(self):
+        """trend_tf index 0→4h, 1→8h, 2→1d."""
+        from qre.monitor import format_params
+
+        params = {
+            "macd_fast": 2.5, "macd_slow": 25.0, "macd_signal": 5.0,
+            "rsi_period": 14.0, "rsi_lower": 30.0, "rsi_upper": 70.0,
+            "rsi_lookback": 4.0, "trend_tf": 2,
+        }
+        result = format_params(params)
+        assert result["trend"] == "1d"
+
+    def test_missing_params_use_question_mark(self):
+        """Missing params show '?' placeholder."""
+        from qre.monitor import format_params
+
+        result = format_params({})
+        assert "?" in result["macd"]
+
+
 def _create_mock_optuna_db(path: Path, n_trials: int, best_value: float):
     """Create a minimal Optuna-compatible SQLite DB for testing."""
     conn = sqlite3.connect(str(path))

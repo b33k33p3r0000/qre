@@ -22,6 +22,7 @@ from pathlib import Path
 
 from rich.console import Console
 from rich.panel import Panel
+from rich.table import Table
 
 
 ACTIVE_RUN_MAX_AGE = 300  # seconds — DB mtime threshold
@@ -189,8 +190,11 @@ def query_db_stats(db_path: Path) -> SymbolStats | None:
         conn.close()
 
 
-def format_params(params: dict) -> str:
-    """Format strategy params into compact one-line string."""
+def format_params(params: dict) -> dict[str, str]:
+    """Format strategy params into separate lines for MACD, RSI, Trend.
+
+    Returns dict with keys: "macd", "rsi", "trend".
+    """
     mf = params.get("macd_fast", "?")
     ms = params.get("macd_slow", "?")
     msig = params.get("macd_signal", "?")
@@ -218,7 +222,11 @@ def format_params(params: dict) -> str:
     ru = int(ru) if isinstance(ru, float) else ru
     rlb = int(rlb) if isinstance(rlb, float) else rlb
 
-    return f"macd: {mf}/{ms}/{msig}  rsi: {rp} [{rl}-{ru}] lb={rlb}  trend: {ttf}"
+    return {
+        "macd": f"{mf} / {ms} / {msig}",
+        "rsi": f"{rp} [{rl}-{ru}] lb={rlb}",
+        "trend": str(ttf),
+    }
 
 
 def render_symbol_panel(stats: SymbolStats, prev_best: float | None = None) -> Panel:
@@ -259,7 +267,11 @@ def render_symbol_panel(stats: SymbolStats, prev_best: float | None = None) -> P
         line4 = None
 
     # Line 5: params
-    line5 = format_params(stats.best_params) if stats.best_params else ""
+    if stats.best_params:
+        fp = format_params(stats.best_params)
+        line5 = f"macd: {fp['macd']}  rsi: {fp['rsi']}  trend: {fp['trend']}"
+    else:
+        line5 = ""
 
     lines = [line1, "", line2, line3]
     if line4:
