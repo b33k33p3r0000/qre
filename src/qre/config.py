@@ -2,7 +2,7 @@
 QRE Configuration
 =================
 Centralized config for Quantitative Research Engine.
-Only BTC/USDC and SOL/USDC. Only MACD+RSI strategy.
+BTC/USDC, SOL/USDC, and BNB/USDC. Only MACD+RSI strategy.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 # SYMBOLS & TIMEFRAMES
 # =============================================================================
 
-SYMBOLS = ["BTC/USDC", "SOL/USDC"]
+SYMBOLS = ["BTC/USDC", "SOL/USDC", "BNB/USDC"]
 
 TREND_TFS = ["4h", "8h", "1d"]
 BASE_TF = "1h"
@@ -42,6 +42,7 @@ FEE = float(os.environ.get("FEE", "0.00075"))
 SLIPPAGE_MAP: dict[str, float] = {
     "BTC/USDC": 0.0008,
     "SOL/USDC": 0.0018,
+    "BNB/USDC": 0.0012,
 }
 
 DEFAULT_SLIPPAGE = float(os.environ.get("SLIPPAGE", "0.0015"))
@@ -133,7 +134,7 @@ BACKTEST_POSITION_PCT = 0.25  # Statických 25% pro všechny backtesty i EE
 # CATASTROPHIC STOP
 # =============================================================================
 
-CATASTROPHIC_STOP_PCT = {"BTC": 0.08, "SOL": 0.12}  # per-symbol emergency exit
+CATASTROPHIC_STOP_PCT = {"BTC": 0.08, "SOL": 0.12, "BNB": 0.10}  # per-symbol emergency exit
 CATASTROPHIC_STOP_PCT_DEFAULT = 0.10  # fallback for unknown symbols
 
 # =============================================================================

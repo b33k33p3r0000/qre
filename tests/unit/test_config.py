@@ -51,6 +51,7 @@ def test_catastrophic_stop_per_symbol():
     assert isinstance(CATASTROPHIC_STOP_PCT, dict)
     assert CATASTROPHIC_STOP_PCT["BTC"] == 0.08
     assert CATASTROPHIC_STOP_PCT["SOL"] == 0.12
+    assert CATASTROPHIC_STOP_PCT["BNB"] == 0.10
     assert CATASTROPHIC_STOP_PCT_DEFAULT == 0.10
 
 
@@ -129,3 +130,10 @@ def test_kept_constants():
     assert hasattr(config, "SHARPE_DECAY_RATE")
     assert hasattr(config, "MIN_DRAWDOWN_FLOOR")
     assert hasattr(config, "PURGE_GAP_BARS")
+
+
+def test_bnb_in_symbols():
+    """BNB/USDC is a configured trading pair."""
+    from qre.config import SYMBOLS, SLIPPAGE_MAP
+    assert "BNB/USDC" in SYMBOLS
+    assert "BNB/USDC" in SLIPPAGE_MAP
