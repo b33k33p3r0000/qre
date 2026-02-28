@@ -76,9 +76,66 @@ PRESET=""
 SKIP_RECENT=0
 ALLOW_FLIP=0
 WARM_START=""
+WARM_BTC=""
+WARM_SOL=""
+WARM_BNB=""
 FOREGROUND=false
 LOG_DIR="$SCRIPT_DIR/logs"
 mkdir -p "$LOG_DIR"
+
+# =============================================================================
+# WARM-START PICKER (per-symbol)
+# =============================================================================
+
+_WARM_RESULT=""
+pick_warm_start() {
+    local sym_filter="$1"  # BTC, SOL, BNB
+    _WARM_RESULT=""
+    local ws_table
+    ws_table=$(venv/bin/python -c "
+import json, sys
+from pathlib import Path
+sym_filter = sys.argv[1]
+runs = sorted(Path('results').rglob('best_params.json'), reverse=True)
+runs = [r for r in runs if 'checkpoints' not in str(r)]
+runs = [r for r in runs if r.parts[-2] == sym_filter]
+for i, r in enumerate(runs[:8]):
+    d = json.loads(r.read_text())
+    run_dir = r.parts[-3] if r.parts[-2] in ('BTC','SOL','BNB') else r.parts[-2]
+    export = ' [LIVE]' if 'EXPORT' in str(r) else ''
+    sharpe = d.get('sharpe_equity', 0)
+    dd = d.get('max_drawdown', 0)
+    trials = d.get('n_trials', 0)
+    print(f'  {i+1:2d}) Sh={sharpe:.2f}  DD={dd:.1f}%  {trials//1000}k  {run_dir}{export}')
+" "$sym_filter" 2>/dev/null)
+    if [ -n "$ws_table" ]; then
+        echo "$ws_table"
+        echo "   0) Bez warm-start"
+        echo ""
+        read -p "  Vyber run [0]: " ws_pick
+        ws_pick="${ws_pick:-0}"
+        if [ "$ws_pick" != "0" ]; then
+            _WARM_RESULT=$(venv/bin/python -c "
+import sys
+from pathlib import Path
+sym_filter = sys.argv[2]
+runs = sorted(Path('results').rglob('best_params.json'), reverse=True)
+runs = [r for r in runs if 'checkpoints' not in str(r)]
+runs = [r for r in runs if r.parts[-2] == sym_filter]
+idx = int(sys.argv[1]) - 1
+if 0 <= idx < len(runs):
+    print(runs[idx])
+else:
+    sys.exit(1)
+" "$ws_pick" "$sym_filter" 2>/dev/null)
+            if [ -z "$_WARM_RESULT" ]; then
+                echo "  Neplatná volba, pokračuji bez warm-start"
+            fi
+        fi
+    else
+        echo "  Žádné předchozí runy."
+    fi
+}
 
 # =============================================================================
 # PARSE ARGS
@@ -254,59 +311,45 @@ case "$PRESET" in
                 read -p "Splits [3]: " SPLITS; SPLITS="${SPLITS:-3}"
                 read -p "Skip recent hours [0]: " SKIP_RECENT; SKIP_RECENT="${SKIP_RECENT:-0}"
                 echo ""
-                read -p "Pairs — (1) BTC, (2) SOL, (3) Both, (4) BNB [3]: " pair_choice
-                case "${pair_choice:-3}" in
+                read -p "Pairs — (1) BTC, (2) SOL, (3) BNB, (4) All [4]: " pair_choice
+                case "${pair_choice:-4}" in
                     1) PAIRS="btc" ;;
                     2) PAIRS="sol" ;;
-                    3) PAIRS="both" ;;
-                    4) PAIRS="bnb" ;;
+                    3) PAIRS="bnb" ;;
+                    4) PAIRS="both" ;;
                 esac
 
-                # Warm-start picker: show recent runs as numbered table
+                # Warm-start picker per symbol
                 echo ""
                 echo "Warm-start (enqueue known-good params as first trial):"
-                WS_TABLE=$(venv/bin/python -c "
-import json, sys
-from pathlib import Path
-
-runs = sorted(Path('results').rglob('best_params.json'), reverse=True)
-runs = [r for r in runs if 'checkpoints' not in str(r)]
-for i, r in enumerate(runs[:12]):
-    d = json.loads(r.read_text())
-    sym = d.get('symbol','?').split('/')[0]
-    run_dir = r.parts[-3] if r.parts[-2] in ('BTC','SOL','BNB') else r.parts[-2]
-    export = ' [LIVE]' if 'EXPORT' in str(r) else ''
-    sharpe = d.get('sharpe_equity', 0)
-    dd = d.get('max_drawdown', 0)
-    trials = d.get('n_trials', 0)
-    print(f'  {i+1:2d}) {sym:3s}  Sh={sharpe:.2f}  DD={dd:.1f}%  {trials//1000}k  {run_dir}{export}')
-" 2>/dev/null)
-                if [ -n "$WS_TABLE" ]; then
-                    echo "$WS_TABLE"
-                    echo "   0) Bez warm-start"
-                    echo ""
-                    read -p "Vyber run [0]: " ws_pick
-                    ws_pick="${ws_pick:-0}"
-                    if [ "$ws_pick" != "0" ]; then
-                        WARM_START=$(venv/bin/python -c "
-import sys
-from pathlib import Path
-runs = sorted(Path('results').rglob('best_params.json'), reverse=True)
-runs = [r for r in runs if 'checkpoints' not in str(r)]
-idx = int(sys.argv[1]) - 1
-if 0 <= idx < len(runs):
-    print(runs[idx])
-else:
-    sys.exit(1)
-" "$ws_pick" 2>/dev/null)
-                        if [ -z "$WARM_START" ]; then
-                            echo "Neplatná volba, pokračuji bez warm-start"
-                            WARM_START=""
-                        fi
-                    fi
-                else
-                    echo "  Žádné předchozí runy nenalezeny."
-                fi
+                case "$PAIRS" in
+                    btc)
+                        echo "— BTC:"
+                        pick_warm_start "BTC"
+                        WARM_BTC="$_WARM_RESULT"
+                        ;;
+                    sol)
+                        echo "— SOL:"
+                        pick_warm_start "SOL"
+                        WARM_SOL="$_WARM_RESULT"
+                        ;;
+                    bnb)
+                        echo "— BNB:"
+                        pick_warm_start "BNB"
+                        WARM_BNB="$_WARM_RESULT"
+                        ;;
+                    both)
+                        echo "— BTC:"
+                        pick_warm_start "BTC"
+                        WARM_BTC="$_WARM_RESULT"
+                        echo "— SOL:"
+                        pick_warm_start "SOL"
+                        WARM_SOL="$_WARM_RESULT"
+                        echo "— BNB:"
+                        pick_warm_start "BNB"
+                        WARM_BNB="$_WARM_RESULT"
+                        ;;
+                esac
                 ;;
             *) echo "Invalid choice"; exit 1 ;;
         esac
@@ -314,11 +357,12 @@ else:
         # Only ask for pairs in interactive if preset doesn't set them
         if [ "$choice" = "1" ]; then
             echo ""
-            read -p "Pairs — (1) BTC only, (2) SOL only, (3) Both [3]: " pair_choice
-            case "${pair_choice:-3}" in
+            read -p "Pairs — (1) BTC, (2) SOL, (3) BNB, (4) All [4]: " pair_choice
+            case "${pair_choice:-4}" in
                 1) PAIRS="btc" ;;
                 2) PAIRS="sol" ;;
-                3) PAIRS="both" ;;
+                3) PAIRS="bnb" ;;
+                4) PAIRS="both" ;;
             esac
         fi
 
@@ -343,8 +387,19 @@ build_cmd() {
         cmd="$cmd --skip-recent $SKIP_RECENT"
     fi
     cmd="$cmd --allow-flip $ALLOW_FLIP"
+    # Warm-start: CLI --warm-start overrides, then per-symbol from interactive picker
+    local warm=""
     if [ -n "$WARM_START" ]; then
-        cmd="$cmd --warm-start $WARM_START"
+        warm="$WARM_START"
+    else
+        case "$symbol" in
+            BTC/USDC) warm="$WARM_BTC" ;;
+            SOL/USDC) warm="$WARM_SOL" ;;
+            BNB/USDC) warm="$WARM_BNB" ;;
+        esac
+    fi
+    if [ -n "$warm" ]; then
+        cmd="$cmd --warm-start $warm"
     fi
     echo "$cmd"
 }
@@ -367,7 +422,13 @@ echo "  Hours:   $HOURS (~$((HOURS / 24)) days)"
 [ -n "$TAG" ] && echo "  Tag:     $TAG"
 echo "  Pairs:   $PAIRS"
 echo "  Flip:    $( [ "$ALLOW_FLIP" = "1" ] && echo "always-in" || echo "selective" )"
-[ -n "$WARM_START" ] && echo "  Warm:    $WARM_START"
+if [ -n "$WARM_START" ]; then
+    echo "  Warm:    $WARM_START (all symbols)"
+else
+    [ -n "$WARM_BTC" ] && echo "  Warm BTC: $WARM_BTC"
+    [ -n "$WARM_SOL" ] && echo "  Warm SOL: $WARM_SOL"
+    [ -n "$WARM_BNB" ] && echo "  Warm BNB: $WARM_BNB"
+fi
 echo "  Mode:    $MODE_LABEL"
 echo "═══════════════════════════════════════════"
 echo ""
