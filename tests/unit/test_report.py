@@ -10,6 +10,7 @@ from qre.report import (
     generate_report, build_equity_curve, build_drawdown_curve,
     _compute_direction_stats, _render_long_short_metrics,
     _compute_yearly_breakdown, _render_yearly_performance,
+    _render_top_trials,
 )
 
 
@@ -550,3 +551,83 @@ class TestYearlyPerformanceIntegration:
         html = generate_report(SAMPLE_PARAMS, [])
         # Should NOT show yearly section if no trades
         assert "Yearly Performance" not in html
+
+
+def _make_top_trial(rank=1, number=42, value=2.5, macd_fast=2.1, macd_slow=24,
+                    macd_signal=5, rsi_period=3, rsi_lower=25, rsi_upper=70,
+                    rsi_lookback=4, trend_tf="8h", trend_strict=1, allow_flip=0,
+                    sharpe=2.0, max_dd=-8.0, pnl_pct=48.0, tpy=80.0):
+    return {
+        "rank": rank, "number": number, "value": value,
+        "params": {
+            "macd_fast": macd_fast, "macd_slow": macd_slow,
+            "macd_signal": macd_signal, "rsi_period": rsi_period,
+            "rsi_lower": rsi_lower, "rsi_upper": rsi_upper,
+            "rsi_lookback": rsi_lookback, "trend_tf": trend_tf,
+            "trend_strict": trend_strict, "allow_flip": allow_flip,
+        },
+        "metrics": {
+            "sharpe_equity": sharpe, "max_drawdown": max_dd,
+            "total_pnl_pct": pnl_pct, "trades_per_year": tpy,
+        },
+    }
+
+
+class TestRenderTopTrials:
+    def test_empty_returns_empty(self):
+        html, js = _render_top_trials([])
+        assert html == ""
+        assert js == ""
+
+    def test_none_returns_empty(self):
+        html, js = _render_top_trials(None)
+        assert html == ""
+        assert js == ""
+
+    def test_single_trial_renders_table(self):
+        trials = [_make_top_trial(rank=1, number=42, value=2.5)]
+        html, js = _render_top_trials(trials)
+        assert "Top Trials" in html
+        assert "#42" in html
+        assert "2.5" in html
+
+    def test_table_has_all_metric_columns(self):
+        trials = [_make_top_trial(sharpe=2.05, max_dd=-8.86, pnl_pct=48.17, tpy=80.6)]
+        html, js = _render_top_trials(trials)
+        assert "2.05" in html
+        assert "8.86" in html
+        assert "48.17" in html or "48.2" in html
+        assert "80.6" in html
+
+    def test_parcoords_chart_div_present(self):
+        trials = [_make_top_trial()]
+        html, js = _render_top_trials(trials)
+        assert "top-trials-parcoords" in html
+        assert "parcoords" in js
+
+    def test_scatter_chart_div_present(self):
+        trials = [_make_top_trial()]
+        html, js = _render_top_trials(trials)
+        assert "top-trials-scatter" in html
+        assert "top-trials-scatter" in js
+
+    def test_best_trial_highlighted(self):
+        trials = [_make_top_trial(rank=1), _make_top_trial(rank=2, number=55, value=2.3)]
+        html, js = _render_top_trials(trials)
+        assert "best-row" in html
+
+    def test_twenty_trials_all_shown(self):
+        trials = [_make_top_trial(rank=i, number=i*10, value=3.0 - i*0.1) for i in range(1, 21)]
+        html, js = _render_top_trials(trials)
+        assert "#10" in html
+        assert "#200" in html
+
+    def test_section_in_full_report(self):
+        trials = [_make_top_trial()]
+        html = generate_report(SAMPLE_PARAMS, [_make_trade()], top_trials=trials)
+        assert "Top Trials" in html
+        assert "top-trials-parcoords" in html
+
+    def test_no_top_trials_no_section(self):
+        html = generate_report(SAMPLE_PARAMS, [_make_trade()], top_trials=None)
+        assert "top-trials-parcoords" not in html
