@@ -1,5 +1,20 @@
 # Session Notes
 
+## 2026-02-28 (2) — Top 20 Trials sekce v reportu
+
+### Uděláno
+- **report.py**: Nová sekce "Top Trials Analysis" na konci reportu — tabulka Top 20 trialů + Plotly parallel coordinates (10 param os) + scatter (Sharpe vs DD)
+- **optimize.py**: Extrakce top 20 completed trialů (value > 0) z Optuna study, předání do report pipeline
+- Regenerace 5years-btc-v1 a 5years-sol-v1 reportů s novou sekcí
+- 12 nových testů (240 PASS celkem), code quality + spec review
+
+### Poznatky
+- SOL top 20 spread: 7.0305–7.0125 (0.25%), BTC: 6.5525–6.5419 (0.16%) — extrémně úzký = silná konvergence
+- Plotly `parcoords` trace vyžaduje numerické hodnoty — kategorický `trend_tf` mapován na hodiny (4h→4, 8h→8, 1d→24)
+- Pattern `(html, js)` tuple konzistentní s ostatními chart sekcemi v reportu
+
+---
+
 ## 2026-02-28 — 5years runy analýza + EE death cross guard
 
 ### Uděláno
