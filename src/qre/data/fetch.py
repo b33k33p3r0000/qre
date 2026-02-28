@@ -2,7 +2,7 @@
 """
 Data Fetching
 =============
-Stahování OHLCV dat z Binance API. Vždy fresh data, žádný disk cache.
+OHLCV data loading: local Parquet dataset first, Binance API fallback.
 """
 
 from __future__ import annotations
@@ -10,6 +10,8 @@ from __future__ import annotations
 import logging
 import time
 from datetime import datetime, timezone
+from pathlib import Path
+from typing import Dict, Optional
 
 import pandas as pd
 
@@ -24,6 +26,49 @@ from qre.config import (
 )
 
 logger = logging.getLogger("qre.data")
+
+# Default dataset path (centralized OHLCV store)
+DATASET_PATH = Path.home() / "projects" / "dataset" / "data"
+
+
+def load_from_dataset(
+    symbol: str,
+    tf: str,
+    dataset_path: Optional[Path] = None,
+) -> Optional[pd.DataFrame]:
+    """
+    Load OHLCV from local Parquet dataset.
+
+    Args:
+        symbol: Trading pair (e.g. "BTC/USDT")
+        tf: Timeframe (e.g. "1h", "4h")
+        dataset_path: Override dataset directory (for testing)
+
+    Returns:
+        DataFrame with OHLCV data, or None if file doesn't exist.
+    """
+    if dataset_path is None:
+        dataset_path = DATASET_PATH
+
+    # BTC/USDT -> BTCUSDT
+    dir_name = symbol.replace("/", "")
+    parquet_path = dataset_path / dir_name / f"{tf}.parquet"
+
+    if not parquet_path.exists():
+        return None
+
+    logger.info("Loading %s %s from dataset: %s", symbol, tf, parquet_path)
+    df = pd.read_parquet(parquet_path)
+
+    # Ensure UTC DatetimeIndex named "timestamp"
+    if not isinstance(df.index, pd.DatetimeIndex):
+        if "timestamp" in df.columns:
+            df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+            df.set_index("timestamp", inplace=True)
+    if df.index.tz is None:
+        df.index = df.index.tz_localize("UTC")
+
+    return df
 
 
 def utcnow_ms() -> int:
@@ -104,14 +149,16 @@ def fetch_ohlcv_paginated(
     return df
 
 
-def load_all_data(exchange, symbol: str, hours_1h: int) -> dict[str, pd.DataFrame]:
+def load_all_data(exchange, symbol: str, hours_1h: int) -> Dict[str, pd.DataFrame]:
     """
-    Načte fresh data z Binance pro base TF + trend TFs.
+    Load OHLCV data for base TF + trend TFs.
+
+    Tries local Parquet dataset first, falls back to Binance API.
 
     Args:
-        exchange: ccxt exchange
-        symbol: Trading pár
-        hours_1h: Kolik hodin zpětně
+        exchange: ccxt exchange (used for API fallback)
+        symbol: Trading pair (e.g. "BTC/USDT")
+        hours_1h: How many hours of 1h data to load
 
     Returns:
         Dict {timeframe: DataFrame} — keys: "1h", "4h", "8h", "1d"
@@ -119,13 +166,25 @@ def load_all_data(exchange, symbol: str, hours_1h: int) -> dict[str, pd.DataFram
     now_ms = utcnow_ms()
     since_1h = now_ms - hours_1h * TF_MS["1h"]
 
-    data: dict[str, pd.DataFrame] = {}
+    data: Dict[str, pd.DataFrame] = {}
+    all_tfs = [BASE_TF] + list(TREND_TFS)
 
-    # Base timeframe
-    data[BASE_TF] = fetch_ohlcv_paginated(exchange, symbol, BASE_TF, since_1h, now_ms)
+    for tf in all_tfs:
+        # Try dataset first
+        df = load_from_dataset(symbol, tf)
+        if df is not None:
+            # Trim to requested time range
+            since_dt = pd.Timestamp(since_1h, unit="ms", tz="UTC")
+            df = df[df.index >= since_dt]
+            if len(df) > 0:
+                logger.info(
+                    "Using dataset for %s %s (%d rows)", symbol, tf, len(df),
+                )
+                data[tf] = df
+                continue
 
-    # Higher timeframes for trend filter
-    for tf in TREND_TFS:
+        # Fallback to API
+        logger.info("Falling back to API for %s %s", symbol, tf)
         data[tf] = fetch_ohlcv_paginated(exchange, symbol, tf, since_1h, now_ms)
 
     return data

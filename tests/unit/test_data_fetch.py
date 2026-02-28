@@ -6,7 +6,12 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 
-from qre.data.fetch import fetch_ohlcv_paginated, load_all_data, utcnow_ms
+from qre.data.fetch import (
+    fetch_ohlcv_paginated,
+    load_all_data,
+    load_from_dataset,
+    utcnow_ms,
+)
 
 
 class TestUtcnowMs:
@@ -61,3 +66,55 @@ class TestLoadAllData:
 
         data = load_all_data(mock_exchange, "BTC/USDT", 100)
         assert "1h" in data
+
+
+class TestLoadFromDataset:
+    def test_loads_parquet_when_exists(self, tmp_path):
+        """load_from_dataset returns DataFrame from Parquet file."""
+        symbol_dir = tmp_path / "BTCUSDT"
+        symbol_dir.mkdir()
+        ts = pd.date_range("2025-01-01", periods=100, freq="h", tz="UTC")
+        df = pd.DataFrame(
+            {
+                "open": range(100),
+                "high": range(100),
+                "low": range(100),
+                "close": range(100),
+                "volume": range(100),
+            },
+            index=ts,
+        )
+        df.index.name = "timestamp"
+        df.to_parquet(symbol_dir / "1h.parquet")
+
+        result = load_from_dataset("BTC/USDT", "1h", dataset_path=tmp_path)
+        assert result is not None
+        assert len(result) == 100
+        assert list(result.columns) == ["open", "high", "low", "close", "volume"]
+
+    def test_returns_none_when_parquet_missing(self, tmp_path):
+        """load_from_dataset returns None if Parquet file doesn't exist."""
+        result = load_from_dataset("BTC/USDT", "1h", dataset_path=tmp_path)
+        assert result is None
+
+    def test_symbol_mapping(self, tmp_path):
+        """BTC/USDT maps to BTCUSDT directory."""
+        symbol_dir = tmp_path / "SOLUSDT"
+        symbol_dir.mkdir()
+        ts = pd.date_range("2025-01-01", periods=10, freq="h", tz="UTC")
+        df = pd.DataFrame(
+            {
+                "open": range(10),
+                "high": range(10),
+                "low": range(10),
+                "close": range(10),
+                "volume": range(10),
+            },
+            index=ts,
+        )
+        df.index.name = "timestamp"
+        df.to_parquet(symbol_dir / "1h.parquet")
+
+        result = load_from_dataset("SOL/USDT", "1h", dataset_path=tmp_path)
+        assert result is not None
+        assert len(result) == 10
