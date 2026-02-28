@@ -516,7 +516,7 @@ def calculate_metrics(
 
     # === WIN/LOSS ANALYSIS ===
     winners = [t for t in trades if t.get("pnl_abs", 0) > 0]
-    losers = [t for t in trades if t.get("pnl_abs", 0) <= 0]
+    losers = [t for t in trades if t.get("pnl_abs", 0) < 0]
 
     win_rate = len(winners) / len(trades) * 100 if trades else 0.0
 

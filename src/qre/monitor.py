@@ -17,7 +17,7 @@ import json
 import sqlite3
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from rich.console import Console
@@ -172,7 +172,7 @@ def query_db_stats(db_path: Path) -> SymbolStats | None:
             stats.start_time = row["first_start"]
             try:
                 start_dt = datetime.fromisoformat(row["first_start"])
-                elapsed_min = (datetime.now() - start_dt).total_seconds() / 60.0
+                elapsed_min = (datetime.now(timezone.utc) - start_dt).total_seconds() / 60.0
                 total_done = stats.completed + stats.pruned + stats.failed
                 if elapsed_min > 0 and total_done > 0:
                     stats.trials_per_min = round(total_done / elapsed_min, 1)
@@ -329,7 +329,7 @@ def render_dashboard(
 
         console.print()
 
-    now = datetime.now().strftime("%H:%M:%S")
+    now = datetime.now(timezone.utc).strftime("%H:%M:%S")
     console.print(f"[dim]Last refresh: {now}   Auto-refresh: 30s   Ctrl+C to exit[/dim]")
 
     merged = {**prev_bests, **new_bests}

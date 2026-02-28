@@ -10,7 +10,7 @@ import csv
 import json
 import logging
 import os
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from statistics import median
 from typing import Any
@@ -306,8 +306,8 @@ def check_robustness(params: dict[str, Any]) -> dict[str, Any]:
         overfit_risk, splits_positive, splits_total, splits_pct_positive,
         split_details, mc_sharpe_mean, mc_confidence.
     """
-    train_s = params.get("train_sharpe", 0)
-    test_s = params.get("test_sharpe", 0)
+    train_s = params.get("train_sharpe_equity", params.get("train_sharpe", 0))
+    test_s = params.get("test_sharpe_equity", params.get("test_sharpe", 0))
     overfit_score = (train_s - test_s) / train_s if train_s != 0 else 0
     overfit_risk = "high" if overfit_score > 0.5 else ("medium" if overfit_score > 0.3 else "low")
 
@@ -545,7 +545,7 @@ def save_analysis(analysis: dict[str, Any], path: str | Path) -> None:
         path: Output file path.
     """
     output = dict(analysis)
-    output["timestamp"] = datetime.now(UTC).isoformat()
+    output["timestamp"] = datetime.now(timezone.utc).isoformat()
 
     path = Path(path)
     os.makedirs(path.parent, exist_ok=True)

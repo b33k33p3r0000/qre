@@ -1,5 +1,17 @@
 # Session Notes
 
+## 2026-02-28 (4) — Code Review Fixes (W1-3, I1)
+
+### Uděláno
+- **`/review QRE`**: 0 Critical, 3 Warning, 4 Info nálezů
+- **W1 analyze.py**: `check_robustness()` četl neexistující klíče `train_sharpe`/`test_sharpe` → opraveno na `train_sharpe_equity` s fallbackem (overfit detekce nefungovala)
+- **W2 monitor.py**: `datetime.now()` bez timezone → `datetime.now(timezone.utc)` (ETA výpočet + display)
+- **W3 analyze.py**: `from datetime import UTC` (Python 3.11+) → `timezone` (3.9 kompatibilní)
+- **I1 metrics.py**: Break-even trades (pnl=0) počítány jako losers → opraveno na strict `< 0`
+- **run.sh**: Per-symbol warm-start picker (BTC/SOL/BNB zvlášť místo globálního výběru)
+
+---
+
 ## 2026-02-28 (3) — Integration: USDT + Dataset + BNB + MQE notify
 
 ### Uděláno
