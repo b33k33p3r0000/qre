@@ -58,7 +58,11 @@ def load_from_dataset(
         return None
 
     logger.info("Loading %s %s from dataset: %s", symbol, tf, parquet_path)
-    df = pd.read_parquet(parquet_path)
+    try:
+        df = pd.read_parquet(parquet_path)
+    except Exception as e:
+        logger.warning("Failed to read parquet %s: %s", parquet_path, e)
+        return None
 
     # Ensure UTC DatetimeIndex named "timestamp"
     if not isinstance(df.index, pd.DatetimeIndex):
