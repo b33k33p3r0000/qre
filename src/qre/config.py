@@ -2,7 +2,7 @@
 QRE Configuration
 =================
 Centralized config for Quantitative Research Engine.
-BTC/USDC, SOL/USDC, and BNB/USDC. Only MACD+RSI strategy.
+BTC/USDT, SOL/USDT, and BNB/USDT. Only MACD+RSI strategy.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 # SYMBOLS & TIMEFRAMES
 # =============================================================================
 
-SYMBOLS = ["BTC/USDC", "SOL/USDC", "BNB/USDC"]
+SYMBOLS = ["BTC/USDT", "SOL/USDT", "BNB/USDT"]
 
 TREND_TFS = ["4h", "8h", "1d"]
 BASE_TF = "1h"
@@ -40,9 +40,9 @@ TF_MS: dict[str, int] = {
 FEE = float(os.environ.get("FEE", "0.00075"))
 
 SLIPPAGE_MAP: dict[str, float] = {
-    "BTC/USDC": 0.0008,
-    "SOL/USDC": 0.0018,
-    "BNB/USDC": 0.0012,
+    "BTC/USDT": 0.0008,
+    "SOL/USDT": 0.0018,
+    "BNB/USDT": 0.0012,
 }
 
 DEFAULT_SLIPPAGE = float(os.environ.get("SLIPPAGE", "0.0015"))

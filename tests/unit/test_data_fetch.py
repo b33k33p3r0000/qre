@@ -36,7 +36,7 @@ class TestLoadAllData:
         mock_exchange.fetch_ohlcv.side_effect = mock_fetch
         mock_exchange.rateLimit = 100
 
-        data = load_all_data(mock_exchange, "BTC/USDC", 100)
+        data = load_all_data(mock_exchange, "BTC/USDT", 100)
 
         assert "1h" in data
         assert "4h" in data
@@ -59,5 +59,5 @@ class TestLoadAllData:
         mock_exchange.fetch_ohlcv.side_effect = mock_fetch
         mock_exchange.rateLimit = 100
 
-        data = load_all_data(mock_exchange, "BTC/USDC", 100)
+        data = load_all_data(mock_exchange, "BTC/USDT", 100)
         assert "1h" in data

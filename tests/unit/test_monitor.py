@@ -280,7 +280,7 @@ def _create_mock_optuna_db(path: Path, n_trials: int, best_value: float):
 
     cur.execute("CREATE TABLE study_user_attributes (study_user_attribute_id INTEGER PRIMARY KEY, study_id INTEGER, key TEXT, value_json TEXT)")
     cur.execute("INSERT INTO study_user_attributes VALUES (1, 1, 'n_trials_requested', '1000')")
-    cur.execute("INSERT INTO study_user_attributes VALUES (2, 1, 'symbol', '\"BTC/USDC\"')")
+    cur.execute("INSERT INTO study_user_attributes VALUES (2, 1, 'symbol', '\"BTC/USDT\"')")
 
     cur.execute("""CREATE TABLE trials (
         trial_id INTEGER PRIMARY KEY, number INTEGER, study_id INTEGER,

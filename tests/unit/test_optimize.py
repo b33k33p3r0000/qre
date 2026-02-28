@@ -84,7 +84,7 @@ class TestBuildObjective:
             index=dates,
         )}
         splits = [{"train_end": 0.70, "test_end": 0.85}]
-        objective = build_objective(symbol="BTC/USDC", data=mock_data, splits=splits)
+        objective = build_objective(symbol="BTC/USDT", data=mock_data, splits=splits)
         assert callable(objective)
 
     def test_objective_runs_without_error(self):
@@ -98,7 +98,7 @@ class TestBuildObjective:
             index=dates,
         )}
         splits = [{"train_end": 0.70, "test_end": 0.85}]
-        objective = build_objective(symbol="BTC/USDC", data=mock_data, splits=splits)
+        objective = build_objective(symbol="BTC/USDT", data=mock_data, splits=splits)
 
         optuna.logging.set_verbosity(optuna.logging.WARNING)
         study = optuna.create_study()
@@ -126,7 +126,7 @@ class TestBuildObjective:
             index=dates,
         )}
         splits = [{"train_end": 0.60, "test_end": 0.80}]
-        objective = build_objective(symbol="BTC/USDC", data=mock_data, splits=splits)
+        objective = build_objective(symbol="BTC/USDT", data=mock_data, splits=splits)
 
         optuna.logging.set_verbosity(optuna.logging.WARNING)
         study = optuna.create_study()
@@ -230,7 +230,7 @@ class TestTrialUserAttrs:
             index=dates,
         )}
         splits = [{"train_end": 0.60, "test_end": 0.80}]
-        objective = build_objective(symbol="BTC/USDC", data=mock_data, splits=splits)
+        objective = build_objective(symbol="BTC/USDT", data=mock_data, splits=splits)
 
         optuna.logging.set_verbosity(optuna.logging.WARNING)
         study = optuna.create_study(direction="maximize")
@@ -270,7 +270,7 @@ class TestTrialUserAttrs:
             index=dates,
         )}
         splits = [{"train_end": 0.60, "test_end": 0.80}]
-        objective = build_objective(symbol="BTC/USDC", data=mock_data, splits=splits)
+        objective = build_objective(symbol="BTC/USDT", data=mock_data, splits=splits)
 
         optuna.logging.set_verbosity(optuna.logging.WARNING)
         study = optuna.create_study(direction="maximize")
@@ -289,8 +289,8 @@ class TestTrialUserAttrs:
 
 
 def test_bnb_in_cli_choices():
-    """BNB/USDC is a valid --symbol choice."""
+    """BNB/USDT is a valid --symbol choice."""
     import inspect
     from qre import optimize
     source = inspect.getsource(optimize)
-    assert "BNB/USDC" in source, "BNB/USDC must be in optimizer CLI choices"
+    assert "BNB/USDT" in source, "BNB/USDT must be in optimizer CLI choices"

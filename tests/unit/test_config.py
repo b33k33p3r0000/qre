@@ -133,7 +133,7 @@ def test_kept_constants():
 
 
 def test_bnb_in_symbols():
-    """BNB/USDC is a configured trading pair."""
+    """BNB/USDT is a configured trading pair."""
     from qre.config import SYMBOLS, SLIPPAGE_MAP
-    assert "BNB/USDC" in SYMBOLS
-    assert "BNB/USDC" in SLIPPAGE_MAP
+    assert "BNB/USDT" in SYMBOLS
+    assert "BNB/USDT" in SLIPPAGE_MAP

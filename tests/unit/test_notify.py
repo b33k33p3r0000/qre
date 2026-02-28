@@ -10,38 +10,38 @@ from qre.notify import format_start_message, format_complete_message, discord_no
 
 class TestFormatStartMessage:
     def test_contains_symbol(self):
-        msg = format_start_message(symbol="BTC/USDC", n_trials=10000, hours=8760, n_splits=3, run_tag="test-v1")
-        assert "BTC/USDC" in msg
+        msg = format_start_message(symbol="BTC/USDT", n_trials=10000, hours=8760, n_splits=3, run_tag="test-v1")
+        assert "BTC/USDT" in msg
 
     def test_contains_trials(self):
-        msg = format_start_message(symbol="BTC/USDC", n_trials=10000, hours=8760, n_splits=3)
+        msg = format_start_message(symbol="BTC/USDT", n_trials=10000, hours=8760, n_splits=3)
         assert "10,000" in msg or "10000" in msg
 
     def test_contains_tag_when_provided(self):
-        msg = format_start_message(symbol="BTC/USDC", n_trials=10000, hours=8760, n_splits=3, run_tag="my-tag")
+        msg = format_start_message(symbol="BTC/USDT", n_trials=10000, hours=8760, n_splits=3, run_tag="my-tag")
         assert "my-tag" in msg
 
     def test_no_tag_when_none(self):
-        msg = format_start_message(symbol="BTC/USDC", n_trials=10000, hours=8760, n_splits=3, run_tag=None)
+        msg = format_start_message(symbol="BTC/USDT", n_trials=10000, hours=8760, n_splits=3, run_tag=None)
         assert "None" not in msg
 
 
 class TestFormatCompleteMessage:
     def test_contains_equity(self):
-        params = {"symbol": "BTC/USDC", "equity": 51234.56, "sharpe": 2.5, "trades": 200,
+        params = {"symbol": "BTC/USDT", "equity": 51234.56, "sharpe": 2.5, "trades": 200,
                   "max_drawdown": -3.0, "win_rate": 0.48, "total_pnl_pct": 2.47,
                   "mc_confidence": "HIGH", "train_sharpe": 3.0, "test_sharpe": -1.5}
         msg = format_complete_message(params)
         assert "51,234" in msg or "51234" in msg
 
     def test_contains_sharpe(self):
-        params = {"symbol": "BTC/USDC", "equity": 51000, "sharpe": 2.5, "trades": 200,
+        params = {"symbol": "BTC/USDT", "equity": 51000, "sharpe": 2.5, "trades": 200,
                   "max_drawdown": -3.0, "win_rate": 0.48, "total_pnl_pct": 2.47}
         msg = format_complete_message(params)
         assert "2.5" in msg or "2.50" in msg
 
     def test_overfit_warning_when_negative_test_sharpe(self):
-        params = {"symbol": "BTC/USDC", "equity": 51000, "sharpe": 2.5, "trades": 200,
+        params = {"symbol": "BTC/USDT", "equity": 51000, "sharpe": 2.5, "trades": 200,
                   "max_drawdown": -3.0, "win_rate": 0.48, "total_pnl_pct": 2.47,
                   "train_sharpe": 3.0, "test_sharpe": -1.5}
         msg = format_complete_message(params)

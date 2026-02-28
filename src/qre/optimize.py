@@ -639,7 +639,7 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="QRE Optimizer — Quant Whale Strategy AWF")
-    parser.add_argument("--symbol", type=str, default="BTC/USDC", choices=["BTC/USDC", "SOL/USDC", "BNB/USDC"])
+    parser.add_argument("--symbol", type=str, default="BTC/USDT", choices=["BTC/USDT", "SOL/USDT", "BNB/USDT"])
     parser.add_argument("--hours", type=int, default=8760)
     parser.add_argument("--trials", type=int, default=DEFAULT_TRIALS)
     parser.add_argument("--splits", type=int, default=5)
