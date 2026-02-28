@@ -1008,8 +1008,8 @@ def _render_top_trials(top_trials: list[dict] | None) -> tuple[str, str]:
         </tr></thead>
         <tbody>{rows_html}</tbody>
     </table>
-    <div id="top-trials-parcoords" class="chart-container" style="height:400px"></div>
-    <div id="top-trials-scatter" class="chart-container" style="height:350px; margin-top:20px"></div>
+    <div id="top-trials-parcoords" class="chart-container" style="height:500px"></div>
+    <div id="top-trials-scatter" class="chart-container" style="height:380px; margin-top:20px"></div>
     """
 
     # --- Plotly parallel coordinates ---
@@ -1017,16 +1017,16 @@ def _render_top_trials(top_trials: list[dict] | None) -> tuple[str, str]:
 
     par_dims = []
     param_defs = [
-        ("macd_fast", "MACD fast", 1.0, 20.0, None),
-        ("macd_slow", "MACD slow", 10, 45, None),
-        ("macd_signal", "MACD signal", 3, 15, None),
-        ("rsi_period", "RSI period", 3, 30, None),
-        ("rsi_lower", "RSI lower", 20, 40, None),
-        ("rsi_upper", "RSI upper", 60, 80, None),
-        ("rsi_lookback", "RSI lookback", 1, 4, None),
-        ("trend_tf", "Trend TF", 4, 24, {"tickvals": [4, 8, 24], "ticktext": ["4h", "8h", "1d"]}),
-        ("trend_strict", "Trend strict", 0, 1, {"tickvals": [0, 1]}),
-        ("allow_flip", "Allow flip", 0, 1, {"tickvals": [0, 1]}),
+        ("macd_fast", "Fast", 1.0, 20.0, None),
+        ("macd_slow", "Slow", 10, 45, None),
+        ("macd_signal", "Signal", 3, 15, None),
+        ("rsi_period", "RSI Per", 3, 30, None),
+        ("rsi_lower", "RSI Lo", 20, 40, None),
+        ("rsi_upper", "RSI Hi", 60, 80, None),
+        ("rsi_lookback", "RSI LB", 1, 4, None),
+        ("trend_tf", "Trend", 4, 24, {"tickvals": [4, 8, 24], "ticktext": ["4h", "8h", "1d"]}),
+        ("trend_strict", "Strict", 0, 1, {"tickvals": [0, 1]}),
+        ("allow_flip", "Flip", 0, 1, {"tickvals": [0, 1]}),
     ]
 
     for pkey, label, lo, hi, extra in param_defs:
@@ -1056,8 +1056,8 @@ def _render_top_trials(top_trials: list[dict] | None) -> tuple[str, str]:
     parcoords_layout = {
         "paper_bgcolor": "#2f334d",
         "plot_bgcolor": "#2f334d",
-        "font": {"color": "#c8d3f5", "size": 10},
-        "margin": {"l": 60, "r": 60, "t": 30, "b": 30},
+        "font": {"color": "#c8d3f5", "size": 11},
+        "margin": {"l": 40, "r": 100, "t": 50, "b": 20},
     }
 
     # --- Plotly scatter: Sharpe vs DD ---
@@ -1096,10 +1096,10 @@ def _render_top_trials(top_trials: list[dict] | None) -> tuple[str, str]:
     scatter_layout = {
         "paper_bgcolor": "#2f334d",
         "plot_bgcolor": "#2f334d",
-        "font": {"color": "#c8d3f5", "size": 10},
-        "xaxis": {"title": "Sharpe", "gridcolor": "#3b4261", "zeroline": False},
+        "font": {"color": "#c8d3f5", "size": 11},
+        "xaxis": {"title": "Sharpe (equity)", "gridcolor": "#3b4261", "zeroline": False},
         "yaxis": {"title": "Max DD (%)", "gridcolor": "#3b4261", "zeroline": False},
-        "margin": {"l": 60, "r": 60, "t": 30, "b": 50},
+        "margin": {"l": 60, "r": 100, "t": 30, "b": 50},
     }
 
     js = (
