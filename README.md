@@ -16,7 +16,7 @@ Systematic algo trading research engine — Anchored Walk-Forward · Bayesian op
 | OOS splits profitable | 5 / 5 |
 
 > Results from 5 independent Anchored Walk-Forward splits, 2021–2025.
-> 38,000+ Optuna trials. +282% total return on $50k starting equity.
+> 38,000+ Optuna trials. +282% total return on $100k starting equity.
 
 ## Architecture
 - **3-layer signal:** MACD crossover · RSI lookback filter · Multi-TF trend guard
@@ -247,8 +247,8 @@ Klíčové konstanty v `config.py`:
 |-----------|---------|-------|
 | `SYMBOLS` | BTC/USDC, SOL/USDC | Obchodované páry |
 | `BASE_TF` | 1h | Base timeframe (+ trend filtr z 4h/8h/1d) |
-| `STARTING_EQUITY` | $50,000 | Per-pair alokace ($100k / 2) |
-| `BACKTEST_POSITION_PCT` | 0.25 | 25% kapitálu na trade |
+| `STARTING_EQUITY` | $100,000 | Celkový účet (bez per-pair dělení) |
+| `BACKTEST_POSITION_PCT` | 0.20 | 20% equity na jednu pozici |
 | `CATASTROPHIC_STOP_PCT` | BTC 0.08, SOL 0.12 | Per-symbol fixní (fallback 0.10) |
 | `LONG_ONLY` | False | Long + Short povoleno |
 | `MIN_HOLD_HOURS` | 2 | Min bary před exit signálem |

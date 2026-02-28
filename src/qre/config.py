@@ -124,11 +124,8 @@ MIN_WARMUP_BARS = 200
 # FUNDED ACCOUNT
 # =============================================================================
 
-ACCOUNT_SIZE = 100_000.0
-TOTAL_PAIRS = 2  # Allocation pairs (BNB supported but not yet in live allocation)
-PAIR_ALLOCATION = ACCOUNT_SIZE / TOTAL_PAIRS  # $50,000 per pair
-STARTING_EQUITY = PAIR_ALLOCATION
-BACKTEST_POSITION_PCT = 0.25  # Statických 25% pro všechny backtesty i EE
+STARTING_EQUITY = 100_000.0  # Celkový účet, bez per-pair dělení
+BACKTEST_POSITION_PCT = 0.20  # 20% z celkového equity na jednu pozici
 
 # =============================================================================
 # CATASTROPHIC STOP
