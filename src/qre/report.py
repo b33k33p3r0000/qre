@@ -1922,7 +1922,7 @@ def generate_report(params: dict[str, Any], trades: list[dict],
     {flow_html}
     {strategy_html}
 
-    {top_trials_html}
+    {f'{_section_divider("Top Trials")}{top_trials_html}' if top_trials_html else ''}
 
     <footer>
         QRE v0.4.0 | MACD+RSI | Anchored Walk-Forward
