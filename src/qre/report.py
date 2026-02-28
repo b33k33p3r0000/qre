@@ -979,6 +979,141 @@ def _render_strategy_params(params: dict[str, Any]) -> str:
     """
 
 
+def _render_top_trials(top_trials: list[dict] | None) -> tuple[str, str]:
+    """Render Top Trials Analysis section: table + parallel coordinates + scatter."""
+    if not top_trials:
+        return "", ""
+
+    # --- HTML table ---
+    rows_html = ""
+    for t in top_trials:
+        m = t["metrics"]
+        row_class = ' class="best-row"' if t["rank"] == 1 else ""
+        rows_html += f"""<tr{row_class}>
+            <td>{t['rank']}</td>
+            <td>#{t['number']}</td>
+            <td>{t['value']:.2f}</td>
+            <td>{m['sharpe_equity']:.2f}</td>
+            <td>{abs(m['max_drawdown']):.2f}%</td>
+            <td>{m['total_pnl_pct']:.2f}%</td>
+            <td>{m['trades_per_year']:.1f}</td>
+        </tr>"""
+
+    html = f"""
+    <h2>Top Trials Analysis</h2>
+    <table class="top-trials-table">
+        <thead><tr>
+            <th>Rank</th><th>Trial</th><th>Objective</th>
+            <th>Sharpe</th><th>DD</th><th>PnL%</th><th>Trades/yr</th>
+        </tr></thead>
+        <tbody>{rows_html}</tbody>
+    </table>
+    <div id="top-trials-parcoords" class="chart-container" style="height:400px"></div>
+    <div id="top-trials-scatter" class="chart-container" style="height:350px; margin-top:20px"></div>
+    """
+
+    # --- Plotly parallel coordinates ---
+    tf_map = {"4h": 4, "8h": 8, "1d": 24}
+
+    par_dims = []
+    param_defs = [
+        ("macd_fast", "MACD fast", 1.0, 20.0, None),
+        ("macd_slow", "MACD slow", 10, 45, None),
+        ("macd_signal", "MACD signal", 3, 15, None),
+        ("rsi_period", "RSI period", 3, 30, None),
+        ("rsi_lower", "RSI lower", 20, 40, None),
+        ("rsi_upper", "RSI upper", 60, 80, None),
+        ("rsi_lookback", "RSI lookback", 1, 4, None),
+        ("trend_tf", "Trend TF", 4, 24, {"tickvals": [4, 8, 24], "ticktext": ["4h", "8h", "1d"]}),
+        ("trend_strict", "Trend strict", 0, 1, {"tickvals": [0, 1]}),
+        ("allow_flip", "Allow flip", 0, 1, {"tickvals": [0, 1]}),
+    ]
+
+    for pkey, label, lo, hi, extra in param_defs:
+        if pkey == "trend_tf":
+            vals = [tf_map.get(t["params"].get(pkey, "8h"), 8) for t in top_trials]
+        else:
+            vals = [t["params"].get(pkey, 0) for t in top_trials]
+        dim = {"label": label, "values": vals, "range": [lo, hi]}
+        if extra:
+            dim.update(extra)
+        par_dims.append(dim)
+
+    obj_vals = [t["value"] for t in top_trials]
+    color_scale = [[0, "#3b4261"], [0.5, "#82aaff"], [1, "#c3e88d"]]
+
+    parcoords_data = [{
+        "type": "parcoords",
+        "line": {
+            "color": obj_vals,
+            "colorscale": color_scale,
+            "showscale": True,
+            "colorbar": {"title": "Objective", "thickness": 15},
+        },
+        "dimensions": par_dims,
+    }]
+
+    parcoords_layout = {
+        "paper_bgcolor": "#2f334d",
+        "plot_bgcolor": "#2f334d",
+        "font": {"color": "#c8d3f5", "size": 10},
+        "margin": {"l": 60, "r": 60, "t": 30, "b": 30},
+    }
+
+    # --- Plotly scatter: Sharpe vs DD ---
+    sharpes = [t["metrics"]["sharpe_equity"] for t in top_trials]
+    dds = [abs(t["metrics"]["max_drawdown"]) for t in top_trials]
+    tpys = [t["metrics"]["trades_per_year"] for t in top_trials]
+    hovers = [
+        f"Trial #{t['number']}<br>Obj: {t['value']:.2f}<br>"
+        f"Sharpe: {t['metrics']['sharpe_equity']:.2f}<br>"
+        f"DD: {t['metrics']['max_drawdown']:.2f}%<br>"
+        f"PnL: {t['metrics']['total_pnl_pct']:.1f}%<br>"
+        f"Trades/yr: {t['metrics']['trades_per_year']:.1f}"
+        for t in top_trials
+    ]
+    symbols = ["star" if t["rank"] == 1 else "circle" for t in top_trials]
+    sizes = [max(6, min(20, v / 5)) for v in tpys]
+
+    scatter_data = [{
+        "type": "scatter",
+        "mode": "markers",
+        "x": sharpes,
+        "y": dds,
+        "text": hovers,
+        "hoverinfo": "text",
+        "marker": {
+            "size": sizes,
+            "color": obj_vals,
+            "colorscale": color_scale,
+            "showscale": True,
+            "colorbar": {"title": "Objective", "thickness": 15},
+            "symbol": symbols,
+            "line": {"width": 1, "color": "#545c7e"},
+        },
+    }]
+
+    scatter_layout = {
+        "paper_bgcolor": "#2f334d",
+        "plot_bgcolor": "#2f334d",
+        "font": {"color": "#c8d3f5", "size": 10},
+        "xaxis": {"title": "Sharpe", "gridcolor": "#3b4261", "zeroline": False},
+        "yaxis": {"title": "Max DD (%)", "gridcolor": "#3b4261", "zeroline": False},
+        "margin": {"l": 60, "r": 60, "t": 30, "b": 50},
+    }
+
+    js = (
+        "Plotly.newPlot('top-trials-parcoords', "
+        f"{json.dumps(parcoords_data)}, {json.dumps(parcoords_layout)}, "
+        "{responsive: true});\n"
+        "        Plotly.newPlot('top-trials-scatter', "
+        f"{json.dumps(scatter_data)}, {json.dumps(scatter_layout)}, "
+        "{responsive: true});"
+    )
+
+    return html, js
+
+
 def _render_optuna_history(optuna_history: list[dict]) -> tuple[str, str]:
     """Render Optuna optimization history chart."""
     if not optuna_history:
@@ -1182,6 +1317,7 @@ def generate_report(params: dict[str, Any], trades: list[dict],
     rolling_html, rolling_js = _render_rolling_metrics(trades)
     streak_html, streak_js = _render_streak_timeline(trades)
     optuna_html, optuna_js = _render_optuna_history(optuna_history or [])
+    top_trials_html, top_trials_js = _render_top_trials(top_trials)
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -1614,6 +1750,36 @@ def generate_report(params: dict[str, Any], trades: list[dict],
             color: var(--bg-primary);
             font-weight: bold;
         }}
+        .top-trials-table {{
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85em;
+            margin-bottom: 20px;
+        }}
+        .top-trials-table th {{
+            background: var(--bg-deep);
+            color: var(--text-muted);
+            padding: 8px 12px;
+            text-align: right;
+            font-weight: 500;
+            border-bottom: 1px solid var(--border);
+        }}
+        .top-trials-table th:first-child,
+        .top-trials-table td:first-child {{ text-align: center; }}
+        .top-trials-table th:nth-child(2),
+        .top-trials-table td:nth-child(2) {{ text-align: center; }}
+        .top-trials-table td {{
+            padding: 6px 12px;
+            text-align: right;
+            border-bottom: 1px solid rgba(59,66,97,0.3);
+        }}
+        .top-trials-table .best-row {{
+            background: rgba(195, 232, 141, 0.08);
+        }}
+        .top-trials-table .best-row td {{
+            color: #c3e88d;
+            font-weight: 600;
+        }}
     </style>
 </head>
 <body>
@@ -1756,6 +1922,8 @@ def generate_report(params: dict[str, Any], trades: list[dict],
     {flow_html}
     {strategy_html}
 
+    {top_trials_html}
+
     <footer>
         QRE v0.4.0 | MACD+RSI | Anchored Walk-Forward
     </footer>
@@ -1839,6 +2007,7 @@ def generate_report(params: dict[str, Any], trades: list[dict],
         {streak_js}
         {hold_dur_js}
         {optuna_js}
+        {top_trials_js}
     </script>
 </body>
 </html>"""
