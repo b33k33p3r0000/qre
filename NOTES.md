@@ -1,5 +1,19 @@
 # Session Notes
 
+## 2026-02-28 (3) — Integration: USDT + Dataset + BNB + MQE notify
+
+### Uděláno
+- **QRE USDC→USDT**: Migrace všech symbolů (config, optimizer CLI, testy) — 7 souborů, 242 testů pass
+- **QRE dataset**: `load_from_dataset()` v fetch.py — Parquet-first, API fallback, error handling
+- **EE BNB support** (VPS): USDT migrace + BNB v SYMBOLS/MT5_SYMBOL_MAP, params-based aktivace, CATASTROPHIC_STOP_PCT per-symbol dict — 210 testů pass
+- **MQE dataset**: Stejný pattern jako QRE — `load_from_dataset()` s API fallback
+- **MQE notify**: `notify_start()` + `notify_complete()` zapojeny v optimize.py, webhook ověřen
+
+### Poznámky
+- Dataset launchd cron aktivován (07:00 daily) — ověřit log po prvním spuštění
+- EE restart nutný pro aktivaci změn na VPS (nerestartováno)
+- BNB se na EE aktivuje až po vytvoření `params/BNB/best_params.json`
+
 ## 2026-02-28 (2) — Top 20 Trials sekce v reportu
 
 ### Uděláno
