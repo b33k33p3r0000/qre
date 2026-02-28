@@ -1118,7 +1118,8 @@ def _section_divider(title: str) -> str:
 
 
 def generate_report(params: dict[str, Any], trades: list[dict],
-                    optuna_history: list[dict] | None = None) -> str:
+                    optuna_history: list[dict] | None = None,
+                    top_trials: list[dict] | None = None) -> str:
     """
     Generate self-contained HTML report.
 
@@ -1846,11 +1847,12 @@ def generate_report(params: dict[str, Any], trades: list[dict],
 
 
 def save_report(path, params: dict[str, Any], trades: list[dict],
-                optuna_history: list[dict] | None = None) -> None:
+                optuna_history: list[dict] | None = None,
+                top_trials: list[dict] | None = None) -> None:
     """Generate and save HTML report to file."""
     from pathlib import Path
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    html = generate_report(params, trades, optuna_history=optuna_history)
+    html = generate_report(params, trades, optuna_history=optuna_history, top_trials=top_trials)
     path.write_text(html, encoding="utf-8")
     logger.info(f"Generated HTML report: {path}")
