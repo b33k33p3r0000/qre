@@ -1067,7 +1067,7 @@ def _render_top_trials(top_trials: list[dict] | None) -> tuple[str, str]:
     hovers = [
         f"Trial #{t['number']}<br>Obj: {t['value']:.2f}<br>"
         f"Sharpe: {t['metrics']['sharpe_equity']:.2f}<br>"
-        f"DD: {t['metrics']['max_drawdown']:.2f}%<br>"
+        f"DD: {abs(t['metrics']['max_drawdown']):.2f}%<br>"
         f"PnL: {t['metrics']['total_pnl_pct']:.1f}%<br>"
         f"Trades/yr: {t['metrics']['trades_per_year']:.1f}"
         for t in top_trials

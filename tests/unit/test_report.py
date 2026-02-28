@@ -631,3 +631,31 @@ class TestRenderTopTrials:
     def test_no_top_trials_no_section(self):
         html = generate_report(SAMPLE_PARAMS, [_make_trade()], top_trials=None)
         assert "top-trials-parcoords" not in html
+
+    def test_trend_tf_mapped_to_numeric(self):
+        """trend_tf categorical values are converted to numeric for parcoords."""
+        trials = [
+            _make_top_trial(rank=1, trend_tf="4h"),
+            _make_top_trial(rank=2, number=2, trend_tf="1d", value=2.3),
+        ]
+        html, js = _render_top_trials(trials)
+        # Numeric values in dimensions data
+        assert "[4, 24]" in js
+        # Tick labels preserved
+        assert "4h" in js
+        assert "1d" in js
+
+    def test_section_divider_in_report_with_top_trials(self):
+        """Top Trials section has divider and appears after Strategy."""
+        params = {
+            **SAMPLE_PARAMS,
+            "macd_fast": 12, "macd_slow": 26, "macd_signal": 9,
+            "rsi_period": 14, "rsi_lower": 30, "rsi_upper": 70,
+            "rsi_lookback": 3, "trend_tf": "4h", "trend_strict": 1,
+        }
+        trials = [_make_top_trial()]
+        html = generate_report(params, [_make_trade()], top_trials=trials)
+        assert ">TOP TRIALS<" in html
+        strategy_pos = html.index(">STRATEGY<")
+        top_trials_pos = html.index(">TOP TRIALS<")
+        assert strategy_pos < top_trials_pos
