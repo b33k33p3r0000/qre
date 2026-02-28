@@ -597,7 +597,26 @@ def run_optimization(
     for trial in study.trials:
         if trial.state == optuna.trial.TrialState.COMPLETE:
             optuna_history.append({"number": trial.number, "value": trial.value})
-    save_report(outdir / f"report_{base}.html", best_params, trades_dicts, optuna_history=optuna_history)
+
+    # Top 20 trials for report
+    top_trials = []
+    completed = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE and t.value > 0]
+    completed.sort(key=lambda t: t.value, reverse=True)
+    for rank, trial in enumerate(completed[:20], 1):
+        top_trials.append({
+            "rank": rank,
+            "number": trial.number,
+            "value": round(trial.value, 4),
+            "params": dict(trial.params),
+            "metrics": {
+                "sharpe_equity": trial.user_attrs.get("sharpe_equity", 0.0),
+                "max_drawdown": trial.user_attrs.get("max_drawdown", 0.0),
+                "total_pnl_pct": trial.user_attrs.get("total_pnl_pct", 0.0),
+                "trades_per_year": trial.user_attrs.get("trades_per_year", 0.0),
+            },
+        })
+
+    save_report(outdir / f"report_{base}.html", best_params, trades_dicts, optuna_history=optuna_history, top_trials=top_trials)
 
     logger.info(
         "Done %s: Equity=$%s, Sharpe(time)=%.2f, Sharpe(equity)=%.2f, Trades=%d",
