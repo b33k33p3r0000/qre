@@ -21,20 +21,19 @@ QRE Optimizer — MACD+RSI AWF
 =============================
 
 Presets:
-  1) Test        —  5k trials, ~3yr, 3 splits, BTC+SOL
-  2) BTC Main    — 30k trials, ~3yr, 3 splits, BTC only
-  3) SOL Main    — 30k trials, ~3yr, 3 splits, SOL only
-  4) Custom      — You choose everything
+  1) Test        —  5k trials, 1yr, 3 splits, BTC only (~15 min)
+  2) Quick       — 15k trials, 2yr, 3 splits, BTC+SOL (~1-2 hr)
+  3) Main        — 40k trials, 3yr, 3 splits, BTC+SOL+BNB (~4-8 hr)
+  4) Deep        — 50k trials, 5yr, 5 splits, BTC+SOL+BNB (~12-24 hr)
+  5) Custom      — You choose everything
 
-All presets use --hours 26280 --skip-recent 0 by default
-(~3yr data). Override with --full or manual flags.
 All runs start in background by default (use --fg for foreground).
 
 Pairs:
-  --btc                BTC/USDC only
-  --sol                SOL/USDC only
-  --bnb                BNB/USDC only
-  --both               All pairs (default)
+  --btc                BTC/USDT only
+  --sol                SOL/USDT only
+  --bnb                BNB/USDT only
+  --all                All pairs (default for main/deep)
 
 Options:
   --trials N           Override trial count
@@ -42,18 +41,17 @@ Options:
   --splits N           Override number of AWF splits
   --skip-recent N      Skip most recent N hours from training data
   --tag NAME           Run tag (e.g. 'test-v1')
-  --full               Full data (--hours 26280 --skip-recent 0)
   --allow-flip N       0=selective (default), 1=always-in
   --always-in          Shortcut for --allow-flip 1
   --warm-start PATH    Path to best_params.json for warm-starting optimization
   --fg                 Run in foreground (default: background)
 
 Examples:
-  ./run.sh 1                          # Test, BTC+SOL, background
-  ./run.sh 2                          # BTC Main, background
-  ./run.sh 3                          # SOL Main, background
-  ./run.sh 2 --fg                     # BTC Main, foreground
-  ./run.sh 4 --btc --trials 8000      # Custom trials
+  ./run.sh 1                          # Test, BTC, background
+  ./run.sh 2                          # Quick, BTC+SOL, background
+  ./run.sh 3                          # Main, all pairs, background
+  ./run.sh 4 --btc --fg               # Deep, BTC only, foreground
+  ./run.sh 5 --btc --trials 8000      # Custom
 
 Process management:
   ./run.sh attach          Attach to running/latest log
@@ -64,13 +62,13 @@ EOF
 }
 
 # =============================================================================
-# DEFAULTS (~3yr window)
+# DEFAULTS
 # =============================================================================
 
 TRIALS=15000
 HOURS=26280
 SPLITS=""
-PAIRS="both"
+PAIRS=""
 TAG=""
 PRESET=""
 SKIP_RECENT=0
@@ -144,23 +142,23 @@ else:
 while [[ $# -gt 0 ]]; do
     case $1 in
         1) PRESET="test" ;;
-        2) PRESET="btc-main" ;;
-        3) PRESET="sol-main" ;;
-        4) PRESET="custom" ;;
+        2) PRESET="quick" ;;
+        3) PRESET="main" ;;
+        4) PRESET="deep" ;;
+        5) PRESET="custom" ;;
         --btc) PAIRS="btc" ;;
         --sol) PAIRS="sol" ;;
         --bnb) PAIRS="bnb" ;;
-        --both) PAIRS="both" ;;
+        --all) PAIRS="all" ;;
         --trials) TRIALS="$2"; shift ;;
         --hours) HOURS="$2"; shift ;;
         --splits) SPLITS="$2"; shift ;;
         --tag) TAG="$2"; shift ;;
         --skip-recent) SKIP_RECENT="$2"; shift ;;
-        --full) HOURS=26280; SKIP_RECENT=0 ;;
         --allow-flip) ALLOW_FLIP="$2"; shift ;;
         --always-in) ALLOW_FLIP=1 ;;
         --warm-start) WARM_START="$2"; shift ;;
-        --bg) FOREGROUND=false ;;  # already default, kept for explicitness
+        --bg) FOREGROUND=false ;;
         --fg) FOREGROUND=true ;;
         attach)
             # Find actively written logs (modified in last 5 min)
@@ -170,7 +168,6 @@ while [[ $# -gt 0 ]]; do
             done < <(find "$LOG_DIR" -name "*.log" -mmin -5 -type f 2>/dev/null | sort -r)
 
             if [ ${#ACTIVE_LOGS[@]} -eq 0 ]; then
-                # No active logs — fall back to latest
                 LATEST=$(ls -t "$LOG_DIR"/*.log 2>/dev/null | head -1)
                 if [ -z "$LATEST" ]; then
                     echo "No log files found in $LOG_DIR"
@@ -217,7 +214,6 @@ while [[ $# -gt 0 ]]; do
             exit 0
             ;;
         kill)
-            # Find QRE optimizer processes (macOS-compatible)
             PIDS=()
             CMDS=()
             while IFS= read -r pid; do
@@ -226,7 +222,6 @@ while [[ $# -gt 0 ]]; do
                 CMDS+=("$cmd")
             done < <(pgrep -f "python.*qre\.optimize" 2>/dev/null || true)
 
-            # Escalating kill: SIGTERM -> wait 3s -> SIGKILL
             _kill_pid() {
                 local pid=$1
                 kill "$pid" 2>/dev/null || true
@@ -292,20 +287,34 @@ done
 # =============================================================================
 
 case "$PRESET" in
-    test)       TRIALS=5000;  SPLITS=3 ;;
-    btc-main)   TRIALS=30000; SPLITS=3; PAIRS="btc" ;;
-    sol-main)   TRIALS=30000; SPLITS=3; PAIRS="sol" ;;
-    custom)     ;; # Use --trials, --hours, --splits from args
+    test)
+        TRIALS=5000; HOURS=8760; SPLITS=3
+        [ -z "$PAIRS" ] && PAIRS="btc"
+        ;;
+    quick)
+        TRIALS=15000; HOURS=17520; SPLITS=3
+        [ -z "$PAIRS" ] && PAIRS="btc-sol"
+        ;;
+    main)
+        TRIALS=40000; HOURS=26280; SPLITS=3
+        [ -z "$PAIRS" ] && PAIRS="all"
+        ;;
+    deep)
+        TRIALS=50000; HOURS=43800; SPLITS=5
+        [ -z "$PAIRS" ] && PAIRS="all"
+        ;;
+    custom) ;; # Use --trials, --hours, --splits from args
     "")
         # Interactive mode
         echo ""
         show_help
-        read -p "Select preset (1-4): " choice
+        read -p "Select preset (1-5): " choice
         case "$choice" in
-            1) TRIALS=5000;  SPLITS=3 ;;
-            2) TRIALS=30000; SPLITS=3; PAIRS="btc" ;;
-            3) TRIALS=30000; SPLITS=3; PAIRS="sol" ;;
-            4)
+            1) TRIALS=5000;  HOURS=8760;  SPLITS=3; [ -z "$PAIRS" ] && PAIRS="btc" ;;
+            2) TRIALS=15000; HOURS=17520; SPLITS=3; [ -z "$PAIRS" ] && PAIRS="btc-sol" ;;
+            3) TRIALS=40000; HOURS=26280; SPLITS=3; [ -z "$PAIRS" ] && PAIRS="all" ;;
+            4) TRIALS=50000; HOURS=43800; SPLITS=5; [ -z "$PAIRS" ] && PAIRS="all" ;;
+            5)
                 read -p "Trials [15000]: " TRIALS; TRIALS="${TRIALS:-15000}"
                 read -p "Hours [26280]: " HOURS; HOURS="${HOURS:-26280}"
                 read -p "Splits [3]: " SPLITS; SPLITS="${SPLITS:-3}"
@@ -316,7 +325,7 @@ case "$PRESET" in
                     1) PAIRS="btc" ;;
                     2) PAIRS="sol" ;;
                     3) PAIRS="bnb" ;;
-                    4) PAIRS="both" ;;
+                    4) PAIRS="all" ;;
                 esac
 
                 # Warm-start picker per symbol
@@ -338,37 +347,25 @@ case "$PRESET" in
                         pick_warm_start "BNB"
                         WARM_BNB="$_WARM_RESULT"
                         ;;
-                    both)
-                        echo "— BTC:"
-                        pick_warm_start "BTC"
-                        WARM_BTC="$_WARM_RESULT"
-                        echo "— SOL:"
-                        pick_warm_start "SOL"
-                        WARM_SOL="$_WARM_RESULT"
-                        echo "— BNB:"
-                        pick_warm_start "BNB"
-                        WARM_BNB="$_WARM_RESULT"
+                    all|btc-sol)
+                        for sym in BTC SOL BNB; do
+                            [[ "$PAIRS" = "btc-sol" && "$sym" = "BNB" ]] && continue
+                            echo "— $sym:"
+                            pick_warm_start "$sym"
+                            eval "WARM_$sym=\"\$_WARM_RESULT\""
+                        done
                         ;;
                 esac
                 ;;
             *) echo "Invalid choice"; exit 1 ;;
         esac
 
-        # Only ask for pairs in interactive if preset doesn't set them
-        if [ "$choice" = "1" ]; then
-            echo ""
-            read -p "Pairs — (1) BTC, (2) SOL, (3) BNB, (4) All [4]: " pair_choice
-            case "${pair_choice:-4}" in
-                1) PAIRS="btc" ;;
-                2) PAIRS="sol" ;;
-                3) PAIRS="bnb" ;;
-                4) PAIRS="both" ;;
-            esac
-        fi
-
         read -p "Run tag (optional, e.g. 'test-v1'): " TAG
         ;;
 esac
+
+# Default pairs if still empty
+[ -z "$PAIRS" ] && PAIRS="all"
 
 # =============================================================================
 # BUILD COMMAND
@@ -393,9 +390,9 @@ build_cmd() {
         warm="$WARM_START"
     else
         case "$symbol" in
-            BTC/USDC) warm="$WARM_BTC" ;;
-            SOL/USDC) warm="$WARM_SOL" ;;
-            BNB/USDC) warm="$WARM_BNB" ;;
+            BTC/USDT) warm="$WARM_BTC" ;;
+            SOL/USDT) warm="$WARM_SOL" ;;
+            BNB/USDT) warm="$WARM_BNB" ;;
         esac
     fi
     if [ -n "$warm" ]; then
@@ -411,16 +408,26 @@ build_cmd() {
 MODE_LABEL="background"
 $FOREGROUND && MODE_LABEL="foreground"
 
+# Build list of symbols to run
+SYMBOLS=()
+case "$PAIRS" in
+    btc)     SYMBOLS=("BTC/USDT") ;;
+    sol)     SYMBOLS=("SOL/USDT") ;;
+    bnb)     SYMBOLS=("BNB/USDT") ;;
+    btc-sol) SYMBOLS=("BTC/USDT" "SOL/USDT") ;;
+    all)     SYMBOLS=("BTC/USDT" "SOL/USDT" "BNB/USDT") ;;
+esac
+
 echo ""
 echo "═══════════════════════════════════════════"
 echo "  QRE Optimizer — MACD+RSI AWF"
 echo "═══════════════════════════════════════════"
 echo "  Trials:  $TRIALS"
-echo "  Hours:   $HOURS (~$((HOURS / 24)) days)"
-[ "$SKIP_RECENT" -gt 0 ] 2>/dev/null && echo "  Skip:    ${SKIP_RECENT}h (~$((SKIP_RECENT / 24)) days recent data excluded)"
+echo "  Hours:   $HOURS (~$((HOURS / 8760))yr)"
+[ "$SKIP_RECENT" -gt 0 ] 2>/dev/null && echo "  Skip:    ${SKIP_RECENT}h (~$((SKIP_RECENT / 24)) days excluded)"
 [ -n "$SPLITS" ] && echo "  Splits:  $SPLITS"
 [ -n "$TAG" ] && echo "  Tag:     $TAG"
-echo "  Pairs:   $PAIRS"
+echo "  Pairs:   ${SYMBOLS[*]}"
 echo "  Flip:    $( [ "$ALLOW_FLIP" = "1" ] && echo "always-in" || echo "selective" )"
 if [ -n "$WARM_START" ]; then
     echo "  Warm:    $WARM_START (all symbols)"
@@ -433,17 +440,7 @@ echo "  Mode:    $MODE_LABEL"
 echo "═══════════════════════════════════════════"
 echo ""
 
-# Build list of symbols to run
-SYMBOLS=()
-case "$PAIRS" in
-    btc)  SYMBOLS=("BTC/USDC") ;;
-    sol)  SYMBOLS=("SOL/USDC") ;;
-    bnb)  SYMBOLS=("BNB/USDC") ;;
-    both) SYMBOLS=("BTC/USDC" "SOL/USDC" "BNB/USDC") ;;
-esac
-
 if $FOREGROUND; then
-    # Foreground mode: run directly in terminal
     for sym in "${SYMBOLS[@]}"; do
         cmd=$(build_cmd "$sym")
         echo ">>> Running: $cmd"
@@ -457,11 +454,9 @@ if $FOREGROUND; then
     echo "  All runs complete!"
     echo "═══════════════════════════════════════════"
 else
-    # Background mode: nohup + log file
     TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
     LOG_FILE="$LOG_DIR/qre_${TIMESTAMP}.log"
 
-    # Build combined command for all symbols
     BG_CMDS=""
     for sym in "${SYMBOLS[@]}"; do
         cmd=$(build_cmd "$sym")
@@ -481,6 +476,5 @@ else
     echo "  ./run.sh attach          # Watch live output"
     echo "  ./run.sh logs            # List log files"
     echo "  tail -f $LOG_FILE        # Direct tail"
-    echo "  kill -2 $BG_PID          # Graceful stop (finishes report + notifications)"
-    echo "  kill $BG_PID             # Hard kill (no report)"
+    echo "  kill -2 $BG_PID          # Graceful stop"
 fi

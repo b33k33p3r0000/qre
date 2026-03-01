@@ -2,7 +2,7 @@
 
 Systematic algo trading research engine — Anchored Walk-Forward · Bayesian optimisation · Monte Carlo validation
 
-## Live Performance — BTC/USDC (QWS v4.2.1)
+## Live Performance — BTC/USDT (QWS v4.2.1)
 | Metric | Value |
 |--------|-------|
 | Calmar (OOS) | 8.94 |
@@ -92,7 +92,7 @@ Constraints: `macd_slow - macd_fast >= 5` (minimální MACD spread, jinak trial 
 
 ```
 run.sh (presets)
-  └→ python -m qre.optimize --symbol BTC/USDC --trials 30000 ...
+  └→ python -m qre.optimize --symbol BTC/USDT --trials 30000 ...
        ├→ data/fetch.py       — stáhne OHLCV z Binance (1H + 4H/8H/1D)
        ├→ optimize.py         — Optuna AWF studie (TPE + SHA pruner)
        │    ├→ strategy.py    — generuje buy/sell signály (10 params)
@@ -169,20 +169,20 @@ Numba `@njit` compiled trading loop:
 
 ```bash
 cd ~/projects/qre
-./run.sh 1               # Test: 5k trials, BTC+SOL, ~15 min
-./run.sh 2               # BTC Main: 30k trials, 3 splits
-./run.sh 3               # SOL Main: 30k trials, 3 splits
-./run.sh 4               # Custom: interaktivní volba
+./run.sh 1               # Test: 5k trials, 1yr, BTC (~15 min)
+./run.sh 2               # Quick: 15k trials, 2yr, BTC+SOL (~1-2 hr)
+./run.sh 3               # Main: 40k trials, 3yr, all pairs (~4-8 hr)
+./run.sh 4               # Deep: 50k trials, 5yr, all pairs (~12-24 hr)
+./run.sh 5               # Custom: interaktivní volba
 ```
 
-| Preset | Trials | Splity | Symboly |
-|--------|--------|--------|---------|
-| 1 Test | 5,000 | 3 | BTC+SOL |
-| 2 BTC Main | 30,000 | 3 | BTC |
-| 3 SOL Main | 30,000 | 3 | SOL |
-| 4 Custom | volba | volba | volba |
-
-Výchozí: `--hours 26280` (~3 roky), `--skip-recent 0`.
+| Preset | Trials | Hours | Splity | Symboly |
+|--------|--------|-------|--------|---------|
+| 1 Test | 5,000 | 8,760 (1yr) | 3 | BTC |
+| 2 Quick | 15,000 | 17,520 (2yr) | 3 | BTC+SOL |
+| 3 Main | 40,000 | 26,280 (3yr) | 3 | BTC+SOL+BNB |
+| 4 Deep | 50,000 | 43,800 (5yr) | 5 | BTC+SOL+BNB |
+| 5 Custom | volba | volba | volba | volba |
 
 **Process management:**
 ```bash
@@ -193,7 +193,7 @@ Výchozí: `--hours 26280` (~3 roky), `--skip-recent 0`.
 
 **Přímé spuštění (bez run.sh):**
 ```bash
-python -m qre.optimize --symbol BTC/USDC --trials 5000 --hours 8760 --splits 3
+python -m qre.optimize --symbol BTC/USDT --trials 5000 --hours 8760 --splits 3
 ```
 
 CLI parametry: `--symbol`, `--hours`, `--trials`, `--splits`, `--seed`, `--timeout`, `--tag`, `--skip-recent`, `--results-dir`, `--test-size`.
@@ -245,14 +245,14 @@ Klíčové konstanty v `config.py`:
 
 | Konstanta | Hodnota | Popis |
 |-----------|---------|-------|
-| `SYMBOLS` | BTC/USDC, SOL/USDC | Obchodované páry |
+| `SYMBOLS` | BTC/USDT, SOL/USDT | Obchodované páry |
 | `BASE_TF` | 1h | Base timeframe (+ trend filtr z 4h/8h/1d) |
 | `STARTING_EQUITY` | $100,000 | Celkový účet (bez per-pair dělení) |
 | `BACKTEST_POSITION_PCT` | 0.20 | 20% equity na jednu pozici |
 | `CATASTROPHIC_STOP_PCT` | BTC 0.08, SOL 0.12 | Per-symbol fixní (fallback 0.10) |
 | `LONG_ONLY` | False | Long + Short povoleno |
 | `MIN_HOLD_HOURS` | 2 | Min bary před exit signálem |
-| `FEE` | 0.075% | Trading fee |
+| `FEE` | 0.06% | Trading fee (Binance VIP0 taker 0.05% + buffer) |
 | `MIN_TRADES_YEAR_HARD` | 30 | Hard constraint |
 | `MIN_TRADES_TEST_HARD` | 5 | Hard constraint per test split |
 | `MIN_DRAWDOWN_FLOOR` | 0.05 | 5% DD floor pro Calmar (anti-gaming) |
@@ -261,7 +261,7 @@ Klíčové konstanty v `config.py`:
 | `PURGE_GAP_BARS` | 50 | Purge gap mezi train/test splity |
 | `N_SPLITS_DEFAULT` | 3 | Default (≥1.5yr dat), 2 pro krátká data |
 
-Trading costs (slippage): BTC 0.08%, SOL 0.18%.
+Trading costs (slippage): BTC 0.06%, SOL 0.12%, BNB 0.08%.
 
 ---
 

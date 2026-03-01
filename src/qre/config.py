@@ -37,12 +37,12 @@ TF_MS: dict[str, int] = {
 # TRADING COSTS
 # =============================================================================
 
-FEE = float(os.environ.get("FEE", "0.00075"))
+FEE = float(os.environ.get("FEE", "0.0006"))  # 6 bps (Binance VIP0 taker=5 bps + 1 bps buffer)
 
 SLIPPAGE_MAP: dict[str, float] = {
-    "BTC/USDT": 0.0008,
-    "SOL/USDT": 0.0018,
-    "BNB/USDT": 0.0012,
+    "BTC/USDT": 0.0006,   # 6 bps (deep book, tight spread)
+    "SOL/USDT": 0.0012,   # 12 bps (moderate liquidity)
+    "BNB/USDT": 0.0008,   # 8 bps (good liquidity)
 }
 
 DEFAULT_SLIPPAGE = float(os.environ.get("SLIPPAGE", "0.0015"))
@@ -69,6 +69,9 @@ SHARPE_SUSPECT_THRESHOLD = 3.0   # OOS Sharpe above this triggers decay penalty
 SHARPE_DECAY_RATE = 0.3          # Decay rate: penalty = 1/(1 + rate*(sharpe - threshold))
 MIN_DRAWDOWN_FLOOR = 0.05        # DD floor 5% — prevents Calmar gaming via tiny drawdowns
 TARGET_TRADES_YEAR = 100          # Trade count ramp: full score at 100+ trades/year
+
+# --- Metrics caps ---
+MAX_PROFIT_FACTOR = 999.0           # Cap for profit_factor when gross_loss == 0
 
 # --- Walk-forward purge gap ---
 PURGE_GAP_BARS = 50              # Bars skipped between train end and test start

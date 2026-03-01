@@ -28,7 +28,7 @@ warnings.filterwarnings(
     message="Converting to PeriodArray/Index representation will drop timezone information",
 )
 
-from qre.config import MIN_HOLD_HOURS, STARTING_EQUITY
+from qre.config import MAX_PROFIT_FACTOR, MIN_HOLD_HOURS, STARTING_EQUITY
 
 
 @dataclass
@@ -580,7 +580,7 @@ def calculate_metrics(
         sortino_ratio=float(sortino),
         calmar_ratio=float(calmar),
         recovery_factor=float(recovery),
-        profit_factor=float(profit_factor) if profit_factor != float("inf") else 999.0,
+        profit_factor=float(profit_factor) if profit_factor != float("inf") else MAX_PROFIT_FACTOR,
         expectancy=float(expectancy),
         avg_hold_bars=float(avg_hold_bars),
         short_hold_ratio=float(short_hold_ratio),

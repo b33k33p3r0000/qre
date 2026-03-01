@@ -1,5 +1,16 @@
 # Session Notes
 
+## 2026-03-01 — Ecosystem Audit: QRE config fixes
+
+### Uděláno
+- **USDC→USDT standardizace**: run.sh kompletně přepsán, všechny symboly USDT (slippage map fungovala špatně kvůli key mismatch)
+- **Fee update**: 0.075% → 0.06% (Binance VIP0 taker 0.05% + 1 bps buffer, starý byl outdated)
+- **Slippage snížení**: BTC 0.08%→0.06%, SOL 0.18%→0.12%, BNB 0.12%→0.08% (mírně konzervativní)
+- **run.sh rewrite**: 5 presetů (Test/Quick/Main/Deep/Custom), správné hodiny, `--all` flag
+- **MAX_PROFIT_FACTOR**: magic number 999.0 → konstanta v config.py, použita v metrics.py
+
+---
+
 ## 2026-02-28 (4) — Code Review Fixes (W1-3, I1)
 
 ### Uděláno
