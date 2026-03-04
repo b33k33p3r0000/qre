@@ -84,7 +84,7 @@ Constraints: `macd_slow - macd_fast >= 5` (minimální MACD spread, jinak trial 
 - Base TF: 1H + trend filtr z vyššího TF (4H/8H/1D)
 - Long + Short, selective mode (flat between trades)
 - Min hold: 2 bary před exit signálem
-- Position size: 25% kapitálu na trade
+- Position size: 20% kapitálu na trade
 
 ---
 
@@ -245,11 +245,11 @@ Klíčové konstanty v `config.py`:
 
 | Konstanta | Hodnota | Popis |
 |-----------|---------|-------|
-| `SYMBOLS` | BTC/USDT, SOL/USDT | Obchodované páry |
+| `SYMBOLS` | BTC/USDT, SOL/USDT, BNB/USDT | Obchodované páry |
 | `BASE_TF` | 1h | Base timeframe (+ trend filtr z 4h/8h/1d) |
 | `STARTING_EQUITY` | $100,000 | Celkový účet (bez per-pair dělení) |
 | `BACKTEST_POSITION_PCT` | 0.20 | 20% equity na jednu pozici |
-| `CATASTROPHIC_STOP_PCT` | BTC 0.08, SOL 0.12 | Per-symbol fixní (fallback 0.10) |
+| `CATASTROPHIC_STOP_PCT` | BTC 0.08, SOL 0.12, BNB 0.10 | Per-symbol fixní (fallback 0.10) |
 | `LONG_ONLY` | False | Long + Short povoleno |
 | `MIN_HOLD_HOURS` | 2 | Min bary před exit signálem |
 | `FEE` | 0.06% | Trading fee (Binance VIP0 taker 0.05% + buffer) |
@@ -261,7 +261,7 @@ Klíčové konstanty v `config.py`:
 | `PURGE_GAP_BARS` | 50 | Purge gap mezi train/test splity |
 | `N_SPLITS_DEFAULT` | 3 | Default (≥1.5yr dat), 2 pro krátká data |
 
-Trading costs (slippage): BTC 0.06%, SOL 0.12%, BNB 0.08%.
+Trading costs (slippage): BTC 0.06%, SOL 0.12%, BNB 0.08%. Fallback: 0.15%.
 
 ---
 
@@ -312,10 +312,10 @@ qre/
 │   └── data/
 │       └── fetch.py
 ├── tests/
-│   ├── unit/          # 222 testů
+│   ├── unit/          # 247 testů
 │   ├── integration/
 │   └── conftest.py
-├── scripts/           # Analytické skripty (compare_stops.py, ...)
+├── docs/plans/        # QRE-specific plány
 ├── results/           # Výstupy runů
 ├── logs/              # Log soubory (background runs)
 ├── run.sh             # Entry point s presety
@@ -335,4 +335,4 @@ qre/
 - **Plotly** — HTML reporty (equity curve, drawdown, trade distribuce)
 - **requests** — Discord webhooky
 - **Rich** — live monitor TUI
-- **pytest** — 222 unit a integračních testů
+- **pytest** — 247 unit a integračních testů
