@@ -15,7 +15,12 @@ from pathlib import Path
 from statistics import median
 from typing import Any
 
-from qre.config import DISCORD_WEBHOOK_RUNS
+from qre.config import (
+    DISCORD_WEBHOOK_RUNS,
+    HEALTH_THRESHOLDS,
+    MACD_SPREAD_THRESHOLDS,
+    RSI_ZONE_THRESHOLDS,
+)
 from qre.notify import discord_notify
 
 log = logging.getLogger(__name__)
@@ -60,66 +65,72 @@ def health_check(params: dict[str, Any]) -> dict[str, dict[str, Any]]:
     # Sharpe: green 1.0–3.5, yellow 0.5–5.0, red outside
     # Use equity-based Sharpe if available, fallback to time-based, then legacy
     sharpe = params.get("sharpe_equity", params.get("sharpe_time", params.get("sharpe", 0)))
+    s_th = HEALTH_THRESHOLDS["sharpe"]
     result["sharpe"] = {
-        "status": _classify(sharpe, (1.0, 3.5), (0.5, 5.0)),
+        "status": _classify(sharpe, s_th["green"], s_th["yellow"]),
         "value": sharpe,
     }
 
     # Max Drawdown (percentage, e.g. -1.43 = -1.43%)
-    # green: > -5%, yellow: -5% to -10%, red: < -10%
     dd = params.get("max_drawdown", 0.0)
-    if dd > -5.0:
+    dd_th = HEALTH_THRESHOLDS["max_drawdown_pct"]
+    if dd > dd_th["green"]:
         dd_status = "green"
-    elif dd >= -10.0:
+    elif dd >= dd_th["yellow"]:
         dd_status = "yellow"
     else:
         dd_status = "red"
     result["max_drawdown"] = {"status": dd_status, "value": dd}
 
-    # Trades per year: green 30–500, yellow 30–800, red outside
+    # Trades per year
     tpy = params.get("trades_per_year", 0.0)
+    tpy_th = HEALTH_THRESHOLDS["trades_per_year"]
     result["trades_per_year"] = {
-        "status": _classify(tpy, (30, 500), (30, 800)),
+        "status": _classify(tpy, tpy_th["green"], tpy_th["yellow"]),
         "value": tpy,
     }
 
-    # Win rate: green >= 0.50, yellow 0.40–0.50, red < 0.40
+    # Win rate
     wr = params.get("win_rate", 0.0)
-    if wr >= 0.50:
+    wr_th = HEALTH_THRESHOLDS["win_rate"]
+    if wr >= wr_th["green"]:
         wr_status = "green"
-    elif wr >= 0.40:
+    elif wr >= wr_th["yellow"]:
         wr_status = "yellow"
     else:
         wr_status = "red"
     result["win_rate"] = {"status": wr_status, "value": wr}
 
-    # Profit factor: green >= 1.5, yellow 1.0–1.5, red < 1.0
+    # Profit factor
     pf = params.get("profit_factor", 0.0)
-    if pf >= 1.5:
+    pf_th = HEALTH_THRESHOLDS["profit_factor"]
+    if pf >= pf_th["green"]:
         pf_status = "green"
-    elif pf >= 1.0:
+    elif pf >= pf_th["yellow"]:
         pf_status = "yellow"
     else:
         pf_status = "red"
     result["profit_factor"] = {"status": pf_status, "value": pf}
 
-    # Expectancy: green >= 100, yellow 0–100, red < 0
+    # Expectancy
     exp = params.get("expectancy", 0.0)
-    if exp >= 100.0:
+    exp_th = HEALTH_THRESHOLDS["expectancy"]
+    if exp >= exp_th["green"]:
         exp_status = "green"
-    elif exp >= 0.0:
+    elif exp >= exp_th["yellow"]:
         exp_status = "yellow"
     else:
         exp_status = "red"
     result["expectancy"] = {"status": exp_status, "value": exp}
 
-    # Train/test sharpe divergence: green diff < 1.0, yellow 1.0–2.0, red > 2.0
+    # Train/test sharpe divergence
     train_s = params.get("train_sharpe_equity", params.get("train_sharpe", 0))
     test_s = params.get("test_sharpe_equity", params.get("test_sharpe", 0))
     diff = abs(train_s - test_s)
-    if diff < 1.0:
+    tt_th = HEALTH_THRESHOLDS["train_test_diff"]
+    if diff < tt_th["green"]:
         tt_status = "green"
-    elif diff <= 2.0:
+    elif diff <= tt_th["yellow"]:
         tt_status = "yellow"
     else:
         tt_status = "red"
@@ -266,16 +277,18 @@ def analyze_thresholds(params: dict[str, Any]) -> dict[str, Any]:
     macd_signal = params.get("macd_signal", 9)
     macd_spread = macd_slow - macd_fast
 
-    # MACD spread: <8 yellow, 8-18 green, >18 yellow (never red)
-    macd_spread_status = _classify(macd_spread, (8, 18), (0, 9999))
+    macd_spread_status = _classify(
+        macd_spread, MACD_SPREAD_THRESHOLDS["green"], MACD_SPREAD_THRESHOLDS["yellow"]
+    )
 
     rsi_lower = params.get("rsi_lower", 30)
     rsi_upper = params.get("rsi_upper", 70)
     rsi_period = params.get("rsi_period", 14)
     rsi_zone_width = rsi_upper - rsi_lower
 
-    # RSI zone: <30 red, 30-40 yellow, 40-55 green, >55 yellow
-    rsi_zone_status = _classify(rsi_zone_width, (40, 55), (30, 9999))
+    rsi_zone_status = _classify(
+        rsi_zone_width, RSI_ZONE_THRESHOLDS["green"], RSI_ZONE_THRESHOLDS["yellow"]
+    )
 
     return {
         "macd_fast": macd_fast,

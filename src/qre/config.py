@@ -149,3 +149,23 @@ MIN_HOLD_HOURS = 2  # Minimum bars before exit signal can trigger
 # =============================================================================
 
 DISCORD_WEBHOOK_RUNS = os.environ.get("DISCORD_WEBHOOK_RUNS", "")
+
+# =============================================================================
+# HEALTH CHECK THRESHOLDS (used by analyze.py)
+# =============================================================================
+
+# _classify(value, green_range, yellow_range): green if in green, yellow if in yellow, else red
+HEALTH_THRESHOLDS = {
+    "sharpe": {"green": (1.0, 3.5), "yellow": (0.5, 5.0)},
+    "trades_per_year": {"green": (30, 500), "yellow": (30, 800)},
+    "max_drawdown_pct": {"green": -5.0, "yellow": -10.0},  # > green = green, > yellow = yellow, else red
+    "win_rate": {"green": 0.50, "yellow": 0.40},            # >= green = green, >= yellow = yellow, else red
+    "profit_factor": {"green": 1.5, "yellow": 1.0},         # >= green = green, >= yellow = yellow, else red
+    "expectancy": {"green": 100.0, "yellow": 0.0},          # >= green = green, >= yellow = yellow, else red
+    "train_test_diff": {"green": 1.0, "yellow": 2.0},       # < green = green, <= yellow = yellow, else red
+    "split_neg_count": {"green": 0, "yellow": 1},            # == green = green, == yellow = yellow, else red
+}
+
+# analyze_thresholds() — MACD/RSI strategy params
+MACD_SPREAD_THRESHOLDS = {"green": (8, 18), "yellow": (0, 9999)}
+RSI_ZONE_THRESHOLDS = {"green": (40, 55), "yellow": (30, 9999)}
