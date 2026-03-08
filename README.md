@@ -18,73 +18,307 @@ Systematic algo trading research engine — Anchored Walk-Forward · Bayesian op
 > Results from 5 independent Anchored Walk-Forward splits, 2021–2025.
 > 38,000+ Optuna trials. +282% total return on $100k starting equity.
 
-## Architecture
-- **3-layer signal:** MACD crossover · RSI lookback filter · Multi-TF trend guard
-- **Validation:** Anchored Walk-Forward with purge gaps · Monte Carlo 1,000 shuffles
-- **Optimisation:** Optuna TPE + SuccessiveHalving · Log Calmar objective with anti-gaming guards
-- **Execution:** MetaTrader 5 IPC bridge · Windows Server VPS · Discord bot monitoring
+---
+
+## Pipeline Overview
+
+```
+Data (Local Parquet / Binance OHLCV)
+  │
+  ├── 1H bary (primary)
+  ├── 4H / 8H / 1D bary (trend filter)
+  │
+  ▼
+Signály (strategy.py)
+  │  Layer 1: MACD crossover
+  │  Layer 2: RSI lookback window
+  │  Layer 3: Multi-TF trend filter
+  │  → buy_signal[], sell_signal[]
+  │
+  ▼
+Backtest (backtest.py, Numba JIT)
+  │  Simulace obchodů na 1H barech
+  │  Position sizing 20%, fees, slippage, catastrophic stop
+  │  → trades[], equity_curve[]
+  │
+  ▼
+AWF Splity (optimize.py)
+  │  3 splity s rostoucím train window
+  │  Purge gap 50 barů mezi train/test
+  │  Hard constraints (30 trades/yr train, 5 trades test)
+  │
+  ▼
+Objective (optimize.py)
+  │  Per-split: log(1 + Calmar) × trade_ramp × sharpe_decay
+  │  Final score = průměr přes splity
+  │
+  ▼
+Optuna (optimize.py)
+  │  TPE sampler, 10 params, N trials
+  │  → best_params (highest avg score)
+  │
+  ▼
+Výsledky
+  │  Full backtest s best params
+  │  Per-split OOS Monte Carlo (1000 shuffles)
+  │  → best_params.json, trades CSV, HTML report
+```
 
 ---
 
-## Performance Summary (BTC, 5-year backtest)
+## Entry Logic (3-Layer Confirmation)
 
-> Run `2026-02-27_06-23-48_5years-test-btc` — 40k trials, 5 AWF splits, Quant Whale v4.2.1
+Vstup vyžaduje **simultánní potvrzení všech 3 vrstev** na stejném 1H baru:
 
-| Metrika | Hodnota |
+```
+LONG  = MACD bullish cross AND RSI oversold (s lookback) AND HTF bullish
+SHORT = MACD bearish cross AND RSI overbought (s lookback) AND HTF bearish
+```
+
+### Layer 1: MACD Crossover (Trigger)
+
+```
+ema_fast    = EMA(close, span=macd_fast)       # macd_fast: float 1.0-20.0
+ema_slow    = EMA(close, span=macd_slow)       # macd_slow: int 10-45
+macd_line   = ema_fast - ema_slow
+signal_line = EMA(macd_line, span=macd_signal) # macd_signal: int 3-15
+
+bullish_cross = (macd_prev <= signal_prev) AND (macd_curr > signal_curr)
+bearish_cross = (macd_prev >= signal_prev) AND (macd_curr < signal_curr)
+```
+
+Hard constraint: `macd_slow - macd_fast >= 5` (porušení → TrialPruned).
+
+### Layer 2: RSI Lookback Window (Filter)
+
+RSI je SMA-based (ne Wilder's EMA).
+
+```
+delta    = close.diff()
+avg_gain = SMA(max(delta, 0), rsi_period)      # rsi_period: int 3-30
+avg_loss = SMA(abs(min(delta, 0)), rsi_period)
+RSI      = 100 - (100 / (1 + avg_gain / avg_loss))
+
+rsi_oversold   = rolling_max(RSI < rsi_lower, window=rsi_lookback + 1)
+rsi_overbought = rolling_max(RSI > rsi_upper, window=rsi_lookback + 1)
+```
+
+`rsi_lookback` (int 1-4) = "paměť" — `lookback=1` vyžaduje RSI v zóně nyní/předchozí bar, `lookback=4` stačí v posledních 4h.
+
+### Layer 3: Multi-TF Trend Filter (Guard)
+
+Filtruje vstupy proti dominantnímu trendu. Používá **stejné MACD params** jako Layer 1.
+
+```
+# Výpočet na vyšším timeframe (trend_tf ∈ {4h, 8h, 1d})
+htf_macd, htf_signal = MACD(htf_close, macd_fast, macd_slow, macd_signal)
+htf_bullish = (htf_macd > htf_signal)
+```
+
+HTF signál se alignuje na 1H bary přes timestamp binary search. `trend_strict=1` (vždy zapnuto):
+- LONG: vyžaduje `htf_bullish`
+- SHORT: vyžaduje `htf_bearish`
+
+---
+
+## Exit Logic & Position Management
+
+### Priorita exitů (per bar)
+
+```
+1. Catastrophic Stop    (check PRVNÍ, před signálem)
+2. Signal Exit          (pokud bars_held >= 2)
+3. Force Close          (konec dat)
+```
+
+### Catastrophic Stop (emergency)
+
+Per-symbol fixní limity:
+
+```
+LONG:  if (low / entry_price - 1.0) <= -catastrophic_stop_pct
+       → exit_price = entry_price × (1 - stop_pct) × (1 - slippage)
+
+SHORT: if (high / entry_price - 1.0) >= catastrophic_stop_pct
+       → exit_price = entry_price × (1 + stop_pct) × (1 + slippage)
+```
+
+| Symbol | Stop | ~Equity loss per trade |
+|--------|------|----------------------|
+| BTC | 8% | ~1.6% |
+| SOL | 12% | ~2.4% |
+| BNB | 10% | ~2.0% |
+
+### Signal Exit (primární)
+
+Vyžaduje **stejné 3 vrstvy jako entry, ale v opačném směru.** Min hold: 2 bary.
+
+### Position Management: allow_flip
+
+```
+allow_flip=0 (Selective, default): close → FLAT → čekat na nový entry
+allow_flip=1 (Always-In):         close → okamžitě otevřít opačný směr
+```
+
+---
+
+## Backtest Engine
+
+### Position Sizing
+
+```
+capital_at_entry = equity × 0.20     # 20% equity per trade
+position_size    = capital_at_entry / (entry_price × (1 + fee))
+```
+
+Start equity: $100,000 (celkový účet, bez per-pair dělení).
+
+### Trading Costs
+
+Fee: 6 bps per side. Slippage (asymetrický):
+
+| Symbol | Slippage |
+|--------|----------|
+| BTC/USDT | 6 bps |
+| SOL/USDT | 12 bps |
+| BNB/USDT | 8 bps |
+| Default fallback | 15 bps |
+
+### Per-Bar Flow (Numba JIT)
+
+```
+Bar N:
+  1. MÁ POZICI?
+     a. Check catastrophic stop (high/low vs entry_price)
+        → if triggered: EXIT, reason="catastrophic_stop"
+     b. Check signal exit (if bars_held >= 2):
+        → if opačný 3-layer signál fires:
+           - EXIT, reason="signal"
+           - if allow_flip=1: OKAMŽITĚ otevři opačný směr
+
+  2. NEMÁ POZICI (flat)?
+     a. if buy_signal: OPEN LONG
+     b. elif sell_signal: OPEN SHORT
+
+Konec dat:
+  → CLOSE jakákoli otevřená pozice, reason="force_close"
+```
+
+---
+
+## AWF (Anchored Walk-Forward)
+
+Anchored = train window ROSTE (kotvený ke startu). Test windows se nepřekrývají.
+
+```
+Split 1: Train [0% ──── 60%] ··purge·· Test [60.x% ── 70%]
+Split 2: Train [0% ──────── 70%] ··purge·· Test [70.x% ── 80%]
+Split 3: Train [0% ──────────── 80%] ··purge·· Test [80.x% ── 90%]
+```
+
+| Data délka | Splity | Train/Test |
+|------------|--------|------------|
+| >= 1.5yr (>= 13,140h) | 3 | 60/70/80% train, ~10% test each |
+| < 1.5yr (>= 4,000h) | 2 | 70/85% train, 15% test |
+| < 4,000h | Error | — |
+
+**Hard Constraints** (trial = 0.0 pokud porušeno):
+
+| Constraint | Hodnota |
+|------------|---------|
+| `MIN_TRADES_YEAR_HARD` | 30 trades/rok (train set) |
+| `MIN_TRADES_TEST_HARD` | 5 trades (každý test split) |
+
+---
+
+## Log Calmar Objective
+
+```
+score = log(1 + raw_calmar) × trade_ramp × sharpe_decay
+
+kde:
+  raw_calmar     = max(0, annual_return / max(max_dd, 0.05))
+  trade_ramp     = min(1.0, trades_per_year / 100)
+  sharpe_decay   = 1 / (1 + 0.3 × (sharpe - 3.0))   # only if sharpe > 3.0
+```
+
+Anti-gaming mechanismy:
+
+| Mechanismus | Co brání |
+|-------------|----------|
+| DD floor 5% | Minimalizace DD na ~0% |
+| Log komprese | Extrémní Calmar hodnoty |
+| Trade ramp | Cherry-picking pár obchodů (penalty pod 100/rok) |
+| Sharpe decay | Přeoptimalizované params (nad Sharpe 3.0) |
+| AWF průměr | Overfitting na jedno období |
+| Hard constraints | Příliš málo obchodů (30/yr train, 5/split test) |
+
+---
+
+## Monte Carlo Validace
+
+Testuje robustnost: "Jsou výsledky závislé na konkrétním pořadí obchodů?"
+
+```
+Pro každou z 1000 simulací:
+  1. Zamíchej pořadí obchodů
+  2. Sestav novou equity curve
+  3. Spočítej Sharpe a Max DD
+
+Výsledek:
+  - 95% CI pro Sharpe a Max DD
+  - Robustness score: 0.0 - 1.0
+  - Confidence level: HIGH / MEDIUM / LOW
+```
+
+**Robustness Score** (průměr 4 faktorů): Sharpe CI width, Sharpe CI low, DD CI width, trade count.
+
+**Agregace přes splity** — konzervativní (worst-case):
+```
+sharpe_ci_low = min(across splits)
+robustness    = min(across splits)
+confidence    = weakest(across splits)
+```
+
+---
+
+## Metrics
+
+### Primary
+
+| Metrika | Výpočet | Annualizace |
+|---------|---------|-------------|
+| **sharpe_equity** | Daily equity returns | sqrt(365) — **PRIMARY** |
+| **calmar** | Annual return / \|max_dd\| | Annualizovaný return |
+| **max_drawdown** | Peak-to-trough na equity curve | — |
+
+### Secondary
+
+| Metrika | Výpočet |
 |---------|---------|
-| **Calmar** | 8.94 |
-| **Sharpe (OOS equity)** | 2.15 |
-| **Max Drawdown** | -6.35% |
-| **Total PnL** | +282.55% |
-| **Trades** | 604 (121/yr) |
-| **Win Rate** | 44.0% |
-| **Profit Factor** | 1.99 |
-| **AWF Splits** | **5/5 profitable**, all HIGH MC confidence |
-| **MC Sharpe CI** | 2.45 – 3.31 |
+| **sharpe_time** | Hourly price returns, sqrt(8760) — fees/slippage chybí → nadhodnocuje |
+| **sortino** | Daily equity returns, downside vol only, sqrt(365) |
+| **win_rate** | count(pnl > 0) / total_trades × 100 |
+| **profit_factor** | gross_profit / gross_loss |
+| **trades_per_year** | total_trades / (days / 365.25) |
+| **expectancy** | (WR × avg_win) - ((1-WR) × avg_loss) |
 
 ---
 
-## Strategie — Quant Whale Strategy v4.2.1
+## 10 Optuna Parameters
 
-> Quant Whale is a systematic long/short crypto strategy trading BTC and SOL on 1-hour bars. Entries require three-layer confirmation: a MACD crossover as the trigger, RSI within a lookback window confirming momentum exhaustion, and a higher-timeframe trend filter for directional alignment. The system operates in selective mode — signal exit closes to flat, then waits for a fresh 3-layer entry — with a per-symbol fixed catastrophic stop as an emergency circuit breaker. All 10 strategy parameters are optimized per-symbol using Optuna with a Log Calmar objective designed to resist overfitting.
-
-Založena na studii Chio (2022) — MACD+RSI dosáhlo 78–86% win rate na US equities.
-
-**Entry logika (3 vrstvy):**
-- **Layer 1 — MACD crossover (trigger):** MACD protne signal line na 1H baru
-- **Layer 2 — RSI lookback:** RSI bylo v extrémní zóně během posledních `rsi_lookback` barů (1–4h)
-- **Layer 3 — Trend filtr:** MACD trend na vyšším TF (4h/8h/1d) souhlasí se směrem
-- **LONG:** MACD bull cross AND RSI oversold (lookback) AND higher-TF bullish
-- **SHORT:** MACD bear cross AND RSI overbought (lookback) AND higher-TF bearish
-
-**Exit logika:**
-- Opačný signál → close to flat → čeká na nový entry (selective mode, `allow_flip=0`)
-- Catastrophic stop: fixní per-symbol (BTC 8%, SOL 12%, BNB 10%)
-
-**10 Optuna parametrů:**
-
-| Parametr | Rozsah | Popis |
-|----------|--------|-------|
-| `macd_fast` | 1.0–20.0 (float) | Rychlá EMA perioda |
-| `macd_slow` | 10–45 | Pomalá EMA perioda |
-| `macd_signal` | 3–15 | Signal line perioda |
-| `rsi_period` | 3–30 | RSI výpočetní perioda |
-| `rsi_lower` | 20–40 | Práh pro oversold zónu |
-| `rsi_upper` | 60–80 | Práh pro overbought zónu |
-| `rsi_lookback` | 1–4 | RSI lookback window (bary) |
-| `trend_tf` | 4h/8h/1d | Vyšší TF pro trend filtr |
-| `trend_strict` | 1 (fixní) | Trend filtr vždy zapnutý |
-| `allow_flip` | 0 (fixní) | 0=selective (default), 1=always-in |
-
-Constraints: `macd_slow - macd_fast >= 5` (minimální MACD spread, jinak trial pruned).
-
-**Catastrophic stop (fixní v config.py):** BTC 8%, SOL 12% — per-symbol emergency exit, není Optuna param.
-
-**Vlastnosti:**
-- Base TF: 1H + trend filtr z vyššího TF (4H/8H/1D)
-- Long + Short, selective mode (flat between trades)
-- Min hold: 2 bary před exit signálem
-- Position size: 20% kapitálu na trade
+| Param | Typ | Range | Poznámka |
+|-------|-----|-------|----------|
+| `macd_fast` | float | 1.0 - 20.0 | Must be < macd_slow by >= 5 |
+| `macd_slow` | int | 10 - 45 | Must be > macd_fast by >= 5 |
+| `macd_signal` | int | 3 - 15 | Min=3 intentional floor |
+| `rsi_period` | int | 3 - 30 | Min=3 intentional floor |
+| `rsi_lower` | int | 20 - 40 | Oversold threshold |
+| `rsi_upper` | int | 60 - 80 | Overbought threshold |
+| `rsi_lookback` | int | 1 - 4 | RSI memory window |
+| `trend_tf` | cat | 4h, 8h, 1d | HTF trend filter TF |
+| `trend_strict` | int | 1 (fixed) | Vždy zapnuto |
+| `allow_flip` | int | 0 (fixed) | 0=selective, 1=always-in |
 
 ---
 
@@ -93,7 +327,7 @@ Constraints: `macd_slow - macd_fast >= 5` (minimální MACD spread, jinak trial 
 ```
 run.sh (presets)
   └→ python -m qre.optimize --symbol BTC/USDT --trials 30000 ...
-       ├→ data/fetch.py       — stáhne OHLCV z Binance (1H + 4H/8H/1D)
+       ├→ data/fetch.py       — stáhne OHLCV (lokální Parquet / Binance)
        ├→ optimize.py         — Optuna AWF studie (TPE + SHA pruner)
        │    ├→ strategy.py    — generuje buy/sell signály (10 params)
        │    ├→ backtest.py    — Numba trading loop
@@ -102,66 +336,6 @@ run.sh (presets)
        ├→ notify.py           — Discord notifikace (start/complete)
        └→ analyze.py          — post-run health check + suggestions + Discord embed
 ```
-
----
-
-## Moduly
-
-| Modul | Popis |
-|-------|-------|
-| `optimize.py` | AWF orchestrátor — Optuna TPE + SHA pruner, RSI cache, hard constraints inline |
-| `core/strategy.py` | Quant Whale Strategy v4.2.1 — MACD crossover + RSI lookback + trend filter |
-| `core/backtest.py` | Numba JIT trading loop — Long+Short, position flipping, per-trial catastrophic stop |
-| `core/indicators.py` | RSI (SMA-based) a MACD výpočty |
-| `core/metrics.py` | Sharpe, Sortino, Calmar, drawdown, win rate, Monte Carlo |
-| `monitor.py` | Live TUI dashboard — sledování běžících optimalizací v reálném čase (Rich) |
-| `analyze.py` | Post-run diagnostika — health check, suggestions, Discord embed |
-| `data/fetch.py` | Binance OHLCV fetch (1H + 4H/8H/1D, fresh data bez cache) |
-| `report.py` | Self-contained HTML report s Plotly grafy |
-| `notify.py` | Discord webhooky — start/complete notifikace |
-| `io.py` | JSON/CSV zápis výsledků |
-| `config.py` | Centrální konfigurace |
-
----
-
-## Optimalizace (AWF)
-
-Anchored Walk-Forward = trénink na rostoucím okně, test na dalším bloku.
-
-```
-Split 1:  [====== train 60% ======][= test =]
-Split 2:  [========= train 70% =========][= test =]
-Split 3:  [============ train 80% ============][= test =]
-```
-
-- Default: 3 splity (≥1.5 roku dat)
-- Krátká data (<1.5 roku): 2 splity (70%/85% train)
-- Optuna TPE sampler s SuccessiveHalving prunerem
-- RSI pre-computed cache: 28 period (3–30) místo počítání per-trial
-- **Purge gap:** 50 barů mezi train/test splity (eliminace indicator leakage)
-- Monte Carlo validace (1000 simulací) na OOS splitech
-
-**Objective — Log Calmar + anti-gaming guards:**
-```
-score = log(1 + calmar) × trade_ramp × sharpe_penalty
-```
-- **Log Calmar:** `log(1 + annual_return / max(DD, 5%))` — komprese extrémních hodnot
-- **Trade ramp:** `min(1.0, trades_per_year / 100)` — penalizuje <100 trades/rok
-- **Sharpe decay:** `1/(1 + 0.3*(sharpe - 3.0))` když Sharpe > 3.0
-- **Hard constraints (inline v optimize.py):** < 30 trades/rok NEBO < 5 test trades → score = 0
-
----
-
-## Backtest Engine
-
-Numba `@njit` compiled trading loop:
-
-- **Pozice:** flat → long/short → flat (selective mode, default)
-- **Priority:** catastrophic stop > signal exit > new position
-- **Catastrophic stop:** per-symbol fixní (BTC 8%, SOL 12%) → emergency exit
-- **Force close:** otevřená pozice na konci dat se zavře
-- **Směry:** Long (+1) a Short (-1) s korektním PnL modelem
-- **Short PnL:** `pnl = size * entry * (1-fee) - size * exit * (1+fee)`
 
 ---
 
@@ -184,14 +358,16 @@ cd ~/projects/qre
 | 4 Deep | 50,000 | 43,800 (5yr) | 5 | BTC+SOL+BNB |
 | 5 Custom | volba | volba | volba | volba |
 
-**Process management:**
+### Process Management
+
 ```bash
 ./run.sh attach      # Připojit se k běžícímu runu
 ./run.sh logs        # Výpis log souborů
 ./run.sh kill        # Zastavit optimalizaci
 ```
 
-**Přímé spuštění (bez run.sh):**
+### Přímé spuštění
+
 ```bash
 python -m qre.optimize --symbol BTC/USDT --trials 5000 --hours 8760 --splits 3
 ```
@@ -202,40 +378,13 @@ CLI parametry: `--symbol`, `--hours`, `--trials`, `--splits`, `--seed`, `--timeo
 
 ## Live Monitor
 
-Sledování běžících optimalizací v reálném čase. Čte Optuna SQLite checkpoint DB v read-only modu.
-
 ```bash
 python -m qre.monitor                           # auto-detect aktivní runy
 python -m qre.monitor calmar-btc                # filtr na konkrétní run
 python -m qre.monitor --interval 5              # refresh každých 5s
 ```
 
-**Zobrazuje per symbol:**
-- Progress (completed / requested trials, trials/min, ETA)
-- Best trial (Log Calmar value, trial číslo)
-- Rozšířené metriky (Sharpe equity, max DD, P&L%, trades, trades/yr)
-- Optimální parametry (MACD/RSI/trend v kompaktním formátu)
-
-**Vlastnosti:**
-- Auto-detect aktivních runů (DB modified < 5 minut)
-- Multi-run podpora (BTC + SOL současně v separátních panelech)
-- Detekce nového best trialu (`NEW` marker)
-- Graceful degradation pro starší runy bez rozšířených metrik
-
----
-
-## Výstupy
-
-Každý run vytvoří složku `results/<timestamp>_<tag>/<SYMBOL>/`:
-
-```
-results/2026-02-22_08-30-00_btc-main/
-  └── BTC/
-      ├── best_params.json     # Optimální parametry + metriky
-      ├── trades_BTC_USDT_1h_FULL.csv   # Všechny obchody
-      ├── report_BTC.html      # Interaktivní HTML report
-      └── analysis.json        # Post-run diagnostika
-```
+Zobrazuje: progress, best trial, metriky (Sharpe, DD, PnL%, trades), optimální params.
 
 ---
 
@@ -246,49 +395,50 @@ Klíčové konstanty v `config.py`:
 | Konstanta | Hodnota | Popis |
 |-----------|---------|-------|
 | `SYMBOLS` | BTC/USDT, SOL/USDT, BNB/USDT | Obchodované páry |
-| `BASE_TF` | 1h | Base timeframe (+ trend filtr z 4h/8h/1d) |
 | `STARTING_EQUITY` | $100,000 | Celkový účet (bez per-pair dělení) |
 | `BACKTEST_POSITION_PCT` | 0.20 | 20% equity na jednu pozici |
-| `CATASTROPHIC_STOP_PCT` | BTC 0.08, SOL 0.12, BNB 0.10 | Per-symbol fixní (fallback 0.10) |
+| `FEE` | 6 bps | Trading fee per side |
+| `CATASTROPHIC_STOP_PCT` | BTC 8%, SOL 12%, BNB 10% | Per-symbol fixní |
 | `LONG_ONLY` | False | Long + Short povoleno |
 | `MIN_HOLD_HOURS` | 2 | Min bary před exit signálem |
-| `FEE` | 0.06% | Trading fee (Binance VIP0 taker 0.05% + buffer) |
-| `MIN_TRADES_YEAR_HARD` | 30 | Hard constraint |
-| `MIN_TRADES_TEST_HARD` | 5 | Hard constraint per test split |
-| `MIN_DRAWDOWN_FLOOR` | 0.05 | 5% DD floor pro Calmar (anti-gaming) |
-| `TARGET_TRADES_YEAR` | 100 | Trade ramp target (plný score od 100/rok) |
-| `SHARPE_SUSPECT_THRESHOLD` | 3.0 | Sharpe decay práh |
-| `PURGE_GAP_BARS` | 50 | Purge gap mezi train/test splity |
-| `ANCHORED_WF_SPLITS` | 3 splity | Default (≥1.5yr dat), 2 pro krátká data |
+| `MIN_TRADES_YEAR_HARD` | 30 | Hard constraint (train) |
+| `MIN_TRADES_TEST_HARD` | 5 | Hard constraint (test split) |
+| `MIN_DRAWDOWN_FLOOR` | 5% | DD floor pro anti-gaming |
+| `TARGET_TRADES_YEAR` | 100 | Trade ramp target |
+| `SHARPE_SUSPECT_THRESHOLD` | 3.0 | Sharpe decay trigger |
+| `PURGE_GAP_BARS` | 50 | Purge gap train/test |
+| `MONTE_CARLO_SIMULATIONS` | 1,000 | MC shuffles per split |
+| `MIN_WARMUP_BARS` | 200 | Bars skipped at start |
 
-Trading costs (slippage): BTC 0.06%, SOL 0.12%, BNB 0.08%. Fallback: 0.15%.
+### Optuna
+
+| Konstanta | Hodnota |
+|-----------|---------|
+| Sampler | TPE |
+| Startup ratio | 20% random |
+| EI candidates | 24 |
+| Pruner | SuccessiveHalving |
+| Consider endpoints | True |
 
 ---
 
-## Discord Notifikace
+## Výstupy
 
-Kanál `#qre-runs` dostává:
-1. **Start** — symbol, trials, history, splity
-2. **Complete** — equity, PnL%, trades, win rate, Sharpe, MC confidence
-3. **Run Analysis** — health check, verdict (PASS/REVIEW/FAIL), suggestions
-
-Webhook URL v `.env` jako `DISCORD_WEBHOOK_RUNS`.
+```
+results/<timestamp>_<tag>/<SYMBOL>/
+  ├── best_params.json     # Optimální parametry + metriky
+  ├── trades_*.csv         # Všechny obchody
+  ├── report_*.html        # Interaktivní HTML report (Plotly)
+  └── analysis.json        # Post-run diagnostika
+```
 
 ---
 
 ## Post-Run Analýza
 
-Auto-diagnose po každém runu spustí `analyze_run()`:
+Auto-diagnose po každém runu — health check (8 metrik), verdikt (PASS/REVIEW/FAIL), suggestions.
 
-**Health Check** (8 metrik):
-- Sharpe, Max Drawdown, Trades/Year, Win Rate, Profit Factor, Expectancy
-- Train/Test Sharpe divergence, Split consistency
-
-**Verdikt:** PASS (vše zelené) / REVIEW (1 red nebo 3+ yellow) / FAIL (2+ red)
-
-**Threshold Analysis:** MACD spread health, RSI zone width health
-
-**Suggestions:** Konkrétní doporučení (widen RSI zones, tighten stops, broaden ranges, ...)
+Discord kanál `#qre-runs`: start, complete, run analysis notifikace.
 
 ---
 
@@ -315,11 +465,10 @@ qre/
 │   ├── unit/          # 289 testů
 │   ├── integration/
 │   └── conftest.py
-├── docs/plans/        # QRE-specific plány
 ├── results/           # Výstupy runů
 ├── logs/              # Log soubory (background runs)
 ├── run.sh             # Entry point s presety
-├── NOTES.md           # Session notes (celá historie)
+├── NOTES.md           # Session notes
 └── pyproject.toml
 ```
 
@@ -333,6 +482,5 @@ qre/
 - **NumPy, pandas** — data manipulace
 - **ccxt** — Binance API
 - **Plotly** — HTML reporty (equity curve, drawdown, trade distribuce)
-- **requests** — Discord webhooky
 - **Rich** — live monitor TUI
 - **pytest** — 289 unit a integračních testů
