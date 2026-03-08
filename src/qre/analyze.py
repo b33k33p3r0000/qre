@@ -138,7 +138,7 @@ def health_check(params: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
     # Split consistency: count splits with negative test_sharpe
     splits = params.get("split_results", [])
-    neg_count = sum(1 for s in splits if s.get("test_sharpe", 0) < 0)
+    neg_count = sum(1 for s in splits if s.get("test_sharpe_equity", s.get("test_sharpe", 0)) < 0)
     if neg_count == 0:
         sc_status = "green"
     elif neg_count == 1:
@@ -325,7 +325,7 @@ def check_robustness(params: dict[str, Any]) -> dict[str, Any]:
     overfit_risk = "high" if overfit_score > 0.5 else ("medium" if overfit_score > 0.3 else "low")
 
     splits = params.get("split_results", [])
-    pos = sum(1 for s in splits if s.get("test_sharpe", 0) > 0)
+    pos = sum(1 for s in splits if s.get("test_sharpe_equity", s.get("test_sharpe", 0)) > 0)
 
     return {
         "train_sharpe": train_s,

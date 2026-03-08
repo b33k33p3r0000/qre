@@ -59,7 +59,7 @@ Založena na studii Chio (2022) — MACD+RSI dosáhlo 78–86% win rate na US eq
 
 **Exit logika:**
 - Opačný signál → close to flat → čeká na nový entry (selective mode, `allow_flip=0`)
-- Catastrophic stop: fixní per-symbol (BTC 8%, SOL 12%)
+- Catastrophic stop: fixní per-symbol (BTC 8%, SOL 12%, BNB 10%)
 
 **10 Optuna parametrů:**
 
@@ -232,7 +232,7 @@ Každý run vytvoří složku `results/<timestamp>_<tag>/<SYMBOL>/`:
 results/2026-02-22_08-30-00_btc-main/
   └── BTC/
       ├── best_params.json     # Optimální parametry + metriky
-      ├── trades_BTC_USDC_1h_FULL.csv   # Všechny obchody
+      ├── trades_BTC_USDT_1h_FULL.csv   # Všechny obchody
       ├── report_BTC.html      # Interaktivní HTML report
       └── analysis.json        # Post-run diagnostika
 ```
@@ -259,7 +259,7 @@ Klíčové konstanty v `config.py`:
 | `TARGET_TRADES_YEAR` | 100 | Trade ramp target (plný score od 100/rok) |
 | `SHARPE_SUSPECT_THRESHOLD` | 3.0 | Sharpe decay práh |
 | `PURGE_GAP_BARS` | 50 | Purge gap mezi train/test splity |
-| `N_SPLITS_DEFAULT` | 3 | Default (≥1.5yr dat), 2 pro krátká data |
+| `ANCHORED_WF_SPLITS` | 3 splity | Default (≥1.5yr dat), 2 pro krátká data |
 
 Trading costs (slippage): BTC 0.06%, SOL 0.12%, BNB 0.08%. Fallback: 0.15%.
 
@@ -312,7 +312,7 @@ qre/
 │   └── data/
 │       └── fetch.py
 ├── tests/
-│   ├── unit/          # 247 testů
+│   ├── unit/          # 289 testů
 │   ├── integration/
 │   └── conftest.py
 ├── docs/plans/        # QRE-specific plány
@@ -335,4 +335,4 @@ qre/
 - **Plotly** — HTML reporty (equity curve, drawdown, trade distribuce)
 - **requests** — Discord webhooky
 - **Rich** — live monitor TUI
-- **pytest** — 247 unit a integračních testů
+- **pytest** — 289 unit a integračních testů

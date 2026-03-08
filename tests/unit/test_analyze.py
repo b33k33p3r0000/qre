@@ -42,9 +42,9 @@ def _good_params() -> Dict[str, Any]:
         "train_sharpe_equity": 2.0,
         "test_sharpe_equity": 1.8,
         "split_results": [
-            {"test_sharpe": 1.5},
-            {"test_sharpe": 2.0},
-            {"test_sharpe": 1.0},
+            {"test_sharpe_equity": 1.5},
+            {"test_sharpe_equity": 2.0},
+            {"test_sharpe_equity": 1.0},
         ],
     }
 
@@ -61,9 +61,9 @@ def _bad_params() -> Dict[str, Any]:
         "train_sharpe_equity": 4.0,
         "test_sharpe_equity": 1.0,
         "split_results": [
-            {"test_sharpe": -0.5},
-            {"test_sharpe": -1.0},
-            {"test_sharpe": 0.5},
+            {"test_sharpe_equity": -0.5},
+            {"test_sharpe_equity": -1.0},
+            {"test_sharpe_equity": 0.5},
         ],
     }
 
@@ -206,8 +206,8 @@ class TestHealthCheck:
     def test_split_consistency_negative_splits(self):
         params = _good_params()
         params["split_results"] = [
-            {"test_sharpe": -0.5},
-            {"test_sharpe": -1.0},
+            {"test_sharpe_equity": -0.5},
+            {"test_sharpe_equity": -1.0},
         ]
         health = health_check(params)
         assert health["split_consistency"]["status"] == "red"

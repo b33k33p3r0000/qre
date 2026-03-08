@@ -4,8 +4,8 @@ QRE HTML Report Generator
 ==========================
 Self-contained HTML report with Plotly charts.
 
-IMPORTANT: Uses start_equity from params (account level $50k),
-NOT hardcoded $10k. This fixes the known drawdown bug.
+IMPORTANT: Uses start_equity from params (currently $100k),
+NOT hardcoded values. This fixes the known drawdown bug.
 """
 
 from __future__ import annotations

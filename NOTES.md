@@ -1,5 +1,14 @@
 # Session Notes
 
+## 2026-03-08 — /review QRE: split key fix + docs update
+
+- **Fix analyze.py**: `health_check()` a `check_robustness()` četly `test_sharpe` klíč, ale optimize.py ukládá `test_sharpe_equity` → split consistency check byl vždy "green", robustness vždy 0 positive splits. Opraveno s fallbackem.
+- **Fix report.py**: Docstring referencoval $50k místo $100k
+- **README.md**: Test count 247→289, BNB 10% v catastrophic stop, USDC→USDT typo, N_SPLITS_DEFAULT→ANCHORED_WF_SPLITS
+- **Testy**: Aktualizovány fixtures v test_analyze.py na `test_sharpe_equity` klíč (284 passed)
+
+---
+
 ## 2026-03-01 — Ecosystem Audit: QRE config fixes
 
 ### Uděláno
