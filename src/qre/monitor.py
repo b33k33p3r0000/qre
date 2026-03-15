@@ -346,11 +346,17 @@ def main():
     default_results = Path(__file__).resolve().parent.parent.parent / "results"
     parser.add_argument("--results-dir", type=str, default=str(default_results), help="Results directory path")
     parser.add_argument("--interval", type=int, default=30, help="Refresh interval in seconds")
+    parser.add_argument("--once", action="store_true", help="Show single snapshot and exit")
     args = parser.parse_args()
 
     console = Console()
     results_dir = Path(args.results_dir)
     prev_bests: dict[str, float] = {}
+
+    if args.once:
+        runs = find_active_runs(results_dir, name_filter=args.filter)
+        render_dashboard(console, runs, prev_bests)
+        sys.exit(0)
 
     console.print(f"[bold]QRE Live Monitor[/bold] — watching {results_dir.resolve()}")
     if args.filter:
