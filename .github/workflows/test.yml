@@ -23,5 +23,8 @@ jobs:
       - name: Install dependencies
         run: uv sync --dev
 
+      - name: Install package
+        run: uv pip install -e .
+
       - name: Run unit tests
         run: uv run pytest tests/ -v -m "not integration" --tb=short
