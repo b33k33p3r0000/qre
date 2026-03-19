@@ -166,8 +166,8 @@ def calculate_monthly_returns(trades: list[dict]) -> list[float]:
     if df.empty or "exit_ts" not in df.columns:
         return []
 
-    df["exit_ts"] = pd.to_datetime(df["exit_ts"])
-    df["month"] = df["exit_ts"].dt.to_period("M")
+    df["exit_ts"] = pd.to_datetime(df["exit_ts"], utc=True)
+    df["month"] = df["exit_ts"].dt.tz_localize(None).dt.to_period("M")
 
     monthly = df.groupby("month")["pnl_abs"].sum().tolist()
     return monthly

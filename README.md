@@ -2,21 +2,17 @@
 
 Systematic algo trading research engine — Anchored Walk-Forward · Bayesian optimisation · Monte Carlo validation
 
-## Live Performance — BTC/USDT (QWS v4.2.1)
-| Metric | Value |
-|--------|-------|
-| Calmar (OOS) | 8.94 |
-| Sharpe (equity, OOS) | 2.15 |
-| Sortino | 3.06 |
-| Max Drawdown | ~6% |
-| Profit Factor | 1.99 |
-| Trades / year | 121 |
-| MC Confidence | HIGH |
-| Sharpe 95% CI | [2.45 – 3.31] |
-| OOS splits profitable | 5 / 5 |
+## Live Performance — 3-pair (QWS v4.2.1, 2026-03-16)
 
-> Results from 5 independent Anchored Walk-Forward splits, 2021–2025.
-> 38,000+ Optuna trials. +282% total return on $100k starting equity.
+| Metric | BTC/USDT | SOL/USDT | BNB/USDT |
+|--------|----------|----------|----------|
+| Equity | $206,923 (+107%) | $264,595 (+165%) | $182,858 (+83%) |
+| Sharpe (equity) | 2.89 | 2.35 | 2.17 |
+| Max Drawdown | -4.51% | -6.63% | -11.28% |
+| Trades / year | 153 | 115 | 125 |
+| MC Confidence | 0.95 HIGH | 0.80 HIGH | 0.95 HIGH |
+
+> 3 AWF splits, 50k Optuna trials per symbol. $100k starting equity per pair.
 
 ---
 
