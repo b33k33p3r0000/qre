@@ -1,5 +1,54 @@
 # Session Notes
 
+## 2026-03-20 — CI/CD + Ecosystem Improvements
+
+**CI/CD:**
+- GitHub Actions workflow (`pytest -m "not integration"`) — 283 testů pass
+- Branch protection na main (require status checks, admin bypass)
+
+**Žádné QRE code changes** — pouze infra. Další kódové změny v MQE (PBO fix, checkpoints).
+
+---
+
+## 2026-03-16 — /analyze 3-pair run (BTC + SOL + BNB) → UPLOAD TO EE
+
+**Verdict:** HIGH confidence — všechny sanity probes 0.00% delta, MC HIGH u všech tří párů, AWF splity konzistentní. Deployment READY.
+
+**Dashboard:**
+| Pair | Equity | Sharpe(eq) | Max DD | Trades/yr | MC |
+|------|--------|-----------|--------|-----------|-----|
+| BTC | $206,923 (+107%) | 2.89 | -4.51% | 153 | 0.95 HIGH |
+| SOL | $264,595 (+165%) | 2.35 | -6.63% | 115 | 0.80 HIGH |
+| BNB | $182,858 (+83%) | 2.17 | -11.28% | 125 | 0.95 HIGH |
+
+**Key findings:**
+- BTC: vlajková loď — extrémně konzistentní AWF splity (σ=0.04), nízký DD, rovnoměrný profit
+- SOL: nejlepší absolutní výnos (+165%), solidní MC, Sharpe delta time-equity neobvykle nízký (0.09) ale OK
+- BNB: vyšší DD (-11.28%) fyzicky konzistentní (6/10 cat stops v DD periodě). Profit koncentrace (best month 20%), 3 negativní kvartály — slabší edge konzistence, ale akceptovatelné
+- Všechny páry: long PF systematicky vyšší než short (BTC 2.78/1.76, SOL 2.10/1.77, BNB 2.72/1.56)
+- Všechny páry konvergují na 8h trend_tf, allow_flip=0, trend_strict=1
+
+**Decided actions:**
+- [x] Kompletní /analyze na celém 3-pair runu
+- [ ] Upload params do EE (všechny 3 páry)
+
+**Monitoring pro live:**
+- BNB quarterly PnL a DD (regime-dependent edge)
+- Short-side výkon across all pairs (nižší PF)
+
+**Deferred:**
+- T1: Rozšíření rsi_lower range na 15-40 — BTC i BNB na boundary (20), ale výsledky dobré → nechávám
+- S1: Profit koncentrace monitoring — operační awareness
+
+**Run directories:**
+- BTC: `results/2026-03-15_19-13-45/BTC/`
+- SOL: `results/2026-03-16_00-43-05/SOL/`
+- BNB: `results/2026-03-16_04-13-47/BNB/`
+
+**Full report:** `docs/analyze/2026-03-16-qre-3pair-btc-sol-bnb.md`
+
+---
+
 ## 2026-03-08 — /review QRE: split key fix + docs update
 
 - **Fix analyze.py**: `health_check()` a `check_robustness()` četly `test_sharpe` klíč, ale optimize.py ukládá `test_sharpe_equity` → split consistency check byl vždy "green", robustness vždy 0 positive splits. Opraveno s fallbackem.
