@@ -645,15 +645,17 @@ def _build_findings(
             "detail": f"Catastrophic stop rate {cat_pct:.0%} is elevated (20-40%)",
         })
 
-    # Signal exit rate: < 50% planned exits → yellow
+    # Signal exit rate: < 50% planned exits (signal + trailing_stop) → yellow
     exit_reasons = trades.get("exit_reasons", {})
     signal_pct = exit_reasons.get("signal", {}).get("pct", 0)
-    if trades.get("total_trades", 0) > 0 and signal_pct < 0.5:
+    trail_pct = exit_reasons.get("trailing_stop", {}).get("pct", 0)
+    planned_pct = signal_pct + trail_pct
+    if trades.get("total_trades", 0) > 0 and planned_pct < 0.5:
         findings.append({
             "severity": "yellow",
             "metric": "signal_exit_pct",
-            "value": f"{signal_pct:.0%}",
-            "detail": f"Only {signal_pct:.0%} of exits are planned signals (< 50%)",
+            "value": f"{planned_pct:.0%}",
+            "detail": f"Only {planned_pct:.0%} of exits are planned (signal + trailing stop) (< 50%)",
         })
 
     # MIN_HOLD blocking: >30% trades at exactly 2 bars
