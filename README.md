@@ -2,7 +2,7 @@
 
 Systematic algo trading research engine — Anchored Walk-Forward · Bayesian optimisation · Monte Carlo validation
 
-## Live Performance — 3-pair (QWS v4.2.1, 2026-03-16)
+## Live Performance — 3-pair (QWS v4.3.0, 2026-03-16)
 
 | Metric | BTC/USDT | SOL/USDT | BNB/USDT |
 |--------|----------|----------|----------|
@@ -34,7 +34,7 @@ Signály (strategy.py)
   ▼
 Backtest (backtest.py, Numba JIT)
   │  Simulace obchodů na 1H barech
-  │  Position sizing 20%, fees, slippage, catastrophic stop
+  │  Position sizing 15%, fees, slippage, catastrophic stop, trailing stop
   │  → trades[], equity_curve[]
   │
   ▼
@@ -50,7 +50,7 @@ Objective (optimize.py)
   │
   ▼
 Optuna (optimize.py)
-  │  TPE sampler, 10 params, N trials
+  │  TPE sampler, 12 params, N trials
   │  → best_params (highest avg score)
   │
   ▼
@@ -63,6 +63,8 @@ Výsledky
 ---
 
 ## Entry Logic (3-Layer Confirmation)
+
+> **Strategy version: v4.3.0** — Added trailing stop (4th exit layer) + ETH/USDT + XRP/USDT + 15% position sizing + Marathon preset.
 
 Vstup vyžaduje **simultánní potvrzení všech 3 vrstev** na stejném 1H baru:
 
@@ -123,8 +125,9 @@ HTF signál se alignuje na 1H bary přes timestamp binary search. `trend_strict=
 
 ```
 1. Catastrophic Stop    (check PRVNÍ, před signálem)
-2. Signal Exit          (pokud bars_held >= 2)
-3. Force Close          (konec dat)
+2. Trailing Stop        (ATR(14) based, aktivuje se po trail_activation_mult × ATR)
+3. Signal Exit          (pokud bars_held >= 2)
+4. Force Close          (konec dat)
 ```
 
 ### Catastrophic Stop (emergency)
@@ -141,9 +144,28 @@ SHORT: if (high / entry_price - 1.0) >= catastrophic_stop_pct
 
 | Symbol | Stop | ~Equity loss per trade |
 |--------|------|----------------------|
-| BTC | 8% | ~1.6% |
-| SOL | 12% | ~2.4% |
-| BNB | 10% | ~2.0% |
+| BTC | 8% | ~1.2% |
+| SOL | 12% | ~1.8% |
+| BNB | 10% | ~1.5% |
+| ETH | 8% | ~1.2% |
+| XRP | 10% | ~1.5% |
+
+### Trailing Stop (harvest)
+
+ATR(14) based trailing stop — aktivuje se po dosažení profit threshold, chrání realizovaný zisk.
+
+```
+trail_activation_mult (float 1.0-3.0):  aktivace po entry_price ± activation_mult × ATR(14)
+trail_mult            (float 1.5-4.0):  trail vzdálenost = trail_mult × ATR(14)
+
+LONG:  pokud high >= entry + activation_mult × ATR
+       → trail_price = high - trail_mult × ATR  (pohybuje se jen nahoru)
+       → exit pokud close < trail_price
+
+SHORT: pokud low <= entry - activation_mult × ATR
+       → trail_price = low + trail_mult × ATR  (pohybuje se jen dolů)
+       → exit pokud close > trail_price
+```
 
 ### Signal Exit (primární)
 
@@ -163,7 +185,7 @@ allow_flip=1 (Always-In):         close → okamžitě otevřít opačný směr
 ### Position Sizing
 
 ```
-capital_at_entry = equity × 0.20     # 20% equity per trade
+capital_at_entry = equity × 0.15     # 15% equity per trade (5 pairs × 15% = 75% max exposure)
 position_size    = capital_at_entry / (entry_price × (1 + fee))
 ```
 
@@ -178,6 +200,8 @@ Fee: 6 bps per side. Slippage (asymetrický):
 | BTC/USDT | 6 bps |
 | SOL/USDT | 12 bps |
 | BNB/USDT | 8 bps |
+| ETH/USDT | 7 bps |
+| XRP/USDT | 10 bps |
 | Default fallback | 15 bps |
 
 ### Per-Bar Flow (Numba JIT)
@@ -187,7 +211,9 @@ Bar N:
   1. MÁ POZICI?
      a. Check catastrophic stop (high/low vs entry_price)
         → if triggered: EXIT, reason="catastrophic_stop"
-     b. Check signal exit (if bars_held >= 2):
+     b. Check trailing stop (if activated: close vs trail_price)
+        → if triggered: EXIT, reason="trailing_stop"
+     c. Check signal exit (if bars_held >= 2):
         → if opačný 3-layer signál fires:
            - EXIT, reason="signal"
            - if allow_flip=1: OKAMŽITĚ otevři opačný směr
@@ -301,7 +327,7 @@ confidence    = weakest(across splits)
 
 ---
 
-## 10 Optuna Parameters
+## 12 Optuna Parameters
 
 | Param | Typ | Range | Poznámka |
 |-------|-----|-------|----------|
@@ -315,6 +341,8 @@ confidence    = weakest(across splits)
 | `trend_tf` | cat | 4h, 8h, 1d | HTF trend filter TF |
 | `trend_strict` | int | 1 (fixed) | Vždy zapnuto |
 | `allow_flip` | int | 0 (fixed) | 0=selective, 1=always-in |
+| `trail_activation_mult` | float | 1.0 - 3.0 | ATR(14) multiples before trail activates |
+| `trail_mult` | float | 1.5 - 4.0 | ATR(14) multiples for trail distance |
 
 ---
 
@@ -325,7 +353,7 @@ run.sh (presets)
   └→ python -m qre.optimize --symbol BTC/USDT --trials 30000 ...
        ├→ data/fetch.py       — stáhne OHLCV (lokální Parquet / Binance)
        ├→ optimize.py         — Optuna AWF studie (TPE + SHA pruner)
-       │    ├→ strategy.py    — generuje buy/sell signály (10 params)
+       │    ├→ strategy.py    — generuje buy/sell signály (12 params)
        │    ├→ backtest.py    — Numba trading loop
        │    └→ metrics.py     — Sharpe, drawdown, win rate, ...
        ├→ report.py           — HTML report (Plotly grafy)
@@ -343,16 +371,24 @@ cd ~/projects/qre
 ./run.sh 2               # Quick: 15k trials, 2yr, BTC+SOL (~1-2 hr)
 ./run.sh 3               # Main: 40k trials, 3yr, all pairs (~4-8 hr)
 ./run.sh 4               # Deep: 50k trials, 5yr, all pairs (~12-24 hr)
-./run.sh 5               # Custom: interaktivní volba
+./run.sh 5               # Marathon: 50k trials, max data, all pairs (~24-48 hr)
+./run.sh 6               # Custom: interaktivní volba
 ```
 
 | Preset | Trials | Hours | Splity | Symboly |
 |--------|--------|-------|--------|---------|
 | 1 Test | 5,000 | 8,760 (1yr) | 3 | BTC |
 | 2 Quick | 15,000 | 17,520 (2yr) | 3 | BTC+SOL |
-| 3 Main | 40,000 | 26,280 (3yr) | 3 | BTC+SOL+BNB |
-| 4 Deep | 50,000 | 43,800 (5yr) | 5 | BTC+SOL+BNB |
-| 5 Custom | volba | volba | volba | volba |
+| 3 Main | 40,000 | 26,280 (3yr) | 3 | BTC+SOL+BNB+ETH+XRP |
+| 4 Deep | 50,000 | 43,800 (5yr) | 5 | BTC+SOL+BNB+ETH+XRP |
+| 5 Marathon | 50,000 | 87,600 (max) | 5 | BTC+SOL+BNB+ETH+XRP |
+| 6 Custom | volba | volba | volba | volba |
+
+Paralelní spuštění (2 páry najednou, `--eth`, `--xrp`, `--original` flagy pro výběr skupiny):
+```bash
+./run.sh 3 --original    # Main: BTC+SOL+BNB (původní páry)
+./run.sh 3 --eth         # Main: ETH+XRP (nové páry, 2 páry paralelně)
+```
 
 ### Process Management
 
@@ -390,11 +426,11 @@ Klíčové konstanty v `config.py`:
 
 | Konstanta | Hodnota | Popis |
 |-----------|---------|-------|
-| `SYMBOLS` | BTC/USDT, SOL/USDT, BNB/USDT | Obchodované páry |
+| `SYMBOLS` | BTC/USDT, SOL/USDT, BNB/USDT, ETH/USDT, XRP/USDT | Obchodované páry |
 | `STARTING_EQUITY` | $100,000 | Celkový účet (bez per-pair dělení) |
-| `BACKTEST_POSITION_PCT` | 0.20 | 20% equity na jednu pozici |
+| `BACKTEST_POSITION_PCT` | 0.15 | 15% equity na jednu pozici (5 × 15% = 75% max) |
 | `FEE` | 6 bps | Trading fee per side |
-| `CATASTROPHIC_STOP_PCT` | BTC 8%, SOL 12%, BNB 10% | Per-symbol fixní |
+| `CATASTROPHIC_STOP_PCT` | BTC 8%, SOL 12%, BNB 10%, ETH 8%, XRP 10% | Per-symbol fixní |
 | `LONG_ONLY` | False | Long + Short povoleno |
 | `MIN_HOLD_HOURS` | 2 | Min bary před exit signálem |
 | `MIN_TRADES_YEAR_HARD` | 30 | Hard constraint (train) |
