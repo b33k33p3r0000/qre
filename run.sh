@@ -21,19 +21,24 @@ QRE Optimizer — MACD+RSI AWF
 =============================
 
 Presets:
-  1) Test        —  5k trials, 1yr, 3 splits, BTC only (~15 min)
-  2) Quick       — 15k trials, 2yr, 3 splits, BTC+SOL (~1-2 hr)
-  3) Main        — 40k trials, 3yr, 3 splits, BTC+SOL+BNB (~4-8 hr)
-  4) Deep        — 50k trials, 5yr, 5 splits, BTC+SOL+BNB (~12-24 hr)
+  1) Test        —  5k trials,  1yr, 3 splits, BTC only     (~15 min)
+  2) Quick       — 15k trials,  2yr, 3 splits, BTC+SOL      (~1-2 hr)
+  3) Main        — 40k trials,  3yr, 3 splits, BTC+SOL+BNB  (~4-8 hr)
+  4) Deep        — 50k trials,  5yr, 5 splits, all 5 pairs  (~12-24 hr)
   5) Custom      — You choose everything
+  6) Marathon    — 50k trials, 10yr, 5 splits, all 5 pairs  (~24-48 hr)
 
 All runs start in background by default (use --fg for foreground).
+Background mode runs 2 symbols in parallel, then waits before next pair.
 
 Pairs:
   --btc                BTC/USDT only
   --sol                SOL/USDT only
   --bnb                BNB/USDT only
-  --all                All pairs (default for main/deep)
+  --eth                ETH/USDT only
+  --xrp                XRP/USDT only
+  --original           BTC+SOL+BNB (original 3 pairs)
+  --all                All 5 pairs: BTC+SOL+BNB+ETH+XRP
 
 Options:
   --trials N           Override trial count
@@ -49,9 +54,10 @@ Options:
 Examples:
   ./run.sh 1                          # Test, BTC, background
   ./run.sh 2                          # Quick, BTC+SOL, background
-  ./run.sh 3                          # Main, all pairs, background
+  ./run.sh 3                          # Main, original 3 pairs, background
   ./run.sh 4 --btc --fg               # Deep, BTC only, foreground
   ./run.sh 5 --btc --trials 8000      # Custom
+  ./run.sh 6                          # Marathon, all 5 pairs
 
 Process management:
   ./run.sh attach          Attach to running/latest log
@@ -79,6 +85,8 @@ WARM_START=""
 WARM_BTC=""
 WARM_SOL=""
 WARM_BNB=""
+WARM_ETH=""
+WARM_XRP=""
 FOREGROUND=false
 LOG_DIR="$SCRIPT_DIR/logs"
 mkdir -p "$LOG_DIR"
@@ -101,7 +109,7 @@ runs = [r for r in runs if 'checkpoints' not in str(r)]
 runs = [r for r in runs if r.parts[-2] == sym_filter]
 for i, r in enumerate(runs[:8]):
     d = json.loads(r.read_text())
-    run_dir = r.parts[-3] if r.parts[-2] in ('BTC','SOL','BNB') else r.parts[-2]
+    run_dir = r.parts[-3] if r.parts[-2] in ('BTC','SOL','BNB','ETH','XRP') else r.parts[-2]
     export = ' [LIVE]' if 'EXPORT' in str(r) else ''
     sharpe = d.get('sharpe_equity', 0)
     dd = d.get('max_drawdown', 0)
@@ -148,9 +156,13 @@ while [[ $# -gt 0 ]]; do
         3) PRESET="main" ;;
         4) PRESET="deep" ;;
         5) PRESET="custom" ;;
+        6) PRESET="marathon" ;;
         --btc) PAIRS="btc" ;;
         --sol) PAIRS="sol" ;;
         --bnb) PAIRS="bnb" ;;
+        --eth) PAIRS="eth" ;;
+        --xrp) PAIRS="xrp" ;;
+        --original) PAIRS="original" ;;
         --all) PAIRS="all" ;;
         --trials) TRIALS="$2"; shift ;;
         --hours) HOURS="$2"; shift ;;
@@ -353,12 +365,16 @@ case "$PRESET" in
         TRIALS=50000; HOURS=43800; SPLITS=5
         [ -z "$PAIRS" ] && PAIRS="all"
         ;;
+    marathon)
+        TRIALS=50000; HOURS=87600; SPLITS=5
+        [ -z "$PAIRS" ] && PAIRS="all"
+        ;;
     custom) ;; # Use --trials, --hours, --splits from args
     "")
         # Interactive mode
         echo ""
         show_help
-        read -p "Select preset (1-5): " choice
+        read -p "Select preset (1-6): " choice
         case "$choice" in
             1) TRIALS=5000;  HOURS=8760;  SPLITS=3; [ -z "$PAIRS" ] && PAIRS="btc" ;;
             2) TRIALS=15000; HOURS=17520; SPLITS=3; [ -z "$PAIRS" ] && PAIRS="btc-sol" ;;
@@ -370,12 +386,15 @@ case "$PRESET" in
                 read -p "Splits [3]: " SPLITS; SPLITS="${SPLITS:-3}"
                 read -p "Skip recent hours [0]: " SKIP_RECENT; SKIP_RECENT="${SKIP_RECENT:-0}"
                 echo ""
-                read -p "Pairs — (1) BTC, (2) SOL, (3) BNB, (4) All [4]: " pair_choice
-                case "${pair_choice:-4}" in
+                read -p "Pairs — (1) BTC, (2) SOL, (3) BNB, (4) ETH, (5) XRP, (6) Original (BTC+SOL+BNB), (7) All [7]: " pair_choice
+                case "${pair_choice:-7}" in
                     1) PAIRS="btc" ;;
                     2) PAIRS="sol" ;;
                     3) PAIRS="bnb" ;;
-                    4) PAIRS="all" ;;
+                    4) PAIRS="eth" ;;
+                    5) PAIRS="xrp" ;;
+                    6) PAIRS="original" ;;
+                    7) PAIRS="all" ;;
                 esac
 
                 # Warm-start picker per symbol
@@ -397,9 +416,20 @@ case "$PRESET" in
                         pick_warm_start "BNB"
                         WARM_BNB="$_WARM_RESULT"
                         ;;
-                    all|btc-sol)
-                        for sym in BTC SOL BNB; do
-                            [[ "$PAIRS" = "btc-sol" && "$sym" = "BNB" ]] && continue
+                    eth)
+                        echo "— ETH:"
+                        pick_warm_start "ETH"
+                        WARM_ETH="$_WARM_RESULT"
+                        ;;
+                    xrp)
+                        echo "— XRP:"
+                        pick_warm_start "XRP"
+                        WARM_XRP="$_WARM_RESULT"
+                        ;;
+                    all|btc-sol|original)
+                        for sym in BTC SOL BNB ETH XRP; do
+                            [[ "$PAIRS" = "btc-sol" && "$sym" != "BTC" && "$sym" != "SOL" ]] && continue
+                            [[ "$PAIRS" = "original" && "$sym" != "BTC" && "$sym" != "SOL" && "$sym" != "BNB" ]] && continue
                             echo "— $sym:"
                             pick_warm_start "$sym"
                             eval "WARM_$sym=\"\$_WARM_RESULT\""
@@ -407,6 +437,7 @@ case "$PRESET" in
                         ;;
                 esac
                 ;;
+            6) TRIALS=50000; HOURS=87600; SPLITS=5; [ -z "$PAIRS" ] && PAIRS="all" ;;
             *) echo "Invalid choice"; exit 1 ;;
         esac
 
@@ -443,6 +474,8 @@ build_cmd() {
             BTC/USDT) warm="$WARM_BTC" ;;
             SOL/USDT) warm="$WARM_SOL" ;;
             BNB/USDT) warm="$WARM_BNB" ;;
+            ETH/USDT) warm="$WARM_ETH" ;;
+            XRP/USDT) warm="$WARM_XRP" ;;
         esac
     fi
     if [ -n "$warm" ]; then
@@ -461,11 +494,14 @@ $FOREGROUND && MODE_LABEL="foreground"
 # Build list of symbols to run
 SYMBOLS=()
 case "$PAIRS" in
-    btc)     SYMBOLS=("BTC/USDT") ;;
-    sol)     SYMBOLS=("SOL/USDT") ;;
-    bnb)     SYMBOLS=("BNB/USDT") ;;
-    btc-sol) SYMBOLS=("BTC/USDT" "SOL/USDT") ;;
-    all)     SYMBOLS=("BTC/USDT" "SOL/USDT" "BNB/USDT") ;;
+    btc)      SYMBOLS=("BTC/USDT") ;;
+    sol)      SYMBOLS=("SOL/USDT") ;;
+    bnb)      SYMBOLS=("BNB/USDT") ;;
+    eth)      SYMBOLS=("ETH/USDT") ;;
+    xrp)      SYMBOLS=("XRP/USDT") ;;
+    btc-sol)  SYMBOLS=("BTC/USDT" "SOL/USDT") ;;
+    original) SYMBOLS=("BTC/USDT" "SOL/USDT" "BNB/USDT") ;;
+    all)      SYMBOLS=("BTC/USDT" "SOL/USDT" "BNB/USDT" "ETH/USDT" "XRP/USDT") ;;
 esac
 
 echo ""
@@ -485,6 +521,8 @@ else
     [ -n "$WARM_BTC" ] && echo "  Warm BTC: $WARM_BTC"
     [ -n "$WARM_SOL" ] && echo "  Warm SOL: $WARM_SOL"
     [ -n "$WARM_BNB" ] && echo "  Warm BNB: $WARM_BNB"
+    [ -n "$WARM_ETH" ] && echo "  Warm ETH: $WARM_ETH"
+    [ -n "$WARM_XRP" ] && echo "  Warm XRP: $WARM_XRP"
 fi
 echo "  Mode:    $MODE_LABEL"
 echo "═══════════════════════════════════════════"
@@ -505,26 +543,49 @@ if $FOREGROUND; then
     echo "═══════════════════════════════════════════"
 else
     TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
-    LOG_FILE="$LOG_DIR/qre_${TIMESTAMP}.log"
+    RUN_LOG_DIR="$LOG_DIR/$TIMESTAMP"
+    mkdir -p "$RUN_LOG_DIR"
 
-    BG_CMDS=""
+    declare -a SYM_CMDS
     for sym in "${SYMBOLS[@]}"; do
-        cmd=$(build_cmd "$sym")
-        if [ -n "$BG_CMDS" ]; then
-            BG_CMDS="$BG_CMDS && echo '' && echo '>>> Done: $sym' && echo '' && "
-        fi
-        BG_CMDS="${BG_CMDS}echo '>>> Running: $cmd' && echo '' && $cmd && echo '' && echo '>>> Done: $sym'"
+        SYM_CMDS+=("$(build_cmd "$sym")")
     done
 
-    nohup bash -c "cd $SCRIPT_DIR && source venv/bin/activate && $BG_CMDS && echo '' && echo 'All runs complete!'" > "$LOG_FILE" 2>&1 &
-    BG_PID=$!
+    echo "Running ${#SYMBOLS[@]} symbols (2 parallel)..."
+    i=0
+    while [ $i -lt ${#SYMBOLS[@]} ]; do
+        SYM1="${SYMBOLS[$i]}"
+        SYM1_SHORT="${SYM1%%/*}"
+        CMD1="${SYM_CMDS[$i]}"
+        LOG1="$RUN_LOG_DIR/${SYM1_SHORT}.log"
 
-    echo "Started in background (PID: $BG_PID)"
-    echo "Log: $LOG_FILE"
+        nohup bash -c "cd $SCRIPT_DIR && source venv/bin/activate && echo '>>> Running: $CMD1' && $CMD1 && echo '>>> Done: $SYM1'" > "$LOG1" 2>&1 &
+        PID1=$!
+        echo "  Started $SYM1 (PID: $PID1) → $LOG1"
+
+        j=$((i + 1))
+        if [ $j -lt ${#SYMBOLS[@]} ]; then
+            SYM2="${SYMBOLS[$j]}"
+            SYM2_SHORT="${SYM2%%/*}"
+            CMD2="${SYM_CMDS[$j]}"
+            LOG2="$RUN_LOG_DIR/${SYM2_SHORT}.log"
+
+            nohup bash -c "cd $SCRIPT_DIR && source venv/bin/activate && echo '>>> Running: $CMD2' && $CMD2 && echo '>>> Done: $SYM2'" > "$LOG2" 2>&1 &
+            PID2=$!
+            echo "  Started $SYM2 (PID: $PID2) → $LOG2"
+            wait $PID1 $PID2
+        else
+            wait $PID1
+        fi
+
+        i=$((i + 2))
+    done
+
+    echo ""
+    echo "All symbols dispatched. Logs in: $RUN_LOG_DIR/"
     echo ""
     echo "Commands:"
     echo "  ./run.sh attach          # Watch live output"
+    echo "  ./run.sh monitor         # Live dashboard"
     echo "  ./run.sh logs            # List log files"
-    echo "  tail -f $LOG_FILE        # Direct tail"
-    echo "  kill -2 $BG_PID          # Graceful stop"
 fi
