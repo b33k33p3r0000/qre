@@ -182,3 +182,199 @@ class TestSimulateTradesFast:
         directions = [t["direction"] for t in result.trades]
         assert "long" in directions
         assert "short" in directions
+
+
+def _make_controlled_data(n_bars, prices, spread=2.0):
+    """Helper: create 1H OHLCV with controlled close prices.
+
+    Args:
+        n_bars: Number of bars.
+        prices: Array of close prices (length n_bars).
+        spread: High-low spread around close (default 2.0).
+
+    Returns:
+        Dict with "1h" key containing DataFrame.
+    """
+    dates = pd.date_range("2025-01-01", periods=n_bars, freq="1h")
+    close = np.array(prices, dtype=np.float64)
+    high = close + spread / 2.0
+    low = close - spread / 2.0
+    df = pd.DataFrame(
+        {"open": close.copy(), "high": high, "low": low, "close": close},
+        index=dates,
+    )
+    return {"1h": df}
+
+
+class TestTrailingStop:
+    """Tests for trailing stop in Numba trading loop."""
+
+    def test_trailing_stop_long(self):
+        """Long trade: price rises above activation, then drops through trail.
+
+        Setup: Entry at bar 250 (price 100). Price rises to 120 over next bars
+        (ATR ~2 with spread=2). activation_mult=2.0 → need 2*ATR ~4 profit.
+        Price 120 means profit = 20, well above activation. Then price drops
+        to 110 → trail_level = 120 - 2*ATR = ~116, low of 109 < 116 → exit.
+        """
+        n = 500
+        close = np.full(n, 100.0)
+        # Warmup: constant price → ATR = spread (high-low = 2.0)
+        # After entry at 250: price rises to 120
+        close[255:280] = 120.0
+        # Then drops sharply — triggers trailing stop
+        close[280:] = 110.0
+
+        data = _make_controlled_data(n, close, spread=2.0)
+        buy, sell = _make_signals(n, buy_bars=[250])
+        result = simulate_trades_fast(
+            "BTC/USDC", data, buy, sell,
+            trail_activation_mult=2.0,
+            trail_mult=2.0,
+        )
+        assert len(result.trades) >= 1
+        trail_trades = [t for t in result.trades if t["reason"] == "trailing_stop"]
+        assert len(trail_trades) >= 1, (
+            f"Expected trailing_stop exit, got reasons: "
+            f"{[t['reason'] for t in result.trades]}"
+        )
+        assert trail_trades[0]["direction"] == "long"
+
+    def test_trailing_stop_short(self):
+        """Short trade: price drops (profit), then rises through trail.
+
+        Setup: Short entry at bar 250 (price 100). Price drops to 80 →
+        profit = 20, activation at 2*ATR ~4. Then price rises to 90 →
+        trail_level = 80 + 2*ATR = ~84, high of 91 > 84 → exit.
+        """
+        n = 500
+        close = np.full(n, 100.0)
+        # Price drops = profit for short
+        close[255:280] = 80.0
+        # Then rises = trailing stop triggers
+        close[280:] = 90.0
+
+        data = _make_controlled_data(n, close, spread=2.0)
+        buy, sell = _make_signals(n, sell_bars=[250])
+        result = simulate_trades_fast(
+            "BTC/USDC", data, buy, sell,
+            long_only=False,
+            trail_activation_mult=2.0,
+            trail_mult=2.0,
+        )
+        assert len(result.trades) >= 1
+        trail_trades = [t for t in result.trades if t["reason"] == "trailing_stop"]
+        assert len(trail_trades) >= 1, (
+            f"Expected trailing_stop exit, got reasons: "
+            f"{[t['reason'] for t in result.trades]}"
+        )
+        assert trail_trades[0]["direction"] == "short"
+
+    def test_trailing_stop_not_activated_when_no_profit(self):
+        """Trade never reaches activation threshold → no trailing stop exit.
+
+        Price stays flat (no profit above activation threshold).
+        With activation_mult=5.0 and ATR~2, need 10 points profit — never reached.
+        """
+        n = 500
+        close = np.full(n, 100.0)
+        # Small move up — not enough for activation (need 5*2=10)
+        close[255:] = 103.0
+
+        data = _make_controlled_data(n, close, spread=2.0)
+        buy, sell = _make_signals(n, buy_bars=[250])
+        result = simulate_trades_fast(
+            "BTC/USDC", data, buy, sell,
+            trail_activation_mult=5.0,
+            trail_mult=2.0,
+        )
+        # Should NOT have any trailing stop exits
+        trail_trades = [t for t in result.trades if t["reason"] == "trailing_stop"]
+        assert len(trail_trades) == 0, (
+            f"Unexpected trailing_stop exit: {trail_trades}"
+        )
+
+    def test_catastrophic_stop_beats_trailing(self):
+        """When both could trigger, catastrophic stop takes priority.
+
+        Catastrophic stop is checked first in the loop. Price crashes 50% →
+        catastrophic fires before trailing stop can activate.
+        """
+        n = 500
+        close = np.full(n, 100.0)
+        # Brief up move to activate trailing, then catastrophic crash
+        close[255:260] = 110.0
+        close[260:] = 40.0  # 60% crash — catastrophic at 10%
+
+        data = _make_controlled_data(n, close, spread=2.0)
+        buy, sell = _make_signals(n, buy_bars=[250])
+        result = simulate_trades_fast(
+            "BTC/USDC", data, buy, sell,
+            trail_activation_mult=2.0,
+            trail_mult=2.0,
+        )
+        assert len(result.trades) >= 1
+        # The first exit should be catastrophic_stop (checked first)
+        first_trade = result.trades[0]
+        assert first_trade["reason"] == "catastrophic_stop", (
+            f"Expected catastrophic_stop, got {first_trade['reason']}"
+        )
+
+    def test_trailing_stop_disabled_by_default(self):
+        """Without trail params, trailing stop never triggers (backward compat).
+
+        Same price data as test_trailing_stop_long, but without trail params.
+        """
+        n = 500
+        close = np.full(n, 100.0)
+        close[255:280] = 120.0
+        close[280:] = 110.0
+
+        data = _make_controlled_data(n, close, spread=2.0)
+        buy, sell = _make_signals(n, buy_bars=[250])
+
+        # No trail params → defaults to 0.0 = disabled
+        result = simulate_trades_fast("BTC/USDC", data, buy, sell)
+        trail_trades = [t for t in result.trades if t["reason"] == "trailing_stop"]
+        assert len(trail_trades) == 0, (
+            f"Trailing stop should be disabled by default, got: {trail_trades}"
+        )
+
+    def test_trailing_stop_bypasses_min_hold(self):
+        """Trailing stop can fire before min_hold (same as catastrophic stop).
+
+        Entry at bar 250. Min hold = 2 bars. Price spikes up at bar 251
+        (activates trail), drops at bar 251 same bar (trail fires).
+        Since trailing stop bypasses min_hold, exit should happen at bar 251.
+        """
+        n = 500
+        close = np.full(n, 100.0)
+        # Bar 251: high goes way up (activates trail), but close/low drops
+        # We need the trail to activate AND trigger in the same bar or at bar 251
+        close[251] = 100.0  # close is normal
+
+        data = _make_controlled_data(n, close, spread=2.0)
+        # Manually set high at 251 very high (activates trail)
+        # and then at 252 low drops below trail level
+        df = data["1h"]
+        # At bar 251: huge spike up → peak_price updates, trail activates
+        df.iloc[251, df.columns.get_loc("high")] = 130.0
+        # At bar 252: price crashes, low drops below trail
+        df.iloc[252, df.columns.get_loc("close")] = 100.0
+        df.iloc[252, df.columns.get_loc("high")] = 105.0
+        df.iloc[252, df.columns.get_loc("low")] = 90.0
+
+        buy, sell = _make_signals(n, buy_bars=[250])
+        result = simulate_trades_fast(
+            "BTC/USDC", data, buy, sell,
+            trail_activation_mult=2.0,
+            trail_mult=2.0,
+        )
+        # Should have trailing stop exit — bars_held = 2 (entry 250, exit 252)
+        # MIN_HOLD_HOURS = 2 — signal exit can't fire at bar 252 (exactly min_hold)
+        # but trailing stop bypasses min_hold
+        trail_trades = [t for t in result.trades if t["reason"] == "trailing_stop"]
+        assert len(trail_trades) >= 1, (
+            f"Trailing stop should bypass min_hold, got reasons: "
+            f"{[t['reason'] for t in result.trades]}"
+        )
