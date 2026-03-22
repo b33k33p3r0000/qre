@@ -41,8 +41,10 @@ FEE = float(os.environ.get("FEE", "0.0006"))  # 6 bps (Binance VIP0 taker=5 bps 
 
 SLIPPAGE_MAP: dict[str, float] = {
     "BTC/USDT": 0.0006,   # 6 bps (deep book, tight spread)
+    "ETH/USDT": 0.0007,   # 7 bps — deep order book, similar to BTC
     "SOL/USDT": 0.0012,   # 12 bps (moderate liquidity)
     "BNB/USDT": 0.0008,   # 8 bps (good liquidity)
+    "XRP/USDT": 0.0010,   # 10 bps — moderate liquidity
 }
 
 DEFAULT_SLIPPAGE = float(os.environ.get("SLIPPAGE", "0.0015"))
@@ -128,13 +130,14 @@ MIN_WARMUP_BARS = 200
 # =============================================================================
 
 STARTING_EQUITY = 100_000.0  # Celkový účet, bez per-pair dělení
-BACKTEST_POSITION_PCT = 0.20  # 20% z celkového equity na jednu pozici
+BACKTEST_POSITION_PCT = 0.15  # 15% z celkového equity na jednu pozici (5 párů × 15% = 75% max)
+ATR_PERIOD = 14  # Fixed ATR period for trailing stop (industry standard)
 
 # =============================================================================
 # CATASTROPHIC STOP
 # =============================================================================
 
-CATASTROPHIC_STOP_PCT = {"BTC": 0.08, "SOL": 0.12, "BNB": 0.10}  # per-symbol emergency exit
+CATASTROPHIC_STOP_PCT = {"BTC": 0.08, "SOL": 0.12, "BNB": 0.10, "ETH": 0.08, "XRP": 0.10}  # per-symbol emergency exit
 CATASTROPHIC_STOP_PCT_DEFAULT = 0.10  # fallback for unknown symbols
 
 # =============================================================================

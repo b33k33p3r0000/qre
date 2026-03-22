@@ -610,3 +610,41 @@ class TestBuildFindings:
             "overfit_risk": "high", "overfit_score": 0.7,
         })
         assert any(f["metric"] == "overfit_risk" for f in findings)
+
+    def test_trailing_stop_counts_as_planned_exit(self):
+        """trailing_stop + signal together as planned exits should suppress low-signal warning."""
+        health = {}
+        # signal=30%, trailing_stop=25% → planned=55% → above 50% threshold → no warning
+        trades = {
+            "catastrophic_pct": 0,
+            "total_trades": 100,
+            "exit_reasons": {
+                "signal": {"pct": 0.30},
+                "trailing_stop": {"pct": 0.25},
+                "catastrophic_stop": {"pct": 0.45},
+            },
+            "min_hold_pct": 0,
+            "direction_stats": {},
+        }
+        findings = _build_findings(health, trades, {}, {"overfit_risk": "low"})
+        signal_finding = [f for f in findings if f["metric"] == "signal_exit_pct"]
+        assert len(signal_finding) == 0, "planned_pct >= 50% should not trigger signal_exit_pct warning"
+
+    def test_low_planned_exit_triggers_warning_even_with_trailing(self):
+        """If signal + trailing_stop combined < 50%, still triggers yellow finding."""
+        health = {}
+        # signal=10%, trailing_stop=20% → planned=30% → below 50% threshold → warning
+        trades = {
+            "catastrophic_pct": 0,
+            "total_trades": 100,
+            "exit_reasons": {
+                "signal": {"pct": 0.10},
+                "trailing_stop": {"pct": 0.20},
+                "catastrophic_stop": {"pct": 0.70},
+            },
+            "min_hold_pct": 0,
+            "direction_stats": {},
+        }
+        findings = _build_findings(health, trades, {}, {"overfit_risk": "low"})
+        signal_finding = [f for f in findings if f["metric"] == "signal_exit_pct"]
+        assert len(signal_finding) == 1, "planned_pct < 50% should trigger signal_exit_pct warning"

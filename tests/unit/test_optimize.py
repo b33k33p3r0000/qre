@@ -294,3 +294,85 @@ def test_bnb_in_cli_choices():
     from qre import optimize
     source = inspect.getsource(optimize)
     assert "BNB/USDT" in source, "BNB/USDT must be in optimizer CLI choices"
+
+
+def test_argparse_accepts_eth_xrp():
+    """ETH/USDT and XRP/USDT are valid --symbol choices."""
+    import inspect
+    from qre import optimize
+    source = inspect.getsource(optimize)
+    assert "ETH/USDT" in source, "ETH/USDT must be in optimizer CLI choices"
+    assert "XRP/USDT" in source, "XRP/USDT must be in optimizer CLI choices"
+
+
+def test_optuna_params_include_trail():
+    """get_optuna_params returns 12 params including trail_activation_mult and trail_mult."""
+    import optuna
+    from qre.core.strategy import MACDRSIStrategy
+
+    strategy = MACDRSIStrategy()
+    study = optuna.create_study()
+    for _ in range(50):
+        trial = study.ask()
+        try:
+            params = strategy.get_optuna_params(trial)
+            assert "trail_activation_mult" in params, "trail_activation_mult missing from Optuna params"
+            assert "trail_mult" in params, "trail_mult missing from Optuna params"
+            assert len(params) == 12, f"Expected 12 params, got {len(params)}: {list(params.keys())}"
+            return
+        except optuna.TrialPruned:
+            continue
+    pytest.fail("All 50 trials pruned — check MACD constraint")
+
+
+def test_warm_start_backward_compat(tmp_path):
+    """Old 10-param warm-start JSON loads OK — returns dict with 10 base keys, no trail keys.
+
+    Trail keys are not in WARM_START_KEYS, so old files (which only have the 10 base keys)
+    still satisfy the check. Optuna samples trail_activation_mult and trail_mult freely
+    for that trial.
+    """
+    import json
+    from qre.optimize import load_warm_start_params, WARM_START_KEYS
+
+    old_params = {
+        "macd_fast": 5.0,
+        "macd_slow": 21,
+        "macd_signal": 9,
+        "rsi_period": 14,
+        "rsi_lower": 30,
+        "rsi_upper": 70,
+        "rsi_lookback": 2,
+        "trend_tf": "4h",
+        "trend_strict": 1,
+        "allow_flip": 0,
+    }
+    ws_file = tmp_path / "best_params.json"
+    ws_file.write_text(json.dumps(old_params))
+
+    result = load_warm_start_params(str(ws_file))
+    # Old 10-param file has all WARM_START_KEYS — should load successfully (not None)
+    assert result is not None, "Old 10-param file should load successfully"
+    assert set(result.keys()) == set(WARM_START_KEYS), f"Keys mismatch: {result.keys()}"
+    # Trail params must NOT be in the returned dict (Optuna samples them freely)
+    assert "trail_activation_mult" not in result
+    assert "trail_mult" not in result
+
+
+def test_warm_start_missing_base_key_returns_none(tmp_path):
+    """File missing a base WARM_START_KEY returns None instead of raising ValueError."""
+    import json
+    from qre.optimize import load_warm_start_params
+
+    # Incomplete params — missing rsi_lookback and more
+    incomplete_params = {
+        "macd_fast": 5.0,
+        "macd_slow": 21,
+        "macd_signal": 9,
+        # rsi_period and others missing
+    }
+    ws_file = tmp_path / "best_params.json"
+    ws_file.write_text(json.dumps(incomplete_params))
+
+    result = load_warm_start_params(str(ws_file))
+    assert result is None, f"Expected None for file with missing base keys, got {result}"

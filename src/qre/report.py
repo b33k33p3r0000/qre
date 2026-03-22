@@ -320,14 +320,16 @@ def _render_exit_reason_breakdown(trades: list[dict]) -> str:
     if not trades:
         return ""
 
-    reason_order = ["signal", "catastrophic_stop", "force_close"]
+    reason_order = ["signal", "trailing_stop", "catastrophic_stop", "force_close"]
     reason_labels = {
         "signal": "Signal (planned exit)",
+        "trailing_stop": "Trailing Stop (profit lock)",
         "catastrophic_stop": "Catastrophic Stop",
         "force_close": "Force Close (end of period)",
     }
     reason_css = {
         "signal": "",
+        "trailing_stop": "positive",
         "catastrophic_stop": "negative",
         "force_close": "warning",
     }
@@ -925,6 +927,8 @@ def _render_strategy_params(params: dict[str, Any]) -> str:
         ("rsi_lower", "RSI lower", 20, 40),
         ("rsi_upper", "RSI upper", 60, 80),
         ("rsi_lookback", "RSI lookback", 1, 4),
+        ("trail_activation_mult", "Trail activation", 1.0, 3.0),
+        ("trail_mult", "Trail mult", 1.5, 4.0),
     ]
     categorical_params = [
         ("trend_tf", "Trend TF", ["4h", "8h", "1d"]),
@@ -1024,6 +1028,8 @@ def _render_top_trials(top_trials: list[dict] | None) -> tuple[str, str]:
         ("rsi_lower", "RSI Lo", 20, 40, None),
         ("rsi_upper", "RSI Hi", 60, 80, None),
         ("rsi_lookback", "RSI LB", 1, 4, None),
+        ("trail_activation_mult", "Trail Act", 1.0, 3.0, None),
+        ("trail_mult", "Trail Mult", 1.5, 4.0, None),
         ("trend_tf", "Trend", 4, 24, {"tickvals": [4, 8, 24], "ticktext": ["4h", "8h", "1d"]}),
         ("trend_strict", "Strict", 0, 1, {"tickvals": [0, 1]}),
         ("allow_flip", "Flip", 0, 1, {"tickvals": [0, 1]}),

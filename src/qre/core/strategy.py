@@ -9,7 +9,7 @@ Evidence:
 - Entry: MACD crossover AND RSI in extreme zone (with lookback) AND higher-TF trend
 - Exit: Opposite signal (flip or flat, controlled by allow_flip)
 
-10 Optuna parameters. Base TF 1H + trend filter from 4H/8H/1D.
+12 Optuna parameters. Base TF 1H + trend filter from 4H/8H/1D.
 """
 
 from __future__ import annotations
@@ -66,7 +66,7 @@ class MACDRSIStrategy(BaseStrategy):
     """
 
     name = "macd_rsi"
-    version = "4.2.1"
+    version = "4.3.0"
     description = "Quant Whale Strategy: MACD crossover + RSI extreme zones"
 
     def get_optuna_params(
@@ -75,7 +75,7 @@ class MACDRSIStrategy(BaseStrategy):
         symbol: str | None = None,
         allow_flip_override: int | None = None,
     ) -> dict[str, Any]:
-        """10 Optuna parameters: 6 original + rsi_lookback + trend_tf + trend_strict + allow_flip."""
+        """12 Optuna parameters: 10 original + trail_activation_mult + trail_mult."""
         params = {}
 
         params["macd_fast"] = trial.suggest_float("macd_fast", 1.0, 20.0)
@@ -95,6 +95,9 @@ class MACDRSIStrategy(BaseStrategy):
 
         flip_val = allow_flip_override if allow_flip_override is not None else 0
         params["allow_flip"] = trial.suggest_int("allow_flip", flip_val, flip_val)
+
+        params["trail_activation_mult"] = trial.suggest_float("trail_activation_mult", 1.0, 3.0)
+        params["trail_mult"] = trial.suggest_float("trail_mult", 1.5, 4.0)
 
         return params
 

@@ -196,6 +196,8 @@ def build_objective(
         allow_flip = bool(params.get("allow_flip", 1))
         symbol_key = symbol.split("/")[0]
         catastrophic_stop_pct = CATASTROPHIC_STOP_PCT.get(symbol_key, CATASTROPHIC_STOP_PCT_DEFAULT)
+        trail_activation_mult = params.get("trail_activation_mult", 0.0)
+        trail_mult = params.get("trail_mult", 0.0)
 
         split_scores = []
         _sharpes = []
@@ -214,6 +216,8 @@ def build_objective(
                 start_idx=MIN_WARMUP_BARS, end_idx=train_end,
                 allow_flip=allow_flip,
                 catastrophic_stop_pct=catastrophic_stop_pct,
+                trail_activation_mult=trail_activation_mult,
+                trail_mult=trail_mult,
             )
             if not train_result.trades:
                 split_scores.append(0.0)
@@ -235,6 +239,8 @@ def build_objective(
                 start_idx=test_start, end_idx=test_end,
                 allow_flip=allow_flip,
                 catastrophic_stop_pct=catastrophic_stop_pct,
+                trail_activation_mult=trail_activation_mult,
+                trail_mult=trail_mult,
             )
 
             # Hard constraint: minimum test trades
@@ -289,11 +295,16 @@ WARM_START_KEYS = [
 ]
 
 
-def load_warm_start_params(path: str | Path) -> dict[str, Any]:
+def load_warm_start_params(path: "str | Path") -> "dict[str, Any] | None":
     """Load and validate warm-start parameters from a best_params.json file.
 
-    Returns dict with only the 10 strategy param keys needed for enqueue_trial.
-    Raises ValueError if file is invalid or missing required keys.
+    Returns dict with only the 10 base strategy param keys needed for enqueue_trial.
+    Trail params (trail_activation_mult, trail_mult) are intentionally excluded from
+    WARM_START_KEYS so old 10-param files remain compatible — Optuna will sample
+    trail params freely for those trials.
+
+    Returns None if file is missing required base keys (backward compat warning).
+    Raises ValueError only if file does not exist or is not valid JSON.
     """
     path = Path(path)
     if not path.exists():
@@ -304,7 +315,8 @@ def load_warm_start_params(path: str | Path) -> dict[str, Any]:
 
     missing = [k for k in WARM_START_KEYS if k not in raw]
     if missing:
-        raise ValueError(f"Warm-start file missing keys: {missing}")
+        logger.warning("Warm-start file missing keys: %s — skipping", missing)
+        return None
 
     params = {k: raw[k] for k in WARM_START_KEYS}
     logger.info("Warm-start params loaded from %s: %s", path.name, params)
@@ -405,10 +417,13 @@ def run_optimization(
     # Warm-start: enqueue known-good params as first trial
     if warm_start_path:
         ws_params = load_warm_start_params(warm_start_path)
-        study.enqueue_trial(ws_params)
-        ws_source = Path(warm_start_path).parent.parent.name
-        study.set_user_attr("warm_start_source", ws_source)
-        logger.info("Warm-start trial enqueued (will be evaluated as trial #0)")
+        if ws_params is not None:
+            study.enqueue_trial(ws_params)
+            ws_source = Path(warm_start_path).parent.parent.name
+            study.set_user_attr("warm_start_source", ws_source)
+            logger.info("Warm-start trial enqueued (will be evaluated as trial #0)")
+        else:
+            logger.warning("Warm-start skipped — file missing required keys")
 
     # Graceful shutdown: SIGTERM → study.stop()
     def _graceful_stop(signum, frame):
@@ -455,7 +470,13 @@ def run_optimization(
     catastrophic_stop_pct_final = CATASTROPHIC_STOP_PCT.get(symbol_key, CATASTROPHIC_STOP_PCT_DEFAULT)
     best_params["catastrophic_stop_pct"] = catastrophic_stop_pct_final
     buy_s, sell_s = strategy.precompute_signals(data, best_params)
-    full_result = simulate_trades_fast(symbol, data, buy_s, sell_s, allow_flip=allow_flip_final, catastrophic_stop_pct=catastrophic_stop_pct_final)
+    full_result = simulate_trades_fast(
+        symbol, data, buy_s, sell_s,
+        allow_flip=allow_flip_final,
+        catastrophic_stop_pct=catastrophic_stop_pct_final,
+        trail_activation_mult=best_params.get("trail_activation_mult", 0.0),
+        trail_mult=best_params.get("trail_mult", 0.0),
+    )
     full_metrics = calculate_metrics(
         full_result.trades, full_result.backtest_days,
         start_equity=STARTING_EQUITY,
@@ -478,6 +499,8 @@ def run_optimization(
                 start_idx=MIN_WARMUP_BARS, end_idx=train_end,
                 allow_flip=allow_flip_final,
                 catastrophic_stop_pct=catastrophic_stop_pct_final,
+                trail_activation_mult=best_params.get("trail_activation_mult", 0.0),
+                trail_mult=best_params.get("trail_mult", 0.0),
             )
             if tr.trades:
                 last_train_metrics = calculate_metrics(
@@ -490,6 +513,8 @@ def run_optimization(
             start_idx=test_start, end_idx=test_end,
             allow_flip=allow_flip_final,
             catastrophic_stop_pct=catastrophic_stop_pct_final,
+            trail_activation_mult=best_params.get("trail_activation_mult", 0.0),
+            trail_mult=best_params.get("trail_mult", 0.0),
         )
         if te_r.trades:
             tm = calculate_metrics(
@@ -639,7 +664,7 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="QRE Optimizer — Quant Whale Strategy AWF")
-    parser.add_argument("--symbol", type=str, default="BTC/USDT", choices=["BTC/USDT", "SOL/USDT", "BNB/USDT"])
+    parser.add_argument("--symbol", type=str, default="BTC/USDT", choices=["BTC/USDT", "SOL/USDT", "BNB/USDT", "ETH/USDT", "XRP/USDT"])
     parser.add_argument("--hours", type=int, default=8760)
     parser.add_argument("--trials", type=int, default=DEFAULT_TRIALS)
     parser.add_argument("--splits", type=int, default=5)

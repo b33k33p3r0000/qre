@@ -1,5 +1,22 @@
 # Session Notes
 
+## 2026-03-21 — QRE Expansion (MQE Harvest)
+
+**Decision:** After comprehensive MQE vs QRE evaluation (8 MQE runs, 6 QRE runs),
+QRE wins on per-pair edge quality (Sharpe 2.35-3.37 vs MQE 1.58-2.77).
+
+**Changes:**
+- Trailing stop harvested from MQE (trail_activation_mult, trail_mult) — ATR(14) based
+- Added ETH/USDT and XRP/USDT (proven in MQE: Calmar 8.88 and 12.94)
+- Position sizing: 20% → 15% (5 pairs × 15% = 75% max exposure)
+- Marathon preset (max history per pair, 87600h sentinel)
+- Parallel 2-pair execution in run.sh
+- Strategy version bumped to 4.3.0
+
+**MQE disposition:** Hibernated. Code preserved, no further development.
+
+---
+
 ## 2026-03-20 — CI/CD + Ecosystem Improvements
 
 **CI/CD:**

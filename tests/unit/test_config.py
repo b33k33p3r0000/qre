@@ -137,3 +137,35 @@ def test_bnb_in_symbols():
     from qre.config import SYMBOLS, SLIPPAGE_MAP
     assert "BNB/USDT" in SYMBOLS
     assert "BNB/USDT" in SLIPPAGE_MAP
+
+
+def test_eth_catastrophic_stop():
+    """ETH catastrophic stop is 8%."""
+    from qre import config
+    assert config.CATASTROPHIC_STOP_PCT["ETH"] == 0.08
+
+
+def test_xrp_catastrophic_stop():
+    """XRP catastrophic stop is 10%."""
+    from qre import config
+    assert config.CATASTROPHIC_STOP_PCT["XRP"] == 0.10
+
+
+def test_eth_slippage():
+    """ETH slippage configured (deep order book, similar to BTC)."""
+    from qre import config
+    assert "ETH/USDT" in config.SLIPPAGE_MAP
+    assert 0.0006 <= config.SLIPPAGE_MAP["ETH/USDT"] <= 0.0008
+
+
+def test_xrp_slippage():
+    """XRP slippage configured (moderate liquidity)."""
+    from qre import config
+    assert "XRP/USDT" in config.SLIPPAGE_MAP
+    assert config.SLIPPAGE_MAP["XRP/USDT"] == 0.0010
+
+
+def test_position_sizing_15pct():
+    """Position sizing updated to 15%."""
+    from qre import config
+    assert config.BACKTEST_POSITION_PCT == 0.15

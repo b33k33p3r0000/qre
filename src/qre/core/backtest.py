@@ -41,6 +41,7 @@ except ImportError:
         return decorator
 
 from qre.config import (
+    ATR_PERIOD,
     BACKTEST_POSITION_PCT,
     BASE_TF,
     CATASTROPHIC_STOP_PCT_DEFAULT,
@@ -76,6 +77,61 @@ def precompute_timeframe_indices(base_timestamps: np.ndarray, tf_timestamps: np.
     return indices.astype(np.int32)
 
 
+def compute_atr(high: np.ndarray, low: np.ndarray, close: np.ndarray, period: int = 14) -> np.ndarray:
+    """Compute ATR (Average True Range) using SMA warmup + EMA.
+
+    Args:
+        high: High prices array.
+        low: Low prices array.
+        close: Close prices array.
+        period: ATR period (default: 14).
+
+    Returns:
+        ATR array (same length as input, first `period` values use SMA warmup).
+    """
+    n = len(close)
+    atr = np.zeros(n, dtype=np.float64)
+
+    if n < 2:
+        return atr
+
+    # True Range: max(high-low, |high-prev_close|, |low-prev_close|)
+    tr = np.zeros(n, dtype=np.float64)
+    tr[0] = high[0] - low[0]
+    for i in range(1, n):
+        hl = high[i] - low[i]
+        hc = abs(high[i] - close[i - 1])
+        lc = abs(low[i] - close[i - 1])
+        tr[i] = max(hl, hc, lc)
+
+    # SMA warmup for first `period` bars
+    if n < period:
+        # Not enough data for full ATR — use cumulative SMA
+        cumsum = 0.0
+        for i in range(n):
+            cumsum += tr[i]
+            atr[i] = cumsum / (i + 1)
+        return atr
+
+    sma_sum = 0.0
+    for i in range(period):
+        sma_sum += tr[i]
+    atr[period - 1] = sma_sum / period
+
+    # EMA (Wilder's smoothing) for remaining bars
+    alpha = 1.0 / period
+    for i in range(period, n):
+        atr[i] = atr[i - 1] * (1.0 - alpha) + tr[i] * alpha
+
+    # Fill initial bars with SMA approximation
+    cumsum = 0.0
+    for i in range(period - 1):
+        cumsum += tr[i]
+        atr[i] = cumsum / (i + 1)
+
+    return atr
+
+
 # =============================================================================
 # NUMBA TRADING LOOP
 # =============================================================================
@@ -98,6 +154,9 @@ def trading_loop_numba(
     long_only: bool,
     allow_flip: bool,
     starting_equity: float,
+    atr: np.ndarray,
+    trail_activation_mult: float,
+    trail_mult: float,
 ) -> tuple[float, np.ndarray, int]:
     """
     Numba trading loop with Long+Short support.
@@ -106,7 +165,7 @@ def trading_loop_numba(
         (final_equity, trades_array, n_trades)
         trades_array columns: [entry_idx, exit_idx, entry_price, exit_price,
                                pnl_abs, pnl_pct, exit_reason, size, capital_at_entry, direction]
-        exit_reason: 0=signal, 1=catastrophic_stop, 2=force_close
+        exit_reason: 0=signal, 1=catastrophic_stop, 2=force_close, 3=trailing_stop
         direction: +1=long, -1=short
     """
     cash = starting_equity
@@ -115,6 +174,11 @@ def trading_loop_numba(
     entry_bar_idx = 0
     entry_price = 0.0
     capital_at_entry = 0.0
+
+    # Trailing stop state (int flags for Numba compatibility)
+    trail_enabled = trail_activation_mult > 0.0 and trail_mult > 0.0
+    peak_price = 0.0
+    trail_active = 0  # 0=inactive, 1=activated
 
     # Numba requires fixed-size pre-allocation (cannot grow arrays dynamically).
     # Actual trades << max_trades; trimmed via [:n_trades] on return.
@@ -126,6 +190,7 @@ def trading_loop_numba(
         current_price = close[bar]
         current_high = high[bar]
         current_low = low[bar]
+        current_atr = atr[bar]
 
         # === CATASTROPHIC STOP (highest priority) ===
         if position == 1:  # long
@@ -152,6 +217,8 @@ def trading_loop_numba(
                 cash += sell_proceeds
                 position = 0
                 position_size = 0.0
+                peak_price = 0.0
+                trail_active = 0
                 continue
 
         elif position == -1:  # short
@@ -178,7 +245,83 @@ def trading_loop_numba(
                 cash += capital_at_entry + pnl
                 position = 0
                 position_size = 0.0
+                peak_price = 0.0
+                trail_active = 0
                 continue
+
+        # === TRAILING STOP (bypasses min_hold, checked before signal exit) ===
+        if trail_enabled and position != 0 and current_atr > 0.0:
+            if position == 1:  # long
+                # Update peak price
+                if current_high > peak_price:
+                    peak_price = current_high
+                # Check activation
+                if trail_active == 0 and (peak_price - entry_price) >= trail_activation_mult * current_atr:
+                    trail_active = 1
+                # Check trail trigger
+                if trail_active == 1:
+                    trail_level = peak_price - trail_mult * current_atr
+                    if current_low <= trail_level:
+                        exit_price = trail_level * (1.0 - slippage)
+                        fee_cost = exit_price * position_size * fee
+                        sell_proceeds = position_size * exit_price - fee_cost
+                        pnl = sell_proceeds - capital_at_entry
+                        pnl_pct = pnl / capital_at_entry if capital_at_entry > 0 else 0.0
+
+                        trades[n_trades, 0] = entry_bar_idx
+                        trades[n_trades, 1] = bar
+                        trades[n_trades, 2] = entry_price
+                        trades[n_trades, 3] = exit_price
+                        trades[n_trades, 4] = pnl
+                        trades[n_trades, 5] = pnl_pct
+                        trades[n_trades, 6] = 3  # trailing_stop
+                        trades[n_trades, 7] = position_size
+                        trades[n_trades, 8] = capital_at_entry
+                        trades[n_trades, 9] = 1  # long
+                        n_trades += 1
+
+                        cash += sell_proceeds
+                        position = 0
+                        position_size = 0.0
+                        peak_price = 0.0
+                        trail_active = 0
+                        continue
+
+            elif position == -1:  # short
+                # Update peak price (lowest for shorts)
+                if current_low < peak_price or peak_price == 0.0:
+                    peak_price = current_low
+                # Check activation
+                if trail_active == 0 and (entry_price - peak_price) >= trail_activation_mult * current_atr:
+                    trail_active = 1
+                # Check trail trigger
+                if trail_active == 1:
+                    trail_level = peak_price + trail_mult * current_atr
+                    if current_high >= trail_level:
+                        exit_price = trail_level * (1.0 + slippage)
+                        net_entry_rev = position_size * entry_price * (1.0 - fee)
+                        net_exit_cost = position_size * exit_price * (1.0 + fee)
+                        pnl = net_entry_rev - net_exit_cost
+                        pnl_pct = pnl / capital_at_entry if capital_at_entry > 0 else 0.0
+
+                        trades[n_trades, 0] = entry_bar_idx
+                        trades[n_trades, 1] = bar
+                        trades[n_trades, 2] = entry_price
+                        trades[n_trades, 3] = exit_price
+                        trades[n_trades, 4] = pnl
+                        trades[n_trades, 5] = pnl_pct
+                        trades[n_trades, 6] = 3  # trailing_stop
+                        trades[n_trades, 7] = position_size
+                        trades[n_trades, 8] = capital_at_entry
+                        trades[n_trades, 9] = -1  # short
+                        n_trades += 1
+
+                        cash += capital_at_entry + pnl
+                        position = 0
+                        position_size = 0.0
+                        peak_price = 0.0
+                        trail_active = 0
+                        continue
 
         # === SIGNAL EXIT + FLIP ===
         bars_held = bar - entry_bar_idx if position != 0 else 0
@@ -216,6 +359,8 @@ def trading_loop_numba(
                 cash -= capital_at_entry
                 entry_bar_idx = bar
                 position = -1
+                peak_price = entry_price
+                trail_active = 0
 
         elif position == -1 and buy_signal[bar] and can_exit:
             # Close short
@@ -249,6 +394,8 @@ def trading_loop_numba(
                 cash -= capital_at_entry
                 entry_bar_idx = bar
                 position = 1
+                peak_price = entry_price
+                trail_active = 0
 
         # === OPEN NEW POSITION (if flat) ===
         elif position == 0:
@@ -259,6 +406,8 @@ def trading_loop_numba(
                 cash -= capital_at_entry
                 entry_bar_idx = bar
                 position = 1
+                peak_price = entry_price
+                trail_active = 0
             elif sell_signal[bar] and not long_only and cash > 0:
                 entry_price = current_price * (1.0 - slippage)
                 capital_at_entry = cash * position_pct
@@ -266,6 +415,8 @@ def trading_loop_numba(
                 cash -= capital_at_entry
                 entry_bar_idx = bar
                 position = -1
+                peak_price = entry_price
+                trail_active = 0
 
     # === FORCE CLOSE AT END ===
     if position != 0 and position_size > 0:
@@ -317,6 +468,8 @@ def simulate_trades_fast(
     long_only: bool | None = None,
     allow_flip: bool | None = None,
     catastrophic_stop_pct: float | None = None,
+    trail_activation_mult: float = 0.0,
+    trail_mult: float = 0.0,
 ) -> BacktestResult:
     """
     Backtest with 1D buy/sell signals. Supports Long+Short.
@@ -334,6 +487,10 @@ def simulate_trades_fast(
             Default: True (backward compat with v4.0).
         catastrophic_stop_pct: Override catastrophic stop percentage.
             If None, falls back to CATASTROPHIC_STOP_PCT_DEFAULT config constant (0.10).
+        trail_activation_mult: ATR multiplier for trailing stop activation.
+            0.0 = disabled (default, backward compat).
+        trail_mult: ATR multiplier for trailing stop distance.
+            0.0 = disabled (default, backward compat).
 
     Returns:
         BacktestResult with equity, trades list, and backtest_days.
@@ -361,6 +518,9 @@ def simulate_trades_fast(
     high_arr = base["high"].values.astype(np.float64)
     low_arr = base["low"].values.astype(np.float64)
 
+    # Compute ATR outside Numba (pandas-free, pure numpy)
+    atr_arr = compute_atr(high_arr, low_arr, close, period=ATR_PERIOD)
+
     slippage = get_slippage(symbol)
 
     final_equity, trades_arr, n_trades = trading_loop_numba(
@@ -379,9 +539,12 @@ def simulate_trades_fast(
         long_only=long_only,
         allow_flip=allow_flip,
         starting_equity=float(STARTING_EQUITY),
+        atr=atr_arr,
+        trail_activation_mult=float(trail_activation_mult),
+        trail_mult=float(trail_mult),
     )
 
-    reason_map = {0: "signal", 1: "catastrophic_stop", 2: "force_close"}
+    reason_map = {0: "signal", 1: "catastrophic_stop", 2: "force_close", 3: "trailing_stop"}
     direction_map = {1: "long", -1: "short"}
     trades = []
 

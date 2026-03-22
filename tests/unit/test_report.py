@@ -659,3 +659,29 @@ class TestRenderTopTrials:
         strategy_pos = html.index(">STRATEGY<")
         top_trials_pos = html.index(">TOP TRIALS<")
         assert strategy_pos < top_trials_pos
+
+
+class TestTrailingStopExitReason:
+    def test_exit_reason_includes_trailing_stop(self):
+        """Exit reason breakdown includes trailing_stop row."""
+        from qre.report import _render_exit_reason_breakdown
+        trades = [
+            {"reason": "signal", "pnl_abs": 100, "pnl_pct": 0.05},
+            {"reason": "trailing_stop", "pnl_abs": 200, "pnl_pct": 0.10},
+            {"reason": "catastrophic_stop", "pnl_abs": -50, "pnl_pct": -0.03},
+        ]
+        html = _render_exit_reason_breakdown(trades)
+        assert "trailing_stop" in html.lower() or "Trailing Stop" in html
+
+    def test_bullet_chart_includes_trail_params(self):
+        """Bullet chart renders trail_activation_mult and trail_mult."""
+        from qre.report import _render_strategy_params
+        params = {
+            "macd_fast": 3.5, "macd_slow": 26, "macd_signal": 3,
+            "rsi_period": 5, "rsi_lower": 31, "rsi_upper": 63, "rsi_lookback": 3,
+            "trend_tf": "4h", "trend_strict": 1, "allow_flip": 0,
+            "trail_activation_mult": 2.0, "trail_mult": 3.0,
+        }
+        html = _render_strategy_params(params)
+        assert "trail_activation" in html.lower() or "Trail activation" in html
+        assert "trail_mult" in html.lower() or "Trail mult" in html
