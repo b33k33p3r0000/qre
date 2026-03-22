@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import plotext as plt
+from rich.align import Align
 from rich.console import Console, Group
 from rich.panel import Panel
 from rich.table import Table
@@ -427,7 +428,7 @@ def render_symbol_panel(stats: SymbolStats, prev_best: float | None = None) -> P
 
     if chart is not None and term_width >= 100:
         layout = Table(show_header=False, show_edge=False, box=None, padding=(0, 1), expand=True)
-        layout.add_column("stats", no_wrap=True)
+        layout.add_column("stats", no_wrap=True, vertical="middle")
         layout.add_column("chart", no_wrap=True)
         layout.add_row(table, Group(Text("Convergence", style="dim"), chart))
         content = layout
