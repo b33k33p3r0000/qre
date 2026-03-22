@@ -43,6 +43,11 @@ class SymbolStats:
     trials_per_min: float | None = None
     eta_minutes: float | None = None
     warm_start_source: str | None = None
+    pruned_pct: float | None = None
+    elapsed_minutes: float | None = None
+    last_improvement_trial: int | None = None
+    last_improvement_age_min: float | None = None
+    convergence_data: list[tuple[int, float]] = field(default_factory=list)
 
 
 def find_active_runs(
@@ -78,6 +83,53 @@ def find_active_runs(
     return list(runs.values())
 
 
+def _query_convergence_data(cur: sqlite3.Cursor, max_points: int = 60) -> list[tuple[int, float]]:
+    """Query running best objective across trials for convergence chart.
+    Uses an existing cursor (avoids opening a second DB connection).
+    Returns list of (trial_number, running_best_value) downsampled to max_points.
+    """
+    try:
+        cur.execute("""
+            SELECT t.number, tv.value
+            FROM trials t
+            JOIN trial_values tv ON t.trial_id = tv.trial_id
+            WHERE t.state = 'COMPLETE'
+            ORDER BY t.number
+        """)
+        rows = cur.fetchall()
+        if not rows:
+            return []
+        data = []
+        best_so_far = float("-inf")
+        for row in rows:
+            val = row["value"]
+            if val > best_so_far:
+                best_so_far = val
+            data.append((row["number"], best_so_far))
+        if len(data) <= max_points:
+            return data
+        step = (len(data) - 1) / (max_points - 1)
+        sampled = [data[int(i * step)] for i in range(max_points - 1)]
+        sampled.append(data[-1])
+        return sampled
+    except Exception:
+        return []
+
+
+def query_convergence_data(db_path: Path, max_points: int = 60) -> list[tuple[int, float]]:
+    """Public wrapper — opens read-only connection and delegates to _query_convergence_data."""
+    try:
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+    except Exception:
+        return []
+    try:
+        return _query_convergence_data(cur, max_points)
+    finally:
+        conn.close()
+
+
 def query_db_stats(db_path: Path) -> SymbolStats | None:
     """Query Optuna SQLite DB for trial statistics.
 
@@ -105,6 +157,11 @@ def query_db_stats(db_path: Path) -> SymbolStats | None:
                 stats.pruned = row["cnt"]
             elif row["state"] == "FAIL":
                 stats.failed = row["cnt"]
+
+        # Pruned percentage
+        total = stats.completed + stats.pruned + stats.failed
+        if total > 0:
+            stats.pruned_pct = round(stats.pruned / total * 100, 1)
 
         # n_trials_requested from study user_attrs
         cur.execute(
@@ -145,6 +202,7 @@ def query_db_stats(db_path: Path) -> SymbolStats | None:
         if best_row:
             stats.best_value = best_row["value"]
             stats.best_trial_number = best_row["number"]
+            stats.last_improvement_trial = best_row["number"]
             best_trial_id = best_row["trial_id"]
 
             # Best trial params
@@ -173,6 +231,7 @@ def query_db_stats(db_path: Path) -> SymbolStats | None:
             try:
                 start_dt = datetime.fromisoformat(row["first_start"])
                 elapsed_min = (datetime.now(timezone.utc) - start_dt).total_seconds() / 60.0
+                stats.elapsed_minutes = round(elapsed_min, 1)
                 total_done = stats.completed + stats.pruned + stats.failed
                 if elapsed_min > 0 and total_done > 0:
                     stats.trials_per_min = round(total_done / elapsed_min, 1)
@@ -182,6 +241,24 @@ def query_db_stats(db_path: Path) -> SymbolStats | None:
                             stats.eta_minutes = round(remaining / stats.trials_per_min, 1)
             except (ValueError, TypeError):
                 pass
+
+        # Last improvement age (time since best trial)
+        if best_row:
+            cur.execute(
+                "SELECT datetime_start FROM trials WHERE trial_id = ?",
+                (best_row["trial_id"],),
+            )
+            best_time_row = cur.fetchone()
+            if best_time_row and best_time_row["datetime_start"]:
+                try:
+                    best_dt = datetime.fromisoformat(best_time_row["datetime_start"])
+                    age = (datetime.now(timezone.utc) - best_dt).total_seconds() / 60.0
+                    stats.last_improvement_age_min = round(age, 1)
+                except (ValueError, TypeError):
+                    pass
+
+        # Convergence data for chart
+        stats.convergence_data = _query_convergence_data(cur)
 
         return stats
     except Exception:

@@ -270,6 +270,91 @@ class TestRenderSymbolPanel:
         assert "calmar-btc-v2" in output
 
 
+class TestNewSymbolStatsFields:
+    """Test new fields added to SymbolStats."""
+
+    def test_pruned_pct_computed(self, tmp_path):
+        from qre.monitor import query_db_stats
+        db_path = tmp_path / "optuna_BTC.db"
+        _create_mock_optuna_db(db_path, n_trials=100, best_value=5.0)
+        stats = query_db_stats(db_path)
+        assert stats.pruned_pct is not None
+        assert 0 <= stats.pruned_pct <= 100
+        assert stats.pruned_pct == pytest.approx(20.0, abs=1.0)
+
+    def test_elapsed_minutes_present(self, tmp_path):
+        from qre.monitor import query_db_stats
+        db_path = tmp_path / "optuna_BTC.db"
+        _create_mock_optuna_db(db_path, n_trials=100, best_value=5.0)
+        stats = query_db_stats(db_path)
+        assert stats.elapsed_minutes is not None
+        assert stats.elapsed_minutes > 0
+
+    def test_last_improvement_trial(self, tmp_path):
+        from qre.monitor import query_db_stats
+        db_path = tmp_path / "optuna_BTC.db"
+        _create_mock_optuna_db(db_path, n_trials=100, best_value=5.0)
+        stats = query_db_stats(db_path)
+        assert stats.last_improvement_trial is not None
+        assert stats.last_improvement_trial == 99
+
+    def test_last_improvement_age_min(self, tmp_path):
+        from qre.monitor import query_db_stats
+        db_path = tmp_path / "optuna_BTC.db"
+        _create_mock_optuna_db(db_path, n_trials=100, best_value=5.0)
+        stats = query_db_stats(db_path)
+        assert stats.last_improvement_age_min is not None
+        assert stats.last_improvement_age_min >= 0
+
+    def test_convergence_data_populated(self, tmp_path):
+        from qre.monitor import query_db_stats
+        db_path = tmp_path / "optuna_BTC.db"
+        _create_mock_optuna_db(db_path, n_trials=100, best_value=5.0)
+        stats = query_db_stats(db_path)
+        assert stats.convergence_data is not None
+        assert len(stats.convergence_data) > 0
+        values = [v for _, v in stats.convergence_data]
+        for i in range(1, len(values)):
+            assert values[i] >= values[i - 1]
+
+
+class TestQueryConvergenceData:
+    """Test convergence data query and downsampling."""
+
+    def test_returns_monotonic_data(self, tmp_path):
+        from qre.monitor import query_convergence_data
+        db_path = tmp_path / "optuna_BTC.db"
+        _create_mock_optuna_db(db_path, n_trials=100, best_value=5.0)
+        data = query_convergence_data(db_path)
+        assert len(data) > 0
+        values = [v for _, v in data]
+        for i in range(1, len(values)):
+            assert values[i] >= values[i - 1]
+
+    def test_downsamples_large_data(self, tmp_path):
+        from qre.monitor import query_convergence_data
+        db_path = tmp_path / "optuna_BTC.db"
+        _create_mock_optuna_db(db_path, n_trials=500, best_value=5.0)
+        data = query_convergence_data(db_path, max_points=60)
+        assert len(data) == 60
+        assert data[0][0] == 1
+        assert data[-1][0] == 499
+
+    def test_no_downsample_small_data(self, tmp_path):
+        from qre.monitor import query_convergence_data
+        db_path = tmp_path / "optuna_BTC.db"
+        _create_mock_optuna_db(db_path, n_trials=20, best_value=3.0)
+        data = query_convergence_data(db_path, max_points=60)
+        assert len(data) == 16
+
+    def test_empty_db(self, tmp_path):
+        from qre.monitor import query_convergence_data
+        db_path = tmp_path / "optuna_BTC.db"
+        _create_mock_optuna_db(db_path, n_trials=0, best_value=0.0)
+        data = query_convergence_data(db_path)
+        assert data == []
+
+
 def _create_mock_optuna_db(path: Path, n_trials: int, best_value: float):
     """Create a minimal Optuna-compatible SQLite DB for testing."""
     conn = sqlite3.connect(str(path))
@@ -302,11 +387,16 @@ def _create_mock_optuna_db(path: Path, n_trials: int, best_value: float):
         key TEXT, value_json TEXT
     )""")
 
+    from datetime import datetime, timedelta, timezone
+
+    base_time = datetime.now(timezone.utc) - timedelta(hours=2)
     for i in range(n_trials):
         state = "COMPLETE" if i % 5 != 0 else "PRUNED"
+        trial_time = base_time + timedelta(seconds=i * 10)
+        dt_str = trial_time.strftime("%Y-%m-%d %H:%M:%S+00:00")
         cur.execute(
-            "INSERT INTO trials VALUES (?, ?, 1, ?, '2026-02-21 04:00:00', '2026-02-21 04:01:00')",
-            (i + 1, i, state),
+            "INSERT INTO trials VALUES (?, ?, 1, ?, ?, ?)",
+            (i + 1, i, state, dt_str, dt_str),
         )
         if state == "COMPLETE":
             value = best_value if i == n_trials - 1 else best_value * 0.5
