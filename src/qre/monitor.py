@@ -14,6 +14,7 @@ Reads Optuna SQLite checkpoint DBs in read-only mode.
 from __future__ import annotations
 
 import json
+import shutil
 import sqlite3
 import time
 from dataclasses import dataclass, field
@@ -424,16 +425,24 @@ def render_symbol_panel(stats: SymbolStats, prev_best: float | None = None) -> P
         warm_str = f"    Warm  {stats.warm_start_source}" if stats.warm_start_source else ""
         table.add_row("Trend", f"{p['trend']}{warm_str}")
 
-    # — Build panel with optional chart —
-    renderables = [table]
+    # — Build panel: side-by-side on wide terminals, stacked on narrow —
+    chart = render_convergence_chart(stats.convergence_data, width=40, height=14)
+    term_width = shutil.get_terminal_size((80, 24)).columns
 
-    chart = render_convergence_chart(stats.convergence_data)
-    if chart is not None:
-        renderables.append(Text(""))  # spacer
-        renderables.append(Text("  Convergence", style="dim"))
-        renderables.append(chart)
+    if chart is not None and term_width >= 100:
+        # Side-by-side: stats left, chart right
+        layout = Table(show_header=False, show_edge=False, box=None, padding=(0, 1), expand=True)
+        layout.add_column("stats", no_wrap=True)
+        layout.add_column("chart", no_wrap=True)
+        layout.add_row(table, Group(Text("Convergence", style="dim"), chart))
+        content = layout
+    elif chart is not None:
+        # Stacked: stats on top, chart below
+        content = Group(table, Text(""), Text("  Convergence", style="dim"), chart)
+    else:
+        content = table
 
-    return Panel(Group(*renderables), title=f"[bold]{stats.symbol}[/bold]", border_style="cyan")
+    return Panel(content, title=f"[bold]{stats.symbol}[/bold]", border_style="cyan")
 
 
 def render_dashboard(
