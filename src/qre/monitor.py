@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import plotext as plt
-from rich.console import Console
+from rich.console import Console, Group
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
@@ -347,7 +347,7 @@ def render_convergence_chart(
 def render_symbol_panel(stats: SymbolStats, prev_best: float | None = None) -> Panel:
     """Render a Rich Panel for one symbol's stats.
 
-    Uses a borderless Rich Table for aligned label-value layout.
+    Uses Rich Group containing a Table (stats) + optional convergence chart.
     """
     total = stats.completed + stats.pruned + stats.failed
     requested = stats.n_trials_requested or total
@@ -356,36 +356,53 @@ def render_symbol_panel(stats: SymbolStats, prev_best: float | None = None) -> P
     table.add_column("label", style="dim", justify="right", min_width=12)
     table.add_column("value", justify="left")
 
+    # — Early state: no completed trials yet —
+    if stats.completed == 0 and stats.best_value is None:
+        table.add_row("", "[yellow]Waiting for first trial...[/yellow]")
+        return Panel(table, title=f"[bold]{stats.symbol}[/bold]", border_style="cyan")
+
     # — Progress section —
-    table.add_row("Progress", f"{stats.completed:,} / {requested:,}")
+    if requested > 0:
+        pct = min(total / requested, 1.0)
+        bar_width = 20
+        filled = int(pct * bar_width)
+        bar = "\u2588" * filled + "\u2591" * (bar_width - filled)
+        table.add_row("Progress", f"{bar}  {total:,} / {requested:,}")
+    else:
+        table.add_row("Progress", f"{total:,}")
+
     rate_str = f"{stats.trials_per_min} t/min" if stats.trials_per_min else "..."
-    table.add_row("Speed", rate_str)
+    elapsed_str = _format_elapsed(stats.elapsed_minutes)
+    table.add_row("Speed", f"{rate_str}    Elapsed  {elapsed_str}")
     if stats.eta_minutes:
         table.add_row("ETA", f"~{int(stats.eta_minutes)} min")
-    if stats.warm_start_source:
-        table.add_row("Warm start", f"[yellow]{stats.warm_start_source}[/yellow]")
 
     table.add_row("", "")  # section separator
 
     # — Best trial section —
     trial_num = f"#{stats.best_trial_number:,}" if stats.best_trial_number is not None else "?"
-    table.add_row("Best trial", trial_num)
-
     is_new = prev_best is not None and stats.best_value is not None and stats.best_value > prev_best
     new_marker = "  [bold green]NEW[/bold green]" if is_new else ""
-    val = f"{stats.best_value:.4f}" if stats.best_value is not None else "—"
-    table.add_row("Log Calmar", f"{val}{new_marker}")
+    val = f"{stats.best_value:.4f}" if stats.best_value is not None else "\u2014"
+    table.add_row("Best", f"{trial_num}  Log Calmar {val}{new_marker}")
+
+    if stats.last_improvement_trial is not None and stats.last_improvement_age_min is not None:
+        age_str = _format_elapsed(stats.last_improvement_age_min)
+        table.add_row("Last impr", f"#{stats.last_improvement_trial:,} ({age_str} ago)")
+
+    if stats.pruned_pct is not None:
+        table.add_row("Pruned", f"{stats.pruned_pct:.1f}%")
 
     table.add_row("", "")  # section separator
 
-    # — Metrics section —
+    # — Metrics section (compact 2-col) —
     ua = stats.user_attrs
     if ua:
-        sharpe = ua.get("sharpe_equity", "—")
-        dd = ua.get("max_drawdown", "—")
-        pnl = ua.get("total_pnl_pct", "—")
-        trades = ua.get("trades", "—")
-        tpy = ua.get("trades_per_year", "—")
+        sharpe = ua.get("sharpe_equity", "\u2014")
+        dd = ua.get("max_drawdown", "\u2014")
+        pnl = ua.get("total_pnl_pct", "\u2014")
+        trades = ua.get("trades", "\u2014")
+        tpy = ua.get("trades_per_year", "\u2014")
 
         sharpe_str = f"{sharpe:.2f}" if isinstance(sharpe, (int, float)) else str(sharpe)
         dd_str = f"{dd:.1f}%" if isinstance(dd, (int, float)) else str(dd)
@@ -394,23 +411,29 @@ def render_symbol_panel(stats: SymbolStats, prev_best: float | None = None) -> P
         else:
             pnl_str = str(pnl)
 
-        table.add_row("Sharpe (eq)", sharpe_str)
-        table.add_row("Max DD", dd_str)
-        table.add_row("P&L", pnl_str)
-        table.add_row("Trades", str(trades))
-        table.add_row("Trades/yr", str(tpy))
+        table.add_row("Sharpe", f"{sharpe_str}    Max DD  {dd_str}")
+        table.add_row("P&L", f"{pnl_str}    Trades  {trades} ({tpy}/yr)")
     else:
         table.add_row("", "[dim](no metrics)[/dim]")
 
-    # — Params section —
+    # — Params section (compact) —
     if stats.best_params:
         table.add_row("", "")  # section separator
         p = format_params(stats.best_params)
-        table.add_row("MACD", p["macd"])
-        table.add_row("RSI", p["rsi"])
-        table.add_row("Trend", p["trend"])
+        table.add_row("MACD", f"{p['macd']}   RSI  {p['rsi']}")
+        warm_str = f"    Warm  {stats.warm_start_source}" if stats.warm_start_source else ""
+        table.add_row("Trend", f"{p['trend']}{warm_str}")
 
-    return Panel(table, title=f"[bold]{stats.symbol}[/bold]", border_style="cyan")
+    # — Build panel with optional chart —
+    renderables = [table]
+
+    chart = render_convergence_chart(stats.convergence_data)
+    if chart is not None:
+        renderables.append(Text(""))  # spacer
+        renderables.append(Text("  Convergence", style="dim"))
+        renderables.append(chart)
+
+    return Panel(Group(*renderables), title=f"[bold]{stats.symbol}[/bold]", border_style="cyan")
 
 
 def render_dashboard(

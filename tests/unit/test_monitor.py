@@ -413,6 +413,126 @@ class TestFormatElapsed:
         assert _format_elapsed(60.0) == "1h 00m"
 
 
+class TestNewPanelLayout:
+    """Test redesigned panel layout."""
+
+    def test_progress_shows_total_not_completed(self):
+        """Progress bar shows total processed, not just completed."""
+        from rich.console import Console
+        from io import StringIO
+        from qre.monitor import render_symbol_panel, SymbolStats
+        stats = SymbolStats(
+            symbol="BTC", completed=600, pruned=300, failed=100,
+            n_trials_requested=5000, best_value=1.5, best_trial_number=50,
+            best_params={"macd_fast": 2.5}, user_attrs={"sharpe_equity": 1.5},
+        )
+        console = Console(file=StringIO(), force_terminal=True, width=80)
+        panel = render_symbol_panel(stats)
+        console.print(panel)
+        output = console.file.getvalue()
+        assert "1,000" in output
+
+    def test_elapsed_displayed(self):
+        from rich.console import Console
+        from io import StringIO
+        from qre.monitor import render_symbol_panel, SymbolStats
+        stats = SymbolStats(
+            symbol="BTC", completed=100, best_value=1.0, best_trial_number=50,
+            elapsed_minutes=135.0, trials_per_min=4.2,
+            best_params={"macd_fast": 2.5}, user_attrs={"sharpe_equity": 1.5},
+        )
+        console = Console(file=StringIO(), force_terminal=True, width=80)
+        panel = render_symbol_panel(stats)
+        console.print(panel)
+        output = console.file.getvalue()
+        assert "2h 15m" in output
+
+    def test_last_improvement_displayed(self):
+        from rich.console import Console
+        from io import StringIO
+        from qre.monitor import render_symbol_panel, SymbolStats
+        stats = SymbolStats(
+            symbol="BTC", completed=100, best_value=1.0, best_trial_number=50,
+            last_improvement_trial=50, last_improvement_age_min=25.0,
+            best_params={"macd_fast": 2.5}, user_attrs={"sharpe_equity": 1.5},
+        )
+        console = Console(file=StringIO(), force_terminal=True, width=80)
+        panel = render_symbol_panel(stats)
+        console.print(panel)
+        output = console.file.getvalue()
+        assert "25 min" in output
+
+    def test_pruned_pct_displayed(self):
+        from rich.console import Console
+        from io import StringIO
+        from qre.monitor import render_symbol_panel, SymbolStats
+        stats = SymbolStats(
+            symbol="BTC", completed=100, pruned=50,
+            pruned_pct=33.3, best_value=1.0, best_trial_number=50,
+            best_params={"macd_fast": 2.5}, user_attrs={"sharpe_equity": 1.5},
+        )
+        console = Console(file=StringIO(), force_terminal=True, width=80)
+        panel = render_symbol_panel(stats)
+        console.print(panel)
+        output = console.file.getvalue()
+        assert "33.3" in output
+
+    def test_compact_metrics_layout(self):
+        from rich.console import Console
+        from io import StringIO
+        from qre.monitor import render_symbol_panel, SymbolStats
+        stats = SymbolStats(
+            symbol="BTC", completed=100, best_value=1.0, best_trial_number=50,
+            best_params={"macd_fast": 2.5},
+            user_attrs={
+                "sharpe_equity": 2.41, "max_drawdown": 6.2,
+                "total_pnl_pct": 142.3, "trades": 284, "trades_per_year": 94,
+            },
+        )
+        console = Console(file=StringIO(), force_terminal=True, width=80)
+        panel = render_symbol_panel(stats)
+        console.print(panel)
+        output = console.file.getvalue()
+        assert "2.41" in output
+        assert "6.2" in output
+
+    def test_convergence_chart_in_panel(self):
+        from rich.console import Console
+        from io import StringIO
+        from qre.monitor import render_symbol_panel, SymbolStats
+        stats = SymbolStats(
+            symbol="BTC", completed=100, best_value=1.0, best_trial_number=50,
+            best_params={"macd_fast": 2.5}, user_attrs={"sharpe_equity": 1.5},
+            convergence_data=[(i, float(i) * 0.01) for i in range(20)],
+        )
+        console = Console(file=StringIO(), force_terminal=True, width=80)
+        panel = render_symbol_panel(stats)
+        console.print(panel)
+        output = console.file.getvalue()
+        assert len(output) > 100
+
+    def test_no_chart_when_insufficient_data(self):
+        from qre.monitor import render_symbol_panel, SymbolStats
+        stats = SymbolStats(
+            symbol="BTC", completed=5, best_value=1.0, best_trial_number=3,
+            best_params={"macd_fast": 2.5}, user_attrs={"sharpe_equity": 1.5},
+            convergence_data=[(1, 1.0)],
+        )
+        panel = render_symbol_panel(stats)
+        assert panel is not None
+
+    def test_waiting_for_first_trial(self):
+        from rich.console import Console
+        from io import StringIO
+        from qre.monitor import render_symbol_panel, SymbolStats
+        stats = SymbolStats(symbol="BTC", completed=0)
+        console = Console(file=StringIO(), force_terminal=True, width=80)
+        panel = render_symbol_panel(stats)
+        console.print(panel)
+        output = console.file.getvalue()
+        assert "Waiting for first trial" in output
+
+
 def _create_mock_optuna_db(path: Path, n_trials: int, best_value: float):
     """Create a minimal Optuna-compatible SQLite DB for testing."""
     conn = sqlite3.connect(str(path))
