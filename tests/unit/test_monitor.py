@@ -355,6 +355,64 @@ class TestQueryConvergenceData:
         assert data == []
 
 
+class TestRenderConvergenceChart:
+    """Test plotext convergence chart rendering."""
+
+    def test_returns_rich_text(self):
+        from rich.text import Text
+        from qre.monitor import render_convergence_chart
+        data = [(i, float(i) * 0.1) for i in range(20)]
+        result = render_convergence_chart(data, width=50, height=8)
+        assert isinstance(result, Text)
+
+    def test_empty_data_returns_none(self):
+        from qre.monitor import render_convergence_chart
+        result = render_convergence_chart([], width=50, height=8)
+        assert result is None
+
+    def test_single_point_returns_none(self):
+        from qre.monitor import render_convergence_chart
+        result = render_convergence_chart([(1, 2.0)], width=50, height=8)
+        assert result is None
+
+    def test_two_points_returns_chart(self):
+        from rich.text import Text
+        from qre.monitor import render_convergence_chart
+        data = [(1, 1.0), (100, 2.0)]
+        result = render_convergence_chart(data, width=50, height=8)
+        assert isinstance(result, Text)
+
+    def test_chart_string_is_nonempty(self):
+        from qre.monitor import render_convergence_chart
+        data = [(i, float(i) * 0.01) for i in range(50)]
+        result = render_convergence_chart(data, width=50, height=8)
+        assert len(result.plain) > 0
+
+
+class TestFormatElapsed:
+    """Test _format_elapsed helper."""
+
+    def test_none_returns_dots(self):
+        from qre.monitor import _format_elapsed
+        assert _format_elapsed(None) == "..."
+
+    def test_less_than_one_minute(self):
+        from qre.monitor import _format_elapsed
+        assert _format_elapsed(0.5) == "< 1 min"
+
+    def test_minutes_only(self):
+        from qre.monitor import _format_elapsed
+        assert _format_elapsed(45.0) == "45 min"
+
+    def test_hours_and_minutes(self):
+        from qre.monitor import _format_elapsed
+        assert _format_elapsed(135.0) == "2h 15m"
+
+    def test_exact_hour(self):
+        from qre.monitor import _format_elapsed
+        assert _format_elapsed(60.0) == "1h 00m"
+
+
 def _create_mock_optuna_db(path: Path, n_trials: int, best_value: float):
     """Create a minimal Optuna-compatible SQLite DB for testing."""
     conn = sqlite3.connect(str(path))

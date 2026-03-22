@@ -20,9 +20,11 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+import plotext as plt
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
+from rich.text import Text
 
 
 ACTIVE_RUN_MAX_AGE = 300  # seconds — DB mtime threshold
@@ -304,6 +306,42 @@ def format_params(params: dict) -> dict[str, str]:
         "rsi": f"{rp} [{rl}-{ru}] lb={rlb}",
         "trend": str(ttf),
     }
+
+
+def _format_elapsed(minutes: float | None) -> str:
+    """Format elapsed minutes as 'Xh Ym' or '< 1 min'."""
+    if minutes is None:
+        return "..."
+    if minutes < 1:
+        return "< 1 min"
+    h = int(minutes // 60)
+    m = int(minutes % 60)
+    if h > 0:
+        return f"{h}h {m:02d}m"
+    return f"{m} min"
+
+
+def render_convergence_chart(
+    data: list[tuple[int, float]],
+    width: int = 50,
+    height: int = 8,
+) -> Text | None:
+    """Render a Braille convergence chart using plotext.
+    Returns Rich Text object with ANSI-rendered chart, or None if insufficient data.
+    """
+    if len(data) < 2:
+        return None
+
+    trial_nums = [d[0] for d in data]
+    values = [d[1] for d in data]
+
+    plt.clf()
+    plt.plotsize(width, height)
+    plt.plot(trial_nums, values, marker="braille")
+    plt.theme("clear")
+
+    chart_str = plt.build()
+    return Text.from_ansi(chart_str)
 
 
 def render_symbol_panel(stats: SymbolStats, prev_best: float | None = None) -> Panel:
