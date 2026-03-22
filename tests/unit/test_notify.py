@@ -48,6 +48,48 @@ class TestFormatCompleteMessage:
         assert "overfit" in msg.lower() or "warning" in msg.lower() or "\u26a0" in msg
 
 
+class TestAutonomousNotifications:
+    def test_format_autonomous_status(self):
+        """Status message contains iteration and status."""
+        from qre.notify import format_autonomous_status
+        msg = format_autonomous_status(iteration=1, max_iterations=5, status="ANALYZING",
+            details={"Run": "2026-03-22_10-05-00", "Preset": "Main (40k, 3yr)"})
+        assert "AUTONOMOUS OPTIMIZER [1/5]" in msg
+        assert "ANALYZING" in msg
+        assert "2026-03-22_10-05-00" in msg
+
+    def test_format_autonomous_verdict(self):
+        from qre.notify import format_autonomous_verdict
+        msg = format_autonomous_verdict(iteration=1, max_iterations=5, verdict="BETTER",
+            metrics={"BTC": {"log_calmar": 2.24, "sharpe_equity": 2.95, "total_pnl_pct": 112}},
+            prev_metrics={"BTC": {"log_calmar": 2.19, "sharpe_equity": 2.89, "total_pnl_pct": 107}},
+            next_action="Iteration 2 starting")
+        assert "BETTER" in msg
+        assert "2.19" in msg and "2.24" in msg
+
+    def test_format_autonomous_complete(self):
+        from qre.notify import format_autonomous_complete
+        msg = format_autonomous_complete(status="TOP TIER REACHED", iterations_used=3,
+            max_iterations=5, best_branch="autonomous/iter-3")
+        assert "COMPLETE" in msg
+        assert "git merge" in msg
+
+    def test_format_autonomous_stopped(self):
+        from qre.notify import format_autonomous_stopped
+        msg = format_autonomous_stopped(status="DIMINISHING RETURNS", iterations_used=4,
+            max_iterations=5, best_branch="autonomous/iter-2")
+        assert "STOPPED" in msg
+        assert "git merge" not in msg
+
+    def test_notify_autonomous_fallback(self):
+        from unittest.mock import patch
+        from qre.notify import notify_autonomous
+        with patch("qre.notify.discord_notify", return_value=True) as mock:
+            with patch.dict("os.environ", {"DISCORD_WEBHOOK_CONTROL": ""}, clear=False):
+                notify_autonomous("test")
+                mock.assert_called_once()
+
+
 class TestDiscordNotify:
     @patch("qre.notify.requests.post")
     def test_sends_when_webhook_set(self, mock_post):
