@@ -330,7 +330,7 @@ def render_dashboard(
         console.print()
 
     now = datetime.now(timezone.utc).strftime("%H:%M:%S")
-    console.print(f"[dim]Last refresh: {now}   Auto-refresh: 30s   Ctrl+C to exit[/dim]")
+    console.print(f"[dim]Last refresh: {now}   Auto-refresh: 10s   Ctrl+C to exit[/dim]")
 
     merged = {**prev_bests, **new_bests}
     return merged
@@ -345,7 +345,7 @@ def main():
     parser.add_argument("filter", nargs="?", default=None, help="Partial run name filter")
     default_results = Path(__file__).resolve().parent.parent.parent / "results"
     parser.add_argument("--results-dir", type=str, default=str(default_results), help="Results directory path")
-    parser.add_argument("--interval", type=int, default=30, help="Refresh interval in seconds")
+    parser.add_argument("--interval", type=int, default=10, help="Refresh interval in seconds")
     parser.add_argument("--once", action="store_true", help="Show single snapshot and exit")
     args = parser.parse_args()
 
