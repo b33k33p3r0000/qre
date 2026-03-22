@@ -1,5 +1,33 @@
 # Session Notes
 
+## 2026-03-22 — Autonomous Optimizer Agent
+
+**Nový agent** pro iterativní vylepšování QRE strategie.
+
+**Architektura:**
+- Claude Code custom agent (`.claude/agents/autonomous-optimizer.md`)
+- Watcher relay pattern — agent dělá analýzu + implementaci, session končí, bash watcher polluje results/ a po dokončení runu spustí novou agent session
+- Řeší problém session timeout při dlouhých optimalizačních runech (4-24h)
+
+**Komponenty:**
+- `src/qre/autonomous.py` — evaluační logika (compare_symbol, overall_verdict, is_top_tier), state management (iteration_log.json, changelog.md, config.json)
+- `src/qre/notify.py` — 4 Discord formáttery (status, verdict, complete, stopped) + sender s fallback na #qre-runs
+- `scripts/autonomous_watcher.sh` — polling (10min), completion detection, 48h timeout, concurrent guard
+- `run.sh kill` rozšířen o watcher kill
+
+**Safety rails:**
+- Agent pracuje na `autonomous/iter-N` branchích, `main` se nikdy nezmění
+- File whitelist — smí editovat jen config.py, strategy.py (get_optuna_params ranges), run.sh (preset values)
+- Max iterations limit, 2 retries per iteration
+- Conservative vs Aggressive režim změn
+- Nikdy nepushuje na remote
+
+**Evaluace:** BETTER (Calmar +1.5%, no RED, PnL ok) / WORSE (Calmar -3%, new RED, PnL -20%) / TOP (all GREEN + 2× NEUTRAL) / NEUTRAL
+
+**Spuštění:** `claude --agent autonomous-optimizer`
+
+---
+
 ## 2026-03-21 — QRE Expansion (MQE Harvest)
 
 **Decision:** After comprehensive MQE vs QRE evaluation (8 MQE runs, 6 QRE runs),

@@ -474,6 +474,89 @@ Discord kanál `#qre-runs`: start, complete, run analysis notifikace.
 
 ---
 
+## Autonomous Optimizer
+
+Autonomní agent pro iterativní vylepšování QRE strategie. Analyzuje výsledky runů, implementuje změny, spouští nové runy a porovnává — v loop dokud nedosáhne TOP tier nebo max iterací.
+
+### Spuštění
+
+```bash
+cd ~/projects/qre
+claude --agent autonomous-optimizer
+```
+
+Agent se zeptá na:
+- **Max iterations** (doporučeno 3-5)
+- **Preset** (Quick/Main/Deep → mapuje na run.sh)
+- **Páry** (All 5 / Original 3 / výběr)
+- **Strategie změn** (Conservative / Aggressive)
+
+### Architektura
+
+```
+AGENT (Claude Code session)
+  │ Analyze → Decide → Implement → Launch run
+  │ Session KONČÍ
+  ▼
+WATCHER (scripts/autonomous_watcher.sh)
+  │ Poll results/ každých 10 min
+  │ Detekce: best_params.json + .autonomous marker
+  │ Timeout: 48h max
+  ▼
+AGENT (nová session, iterace N+1)
+  │ Porovná výsledky → BETTER/WORSE/TOP/NEUTRAL
+  │ → pokračuje nebo zastaví
+```
+
+### Evaluace
+
+| Verdict | Podmínka | Akce |
+|---------|----------|------|
+| BETTER | Log Calmar +1.5%, no RED, PnL drop <10% | Pokračuje |
+| WORSE | Log Calmar -3%, new RED, nebo PnL drop >20% | Rollback, jiný fix |
+| TOP | Všechny metriky GREEN/TOP + 2× NEUTRAL | Zastaví, notifikace |
+| NEUTRAL 2× | Diminishing returns | Zastaví |
+
+### Co agent smí měnit
+
+**Conservative:** Search space ranges, catastrophic stop %, trail stop ranges
+**Aggressive:** + trial count, AWF splits, data window, slippage
+
+**Nikdy nezmění:** strategy.py logiku, objective function, backtest engine, position sizing
+
+### Git isolation
+
+Agent pracuje na `autonomous/iter-N` branchích. `main` se nikdy nezmění.
+
+```bash
+git checkout main                        # zahodit vše
+git merge autonomous/iter-3              # aplikovat iteraci 3
+git branch -D $(git branch --list 'autonomous/*')  # smazat vše
+```
+
+### State soubory
+
+```
+results/autonomous/
+  config.json          — startup konfigurace
+  iteration_log.json   — strukturovaná data per-iterace
+  changelog.md         — lidsky čitelný log všech změn
+  watcher.pid          — PID watcher procesu
+```
+
+### Discord notifikace
+
+5 per iterace do `#qre-control`: ANALYZING → IMPLEMENTING → RUN LAUNCHED → verdict → next/stop
+
+### Zastavení
+
+```bash
+./run.sh kill                   # killne optimizer i watcher
+kill $(cat results/autonomous/watcher.pid)  # jen watcher
+```
+
+---
+
 ## Adresářová struktura
 
 ```
@@ -482,6 +565,7 @@ qre/
 │   ├── config.py
 │   ├── optimize.py
 │   ├── analyze.py
+│   ├── autonomous.py   # Evaluace + state management pro autonomous optimizer
 │   ├── notify.py
 │   ├── report.py
 │   ├── monitor.py
@@ -494,11 +578,13 @@ qre/
 │   └── data/
 │       └── fetch.py
 ├── tests/
-│   ├── unit/          # 289 testů
+│   ├── unit/          # 315 testů
 │   ├── integration/
 │   └── conftest.py
 ├── results/           # Výstupy runů
 ├── logs/              # Log soubory (background runs)
+├── .claude/agents/
+│   └── autonomous-optimizer.md  # Agent definice
 ├── run.sh             # Entry point s presety
 ├── NOTES.md           # Session notes
 └── pyproject.toml
@@ -515,4 +601,4 @@ qre/
 - **ccxt** — Binance API
 - **Plotly** — HTML reporty (equity curve, drawdown, trade distribuce)
 - **Rich** — live monitor TUI
-- **pytest** — 289 unit a integračních testů
+- **pytest** — 315 unit a integračních testů
