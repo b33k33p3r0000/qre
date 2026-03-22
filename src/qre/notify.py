@@ -111,3 +111,123 @@ def notify_complete(params: dict[str, Any]) -> bool:
     """Send completion notification to #qre-runs."""
     msg = format_complete_message(params)
     return discord_notify(msg, DISCORD_WEBHOOK_RUNS)
+
+
+# ---------------------------------------------------------------------------
+# Autonomous Optimizer Notifications
+# ---------------------------------------------------------------------------
+
+def format_autonomous_status(
+    iteration: int,
+    max_iterations: int,
+    status: str,
+    details: Any = None,
+) -> str:
+    """Format autonomous optimizer status notification."""
+    header = f"AUTONOMOUS OPTIMIZER [{iteration}/{max_iterations}]"
+    lines = [
+        f"```",
+        header,
+        "=" * 30,
+        f"Status:   {status}",
+    ]
+    if details:
+        for key, value in details.items():
+            lines.append(f"{key + ':' :<10}{value}")
+    lines.append("```")
+    return "\n".join(lines)
+
+
+def format_autonomous_verdict(
+    iteration: int,
+    max_iterations: int,
+    verdict: str,
+    metrics: Any,
+    prev_metrics: Any,
+    next_action: str,
+) -> str:
+    """Format autonomous optimizer verdict notification with metric comparison."""
+    header = f"AUTONOMOUS OPTIMIZER [{iteration}/{max_iterations}]"
+    lines = [
+        "```",
+        header,
+        "=" * 30,
+        f"Verdict:  {verdict}",
+        "\u2500" * 30,
+        f"{'':10}{'Calmar':8} {'Sharpe':8} {'PnL':>8}",
+    ]
+    for symbol, m in metrics.items():
+        prev = prev_metrics.get(symbol, {})
+        calmar_prev = prev.get("log_calmar", 0)
+        calmar_curr = m.get("log_calmar", 0)
+        sharpe_prev = prev.get("sharpe_equity", 0)
+        sharpe_curr = m.get("sharpe_equity", 0)
+        pnl_prev = prev.get("total_pnl_pct", 0)
+        pnl_curr = m.get("total_pnl_pct", 0)
+        lines.append(
+            f"{symbol:<10}"
+            f"{calmar_prev:.2f}\u2192{calmar_curr:.2f}  "
+            f"{sharpe_prev:.2f}\u2192{sharpe_curr:.2f}  "
+            f"+{pnl_prev:.0f}\u2192+{pnl_curr:.0f}%"
+        )
+    lines += [
+        "\u2500" * 30,
+        f"Next:     {next_action}",
+        "```",
+    ]
+    return "\n".join(lines)
+
+
+def format_autonomous_complete(
+    status: str,
+    iterations_used: int,
+    max_iterations: int,
+    best_branch: str,
+) -> str:
+    """Format autonomous optimizer completion notification."""
+    lines = [
+        "```",
+        "AUTONOMOUS OPTIMIZER \u2014 COMPLETE",
+        "=" * 30,
+        f"Status:   {status}",
+        f"Iters:    {iterations_used}/{max_iterations} used",
+        f"Branch:   {best_branch}",
+        "\u2500" * 30,
+        "Changelog: results/autonomous/",
+        f"To apply:  git merge {best_branch}",
+        "```",
+    ]
+    return "\n".join(lines)
+
+
+def format_autonomous_stopped(
+    status: str,
+    iterations_used: int,
+    max_iterations: int,
+    best_branch: str,
+) -> str:
+    """Format autonomous optimizer stopped notification (no merge line)."""
+    lines = [
+        "```",
+        "AUTONOMOUS OPTIMIZER \u2014 STOPPED",
+        "=" * 30,
+        f"Status:   {status}",
+        f"Iters:    {iterations_used}/{max_iterations} used",
+        f"Best:     {best_branch}",
+        "\u2500" * 30,
+        "Changelog: results/autonomous/",
+        "```",
+    ]
+    return "\n".join(lines)
+
+
+def notify_autonomous(msg: str) -> bool:
+    """Send autonomous optimizer notification to #qre-control.
+
+    Uses DISCORD_WEBHOOK_CONTROL env var; falls back to DISCORD_WEBHOOK_RUNS.
+    """
+    import os
+    webhook = os.environ.get("DISCORD_WEBHOOK_CONTROL", "")
+    if not webhook:
+        webhook = DISCORD_WEBHOOK_RUNS
+    return discord_notify(msg, webhook)
