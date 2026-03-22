@@ -475,7 +475,7 @@ class TestNewPanelLayout:
         panel = render_symbol_panel(stats)
         console.print(panel)
         output = console.file.getvalue()
-        assert "33.3" in output
+        assert "Pr 33%" in output
 
     def test_compact_metrics_layout(self):
         from rich.console import Console

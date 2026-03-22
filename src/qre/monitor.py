@@ -354,7 +354,7 @@ def render_symbol_panel(stats: SymbolStats, prev_best: float | None = None) -> P
     requested = stats.n_trials_requested or total
 
     table = Table(show_header=False, show_edge=False, box=None, padding=(0, 1))
-    table.add_column("label", style="dim", justify="right", min_width=12)
+    table.add_column("label", style="dim", justify="right", min_width=10)
     table.add_column("value", justify="left")
 
     # — Early state: no completed trials yet —
@@ -362,10 +362,10 @@ def render_symbol_panel(stats: SymbolStats, prev_best: float | None = None) -> P
         table.add_row("", "[yellow]Waiting for first trial...[/yellow]")
         return Panel(table, title=f"[bold]{stats.symbol}[/bold]", border_style="cyan")
 
-    # — Progress section —
+    # — Progress —
     if requested > 0:
         pct = min(total / requested, 1.0)
-        bar_width = 20
+        bar_width = 16
         filled = int(pct * bar_width)
         bar = "\u2588" * filled + "\u2591" * (bar_width - filled)
         table.add_row("Progress", f"{bar}  {total:,} / {requested:,}")
@@ -374,29 +374,27 @@ def render_symbol_panel(stats: SymbolStats, prev_best: float | None = None) -> P
 
     rate_str = f"{stats.trials_per_min} t/min" if stats.trials_per_min else "..."
     elapsed_str = _format_elapsed(stats.elapsed_minutes)
-    table.add_row("Speed", f"{rate_str}    Elapsed  {elapsed_str}")
-    if stats.eta_minutes:
-        table.add_row("ETA", f"~{int(stats.eta_minutes)} min")
+    eta_str = f"   ETA ~{int(stats.eta_minutes)}m" if stats.eta_minutes else ""
+    table.add_row("Speed", f"{rate_str}  {elapsed_str}{eta_str}")
 
-    table.add_row("", "")  # section separator
-
-    # — Best trial section —
+    # — Best trial —
     trial_num = f"#{stats.best_trial_number:,}" if stats.best_trial_number is not None else "?"
     is_new = prev_best is not None and stats.best_value is not None and stats.best_value > prev_best
     new_marker = "  [bold green]NEW[/bold green]" if is_new else ""
     val = f"{stats.best_value:.4f}" if stats.best_value is not None else "\u2014"
     table.add_row("Best", f"{trial_num}  Log Calmar {val}{new_marker}")
 
+    # Last improvement + pruned on one line
+    parts = []
     if stats.last_improvement_trial is not None and stats.last_improvement_age_min is not None:
         age_str = _format_elapsed(stats.last_improvement_age_min)
-        table.add_row("Last impr", f"#{stats.last_improvement_trial:,} ({age_str} ago)")
-
+        parts.append(f"#{stats.last_improvement_trial:,} ({age_str} ago)")
     if stats.pruned_pct is not None:
-        table.add_row("Pruned", f"{stats.pruned_pct:.1f}%")
+        parts.append(f"Pr {stats.pruned_pct:.0f}%")
+    if parts:
+        table.add_row("Last impr", "    ".join(parts))
 
-    table.add_row("", "")  # section separator
-
-    # — Metrics section (compact 2-col) —
+    # — Metrics (compact) —
     ua = stats.user_attrs
     if ua:
         sharpe = ua.get("sharpe_equity", "\u2014")
@@ -412,33 +410,29 @@ def render_symbol_panel(stats: SymbolStats, prev_best: float | None = None) -> P
         else:
             pnl_str = str(pnl)
 
-        table.add_row("Sharpe", f"{sharpe_str}    Max DD  {dd_str}")
-        table.add_row("P&L", f"{pnl_str}    Trades  {trades} ({tpy}/yr)")
+        table.add_row("Sharpe", f"{sharpe_str}    DD {dd_str}    P&L {pnl_str}")
+        table.add_row("Trades", f"{trades} ({tpy}/yr)")
     else:
         table.add_row("", "[dim](no metrics)[/dim]")
 
-    # — Params section (compact) —
+    # — Params (one line) —
     if stats.best_params:
-        table.add_row("", "")  # section separator
         p = format_params(stats.best_params)
-        table.add_row("MACD", f"{p['macd']}   RSI  {p['rsi']}")
-        warm_str = f"    Warm  {stats.warm_start_source}" if stats.warm_start_source else ""
-        table.add_row("Trend", f"{p['trend']}{warm_str}")
+        warm_str = f"  W={stats.warm_start_source}" if stats.warm_start_source else ""
+        table.add_row("Params", f"M {p['macd']}  R {p['rsi']}  T {p['trend']}{warm_str}")
 
     # — Build panel: side-by-side on wide terminals, stacked on narrow —
-    chart = render_convergence_chart(stats.convergence_data, width=40, height=14)
+    chart = render_convergence_chart(stats.convergence_data, width=38, height=10)
     term_width = shutil.get_terminal_size((80, 24)).columns
 
     if chart is not None and term_width >= 100:
-        # Side-by-side: stats left, chart right
         layout = Table(show_header=False, show_edge=False, box=None, padding=(0, 1), expand=True)
         layout.add_column("stats", no_wrap=True)
         layout.add_column("chart", no_wrap=True)
         layout.add_row(table, Group(Text("Convergence", style="dim"), chart))
         content = layout
     elif chart is not None:
-        # Stacked: stats on top, chart below
-        content = Group(table, Text(""), Text("  Convergence", style="dim"), chart)
+        content = Group(table, Text("  Convergence", style="dim"), chart)
     else:
         content = table
 
