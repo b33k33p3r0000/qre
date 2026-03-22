@@ -13,6 +13,7 @@ dependencies = [
     "pyarrow>=23.0.0",
     "requests>=2.32.0",
     "rich>=13.0",
+    "plotext>=5.2",
 ]
 
 [project.scripts]
