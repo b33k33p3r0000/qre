@@ -336,6 +336,23 @@ while [[ $# -gt 0 ]]; do
                     fi
                 fi
             fi
+
+            # Also check for autonomous watcher
+            WATCHER_PID_FILE="$SCRIPT_DIR/results/autonomous/watcher.pid"
+            if [ -f "$WATCHER_PID_FILE" ]; then
+                W_PID=$(cat "$WATCHER_PID_FILE")
+                if kill -0 "$W_PID" 2>/dev/null; then
+                    echo ""
+                    echo "Autonomous watcher running (PID: $W_PID)"
+                    read -p "Kill watcher too? (y/n) [y]: " kill_watcher
+                    kill_watcher="${kill_watcher:-y}"
+                    if [ "$kill_watcher" = "y" ] || [ "$kill_watcher" = "Y" ]; then
+                        kill "$W_PID" 2>/dev/null || true
+                        rm -f "$WATCHER_PID_FILE"
+                        echo "Watcher killed."
+                    fi
+                fi
+            fi
             exit 0
             ;;
         -h|--help) show_help; exit 0 ;;
